@@ -69,7 +69,8 @@ function coverTan(camera, out) {
 // One hero drop. `poster` + `rect`: its cell in the poster atlas. The video budget manager's record
 // for `slotKey` ({ live, texture }) is read every frame, so going live never re-renders React.
 // `slot` can be passed directly instead (the drop lab does). `dive`: this is the drop the camera
-// enters, so it follows rig.dive. `positionRef`: a Vector3 to follow every frame (the falling drop).
+// enters, so it follows rig.dive. `positionRef`: a Vector3, or a function returning one, to follow
+// every frame (the falling drop).
 // `envOnly`: no clip at all, the drop refracts only the environment.
 export default function HeroDrop({
   position,
@@ -99,8 +100,9 @@ export default function HeroDrop({
 
   useFrame(({ camera }) => {
     if (positionRef) {
-      u.uCenter.value.copy(positionRef)
-      mesh.current.position.copy(positionRef)
+      const p = typeof positionRef === 'function' ? positionRef() : positionRef
+      u.uCenter.value.copy(p)
+      mesh.current.position.copy(p)
     }
     if (dive) {
       u.uDive.value = rig.dive

@@ -13,17 +13,21 @@ import HeroDrop from './HeroDrop.jsx'
 const fragmentShader = /* glsl */ `
 ${envChunk}
 ${waterChunk}
-uniform float uCrop;   // radius (sim units) where the baked mesh ends and the puddle takes over
+uniform float uCrop;     // radius (sim units) where the baked mesh ends and the puddle takes over
+uniform float uSurface;  // resting water height (sim units)
 varying vec3 vWorld;
 varying vec3 vNormal;
 varying vec2 vLocalXZ;
+varying float vLocalY;
 void main() {
   vec3 v = normalize(vWorld - cameraPosition);
   vec3 n = normalize(vNormal);
   if (!gl_FrontFacing) n = -n; // the crown is a thin sheet: both sides are seen
-  // Fade out toward the crop edge so the baked water melts into the puddle underneath.
-  float edge = 1.0 - smoothstep(0.75 * uCrop, 0.97 * uCrop, length(vLocalXZ));
-  gl_FragColor = vec4(shadeWater(v, n), edge);
+  // Calm water at rest height is left to the puddle underneath (which carries the rings), so only
+  // what the drop disturbed is drawn: the crater, crown, jet. The crop edge fades out too.
+  float disturbed = max(smoothstep(0.002, 0.004, abs(vLocalY - uSurface)), smoothstep(0.03, 0.1, 1.0 - abs(n.y)));
+  float edge = 1.0 - smoothstep(0.55 * uCrop, 0.85 * uCrop, length(vLocalXZ));
+  gl_FragColor = vec4(shadeWater(v, n), disturbed * edge);
 }`
 
 function loadData(base) {
@@ -95,7 +99,9 @@ export default function Splash() {
         uRowsPerFrame: { value: meta.rowsPerFrame },
         uBoundsMin: { value: new THREE.Vector3(...meta.boundsMin) },
         uBoundsMax: { value: new THREE.Vector3(...meta.boundsMax) },
+        uQuantMax: { value: meta.quantMax ?? 65535 },
         uCrop: { value: Math.min(-meta.boundsMin[0], meta.boundsMax[0]) },
+        uSurface: { value: meta.surfaceY },
         uReflGain: { value: WATER.reflGain },
         uDeep: { value: new THREE.Color(...WATER.deep) },
         uTransGain: { value: WATER.transGain },
@@ -132,7 +138,9 @@ export default function Splash() {
   return (
     <>
       <group ref={drop} visible={false}>
-        <HeroDrop position={FALL_ORIGIN} radius={SPLASH.fallRadius} positionRef={fall.pos} envOnly dispersion={false} />
+        {/* A function, not fall.pos: children run their frame callbacks before this component does,
+            so reading fall.pos there would draw the drop one frame behind the camera. */}
+        <HeroDrop position={FALL_ORIGIN} radius={SPLASH.fallRadius} positionRef={currentFallPosition} envOnly dispersion={false} />
       </group>
       {vat && <mesh ref={vatMesh} geometry={vat.geometry} material={vat.material} scale={vat.scale} frustumCulled={false} visible={false} />}
     </>
@@ -140,3 +148,4 @@ export default function Splash() {
 }
 
 const FALL_ORIGIN = [0, 0, 0]
+const currentFallPosition = () => fallPosition(rig.fall)

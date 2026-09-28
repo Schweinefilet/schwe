@@ -70,7 +70,7 @@ export default function Puddle() {
           uTransGain: { value: 0 },
         },
         transparent: true,
-        depthWrite: false,
+        // Writes depth so the underside of the baked crater never shows through the water.
       }),
     []
   )
@@ -85,7 +85,7 @@ export default function Puddle() {
   })
 
   return (
-    <mesh ref={mesh} material={material} position={[fall.impact.x, SPLASH.groundY - 0.0005, fall.impact.z]} rotation-x={-Math.PI / 2}>
+    <mesh ref={mesh} renderOrder={-0.5} material={material} position={[fall.impact.x, SPLASH.groundY - 0.0005, fall.impact.z]} rotation-x={-Math.PI / 2}>
       <planeGeometry args={[SPLASH.puddleSize, SPLASH.puddleSize]} />
     </mesh>
   )

@@ -14,6 +14,7 @@ import { globalUniforms } from '../core/uniforms.js'
 let ctx = null
 let master = null
 let layers = null
+let building = false
 let lastTime = 0
 const buffers = {}
 
@@ -26,7 +27,12 @@ export function unlockAudio() {
   src.buffer = ctx.createBuffer(1, 1, 22050)
   src.connect(ctx.destination)
   src.start(0)
-  if (!layers) build()
+  // Synthesizing the rain loop takes tens of milliseconds on a phone: do it after the click returns.
+  // Only the silent sample above has to happen inside the gesture.
+  if (!layers && !building) {
+    building = true
+    setTimeout(build, 0)
+  }
   return ctx
 }
 
@@ -106,7 +112,7 @@ function build() {
   rainFilter.connect(rainGain).connect(master)
   const rain = loop(rainBuffer(6), rainFilter)
 
-  // City ambience inside the dive drop. Placeholder: a low, slowly breathing murmur.
+  // City ambience inside the dive drop. Placeholder: a low murmur of brown noise.
   const cityFilter = ctx.createBiquadFilter()
   cityFilter.type = 'lowpass'
   cityFilter.frequency.value = 500

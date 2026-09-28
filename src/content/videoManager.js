@@ -30,9 +30,10 @@ export function registerDrop(key, { position, radius, urls, full = false }) {
   slot.position.set(...position)
   slot.radius = radius
   if (slot.urls?.mp4 !== urls?.mp4) {
-    // The clip changed (new light state or weather): drop the old video; the poster already updated.
-    release(slot)
-    slot.urls = urls
+    // The clip changed (new light state or weather). A live drop fades back to its poster first
+    // (no hard cut) and picks up the new clip once released; an idle one switches at once.
+    if (slot.video) slot.nextUrls = urls
+    else slot.urls = urls
   }
   return slot
 }
@@ -79,6 +80,10 @@ function attach(slot) {
 }
 
 function release(slot) {
+  if (slot.nextUrls !== undefined) {
+    slot.urls = slot.nextUrls
+    delete slot.nextUrls
+  }
   if (slot.video) destroyClipVideo(slot.video)
   slot.texture?.dispose()
   slot.video = null
@@ -101,7 +106,8 @@ function assign(camera) {
     scored.push([score, slot])
   }
   scored.sort((a, b) => b[0] - a[0])
-  scored.forEach(([score, slot], i) => (slot.want = i < quality.decoders && score >= MIN_SCORE))
+  // A slot waiting to switch clips gives up its decoder first, so it can fade out and reload.
+  scored.forEach(([score, slot], i) => (slot.want = i < quality.decoders && score >= MIN_SCORE && slot.nextUrls === undefined))
 }
 
 // Called once per frame (from HeroDrops). Assignment is throttled; fades run every frame.

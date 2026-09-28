@@ -10,12 +10,14 @@ uniform int uWidth;
 uniform int uRowsPerFrame;
 uniform vec3 uBoundsMin;
 uniform vec3 uBoundsMax;
+uniform float uQuantMax;   // largest stored 16-bit value (depends on the bake's precision)
 
 attribute float aIndex;
 
 varying vec3 vWorld;
 varying vec3 vNormal;
 varying vec2 vLocalXZ;
+varying float vLocalY;
 
 vec3 octDecode(vec2 e) {
   e = e * 2.0 - 1.0;
@@ -33,12 +35,13 @@ void main() {
 
   vec3 hi = floor(texelFetch(uHi, texel, 0).rgb * 255.0 + 0.5);
   vec3 lo = floor(texelFetch(uLo, texel, 0).rgb * 255.0 + 0.5);
-  vec3 p = mix(uBoundsMin, uBoundsMax, (hi * 256.0 + lo) / 65535.0);
+  vec3 p = mix(uBoundsMin, uBoundsMax, (hi * 256.0 + lo) / uQuantMax);
   vec3 n = octDecode(texelFetch(uNrm, texel, 0).rg);
 
   vec4 w = modelMatrix * vec4(p, 1.0);
   vWorld = w.xyz;
   vNormal = normalize(mat3(modelMatrix) * n);
   vLocalXZ = p.xz;
+  vLocalY = p.y;
   gl_Position = projectionMatrix * viewMatrix * w;
 }

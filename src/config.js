@@ -44,7 +44,7 @@ export const HERO = {
   exposure: 1.0,
   reflGain: 4,
   glint: 2,
-  envOnlyGain: 30, // the falling drop has no clip: it shows the street glow, as bright as a rain bead's
+  envOnlyGain: 14, // the falling drop has no clip: it shows the street glow, as bright as a rain bead's
   envOnlyGlint: 6,
 }
 // One hero drop per city, so no city repeats. The dive drop is always shown; lower tiers drop others.
@@ -92,7 +92,7 @@ export const SPLASH = {
   puddleSize: 80, // the wet ground, fading into darkness with distance
 }
 // Water look shared by the splash and the puddle (water.glsl).
-export const WATER = { reflGain: 4, deep: [0.004, 0.006, 0.009], transGain: 4 }
+export const WATER = { reflGain: 4, deep: [0.004, 0.006, 0.009], transGain: 2 }
 
 // Where the falling drop starts until the word is laid out (AlignmentWord replaces it with the exact
 // word sample it picks). The impact point is straight below.
