@@ -102,6 +102,10 @@ def frame_mesh(path, domain, args):
 
     c = v[tris].mean(axis=1)
     keep = (np.hypot(c[:, 0], c[:, 1]) <= args.crop) & (c[:, 2] >= domain["poolDepth"] * 0.5)
+    # Calm water (at rest height, facing up) is drawn by the site's puddle, and the splash shader
+    # makes it transparent anyway: drop it here so the whole budget goes to the crown, jet and crater.
+    calm_v = (np.abs(v[:, 2] - domain["restHeight"]) < 0.0015) & (n[:, 2] > 0.985)
+    keep &= ~calm_v[tris].all(axis=1)
     tris = tris[keep]
     if len(tris) == 0:
         return np.zeros((0, 3, 3), np.float32), np.zeros((0, 3, 3), np.float32)

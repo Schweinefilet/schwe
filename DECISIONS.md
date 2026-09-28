@@ -37,7 +37,7 @@
 - Splash: Blender 4.2 LTS Mantaflow (the pip bpy wheel's Mantaflow is broken), res 160, pool + 6 mm drop at 4 m/s, time scale 0.05, 72 frames. Bake ≈ 20 min on 4 CPU cores.
 - VAT export is plain numpy (vat_from_cache.py) reading Mantaflow's .bobj.gz cache directly: crop radius 60 mm, vertex clustering (fine on the crown, 5× coarser on calm water, cell size searched per frame) to ≤ 6000 tris. Re-export takes ~30 s without re-simulating.
 - VAT = triangle soup, 12-bit positions in hi/lo RGB PNGs + octahedral normals; 72 frames = 5.6 MB. Resting water height is measured from frame 1 (30.6 mm, not the nominal 30) and put exactly on the puddle plane.
-- Calm water at rest height in the VAT is drawn transparent; the puddle (which writes depth) shows through and carries the rings. Same VAT on all tiers (no pre-rendered splash video for low).
+- Calm water at rest height is dropped by the exporter (and drawn transparent if any remains); the puddle (which writes depth) carries it and the rings, so the triangle budget goes to crown, jet and crater. Same VAT on all tiers (no pre-rendered splash video for low).
 - Sim scale = fall radius 0.03 / sim drop radius. Falling drop = hero-drop optics with no clip (env only, lens gain 30). Hand-off to the VAT's own drop at frame 0.
 - Puddle exists only in beat 7, fades beyond ~5 units; rings = three wave packets.
 - Splash data loads at timeline 3.5 (during the drift), not at startup.
