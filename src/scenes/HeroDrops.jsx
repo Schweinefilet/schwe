@@ -5,6 +5,7 @@ import { quality } from '../core/quality.js'
 import { createPosterAtlas } from '../content/posterAtlas.js'
 import { pinDrop, registerDrop, unregisterDrop, updateVideoBudget } from '../content/videoManager.js'
 import { state } from '../core/state.js'
+import { useTier } from '../core/useTier.js'
 import HeroDrop from './HeroDrop.jsx'
 
 // The dive drop is always kept; lower tiers show fewer of the others.
@@ -16,7 +17,8 @@ const pickVisible = () => [
 // Beats 4–5: the hero drops. Posters come from one atlas; the video budget manager decides which
 // drops play live video.
 export default function HeroDrops({ clips }) {
-  const visible = useMemo(pickVisible, [])
+  const tier = useTier()
+  const visible = useMemo(pickVisible, [tier])
   const atlas = useMemo(() => createPosterAtlas(), [])
   useEffect(() => () => atlas.dispose(), [atlas])
   const rects = useMemo(() => visible.map((_, i) => atlas.rectAt(i)), [atlas, visible])

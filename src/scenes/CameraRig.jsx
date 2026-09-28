@@ -3,6 +3,7 @@ import { useFrame } from '@react-three/fiber'
 import * as THREE from 'three'
 import { CAMERA_KEYS } from '../config.js'
 import { rig } from '../core/rig.js'
+import { fall, fallPosition } from '../core/fall.js'
 
 const _pos = new THREE.Vector3()
 const _look = new THREE.Vector3()
@@ -29,6 +30,8 @@ export default function CameraRig() {
       posCurve.getPoint(u, _pos)
       lookCurve.getPoint(u, _look)
     }
+    // Beat 7: turn toward the falling drop and keep it framed on the way down.
+    if (rig.follow > 0) _look.lerp(fallPosition(rig.fall), rig.follow) // computed here too: no one-frame lag
     camera.position.copy(_pos)
     camera.lookAt(_look)
   })

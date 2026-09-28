@@ -12,6 +12,7 @@ import Effects from '../scenes/Effects.jsx'
 
 // Dev only: /?lab=drop. One hero drop in frozen rain, orbit with mouse or touch, so the drop can be
 // judged close up without scrolling. ?clip=tokyo_night_clear picks the clip (default: first found).
+// Press S to save the current frame as still.jpg (the still page's image: put it in public/).
 export default function DropLab() {
   const [slot, setSlot] = useState(null)
 
@@ -34,11 +35,23 @@ export default function DropLab() {
     }
   }, [])
 
+  useEffect(() => {
+    const onKey = (e) => {
+      if (e.key !== 's' && e.key !== 'S') return
+      const a = document.createElement('a')
+      a.download = 'still.jpg'
+      a.href = document.querySelector('canvas').toDataURL('image/jpeg', 0.9)
+      a.click()
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [])
+
   return (
     <Canvas
       frameloop="never"
       dpr={[1, 2]}
-      gl={{ antialias: false }}
+      gl={{ antialias: false, preserveDrawingBuffer: true }}
       camera={{ fov: 50, near: 0.01, far: 200, position: [0, 0, 1.1] }}
       style={{ position: 'fixed', inset: 0, touchAction: 'none' }}
     >

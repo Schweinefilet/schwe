@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from 'react'
+import { useEffect, useMemo, useRef } from 'react'
 import { useFrame } from '@react-three/fiber'
 import * as THREE from 'three'
 import { HERO } from '../config.js'
@@ -45,6 +45,7 @@ export function createDropMaterial({ radius = HERO.radius, dispersion = true } =
       uExposure: { value: HERO.exposure },
       uReflGain: { value: HERO.reflGain },
       uGlint: { value: HERO.glint },
+      uEnvGain: { value: 1 },
       uDive: { value: 0 },
       uCoverTan: { value: new THREE.Vector2(1, 1) },
     },
@@ -68,16 +69,39 @@ function coverTan(camera, out) {
 // One hero drop. `poster` + `rect`: its cell in the poster atlas. The video budget manager's record
 // for `slotKey` ({ live, texture }) is read every frame, so going live never re-renders React.
 // `slot` can be passed directly instead (the drop lab does). `dive`: this is the drop the camera
-// enters, so it follows rig.dive.
-export default function HeroDrop({ position, radius = HERO.radius, poster = null, rect = null, slotKey = null, slot = null, dispersion = true, dive = false }) {
+// enters, so it follows rig.dive. `positionRef`: a Vector3 to follow every frame (the falling drop).
+// `envOnly`: no clip at all, the drop refracts only the environment.
+export default function HeroDrop({
+  position,
+  radius = HERO.radius,
+  poster = null,
+  rect = null,
+  slotKey = null,
+  slot = null,
+  dispersion = true,
+  dive = false,
+  positionRef = null,
+  envOnly = false,
+}) {
   const material = useMemo(() => createDropMaterial({ radius, dispersion }), [radius, dispersion])
   const u = material.uniforms
+  const mesh = useRef()
 
   u.uCenter.value.set(...position)
+  if (envOnly) {
+    // No clip: every exit ray misses it and sees the environment, concentrated like a rain bead's.
+    u.uClipTan.value.set(1e-4, 1e-4)
+    u.uEnvGain.value = HERO.envOnlyGain
+    u.uGlint.value = HERO.envOnlyGlint
+  }
   u.uPoster.value = poster ?? BLACK
   u.uPosterRect.value.copy(rect ?? FULL_RECT)
 
   useFrame(({ camera }) => {
+    if (positionRef) {
+      u.uCenter.value.copy(positionRef)
+      mesh.current.position.copy(positionRef)
+    }
     if (dive) {
       u.uDive.value = rig.dive
       if (rig.dive > 0) coverTan(camera, u.uCoverTan.value)
@@ -90,5 +114,5 @@ export default function HeroDrop({ position, radius = HERO.radius, poster = null
 
   useEffect(() => () => material.dispose(), [material])
 
-  return <mesh geometry={proxy} material={material} position={position} scale={radius} />
+  return <mesh ref={mesh} geometry={proxy} material={material} position={position} scale={radius} />
 }

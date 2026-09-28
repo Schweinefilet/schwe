@@ -1,5 +1,5 @@
 import gsap from 'gsap'
-import { ALIGN, BEATS, CAMERA_KEYS, DIVE, TIMELINE_END } from '../config.js'
+import { ALIGN, BEATS, CAMERA_KEYS, DIVE, SPLASH, TIMELINE_END } from '../config.js'
 import { rig } from './rig.js'
 import { setFrozen } from './uniforms.js'
 import { state } from './state.js'
@@ -43,10 +43,13 @@ export function buildMasterTimeline() {
   tl.to(rig, { alignGlow: 1.9, duration: 0.12, ease: 'power2.out' }, ALIGN.arrive - 0.06)
   tl.to(rig, { alignGlow: 1.25, duration: 0.6, ease: 'power2.inOut' }, ALIGN.arrive + 0.06)
 
-  // Beat 7: one drop falls, ripple spreads, fade to black.
-  tl.to(rig, { dropY: 0, duration: 1.6, ease: 'power2.in' }, 'splash+=0.6')
-  tl.to(rig, { ring: 1, duration: 1.8 }, 'splash+=2.2')
-  tl.to('#fade', { opacity: 1, duration: 1 }, TIMELINE_END - 1)
+  // Beat 7: time resumes for one drop. The camera turns to it and follows it down; at the water the
+  // baked splash takes over, rings spread, and everything fades to black.
+  tl.to(rig, { follow: 1, duration: 0.7, ease: 'sine.inOut' }, SPLASH.fallAt - 0.1)
+  tl.to(rig, { fall: 1, duration: SPLASH.impactAt - SPLASH.fallAt, ease: 'sine.in' }, SPLASH.fallAt)
+  tl.to(rig, { splash: 1, duration: SPLASH.splashEnd - SPLASH.impactAt }, SPLASH.impactAt)
+  tl.to(rig, { ring: 1, duration: SPLASH.ringEnd - SPLASH.ringStart }, SPLASH.ringStart)
+  tl.to('#fade', { opacity: 1, duration: TIMELINE_END - SPLASH.fadeStart }, SPLASH.fadeStart)
 
   // Pin total duration so scroll maps 1:1 to units even if the last tween ends early.
   tl.set({}, {}, TIMELINE_END)

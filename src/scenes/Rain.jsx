@@ -38,6 +38,7 @@ export default function Rain() {
     g.setAttribute('aOffset', new THREE.InstancedBufferAttribute(offsets, 3))
     g.setAttribute('aParams', new THREE.InstancedBufferAttribute(params, 4))
     g.instanceCount = count
+    g.userData.maxCount = count
     return g
   }, [])
 
@@ -77,6 +78,7 @@ export default function Rain() {
     gl.getDrawingBufferSize(_size)
     uniforms.uResolution.value.copy(_size)
     uniforms.uFade.value = rig.rainFade
+    geometry.instanceCount = Math.min(geometry.userData.maxCount, quality.rainCount) // follows a live tier drop
   })
 
   return (

@@ -28,5 +28,9 @@ vec3 envColor(vec3 d) {
   vec3 cool = vec3(0.35, 0.55, 0.75);
   vec3 street = mix(sodium, cool, 0.35 * envNoise(ring * 4.0 + 20.0));
 
-  return sky + street * (0.035 * band + 0.015 * below) * pools;
+  // Low cloud lit from below by the city: a faint warm glow just above the horizon. Water at grazing
+  // angles reflects it, which is what lets the dark puddle read as a surface.
+  float skyglow = exp(-abs(y) * 9.0); // continuous across the horizon: no seam
+
+  return sky + street * (0.035 * band + 0.015 * below + 0.008 * skyglow) * pools;
 }

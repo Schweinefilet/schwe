@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useFrame, useThree } from '@react-three/fiber'
 import * as THREE from 'three'
-import { ALIGN, RAIN } from '../config.js'
+import { ALIGN, RAIN, SPLASH } from '../config.js'
 import { quality } from '../core/quality.js'
 import { rig } from '../core/rig.js'
+import { setFallStart } from '../core/fall.js'
 import { sampleWord } from '../content/wordPoints.js'
 import envChunk from '../shaders/env.glsl?raw'
 import vertexShader from '../shaders/align.vert.glsl?raw'
@@ -42,6 +43,19 @@ export default function AlignmentWord() {
     // Beads shrink with the word (portrait phones), so letters keep the same texture at any size.
     const beadAngle = ALIGN.beadAngle * Math.min(1, halfW / (ALIGN.widthFrac * tanY * (16 / 9)))
 
+    // The drop that will fall in beat 7: the sample nearest the lower middle of the word, placed at a
+    // fixed depth and drawn at the falling drop's size, so the hand-off to it is exact.
+    let fallIndex = 0
+    let best = Infinity
+    for (let i = 0; i < word.points.length / 2; i++) {
+      const dx = word.points[i * 2]
+      const dy = word.points[i * 2 + 1] + 0.12
+      if (dx * dx + dy * dy < best) {
+        best = dx * dx + dy * dy
+        fallIndex = i
+      }
+    }
+
     let s = 7
     const rand = () => ((s = (s * 16807) % 2147483647) - 1) / 2147483646
     const n = word.points.length / 2
@@ -52,9 +66,14 @@ export default function AlignmentWord() {
       const x = word.points[i * 2] * halfW
       const y = word.points[i * 2 + 1] * halfW
       dir.copy(forward).addScaledVector(right, x).addScaledVector(up, y).normalize()
-      const t = ALIGN.depth[0] + rand() * (ALIGN.depth[1] - ALIGN.depth[0])
+      let t = ALIGN.depth[0] + rand() * (ALIGN.depth[1] - ALIGN.depth[0])
+      let radius = beadAngle * t * (0.8 + rand() * 0.4)
+      if (i === fallIndex) {
+        t = ALIGN.fallDepth
+        radius = SPLASH.fallRadius
+      }
       offsets.set([eye.x + dir.x * t, eye.y + dir.y * t, eye.z + dir.z * t], i * 3)
-      params[i * 4 + 0] = beadAngle * t * (0.8 + rand() * 0.4)
+      params[i * 4 + 0] = radius
       params[i * 4 + 1] = 0.8 + rand() * 0.4
     }
     const g = new THREE.InstancedBufferGeometry()
@@ -64,6 +83,9 @@ export default function AlignmentWord() {
     g.setAttribute('aOffset', new THREE.InstancedBufferAttribute(offsets, 3))
     g.setAttribute('aParams', new THREE.InstancedBufferAttribute(params, 4))
     g.instanceCount = n
+    setFallStart(new THREE.Vector3(offsets[fallIndex * 3], offsets[fallIndex * 3 + 1], offsets[fallIndex * 3 + 2]))
+    g.userData.fallIndex = fallIndex
+    g.userData.fallBrightness = params[fallIndex * 4 + 1]
     return g
   }, [word, aspect])
 
@@ -79,6 +101,7 @@ export default function AlignmentWord() {
           uResolution: { value: new THREE.Vector2(1, 1) },
           uFogDensity: { value: RAIN.fogDensity },
           uGlow: { value: 1 },
+          uEye: { value: new THREE.Vector3(...ALIGN.eye) },
           uLensGain: { value: RAIN.lensGain },
           uReflGain: { value: RAIN.reflGain },
           uSpec: { value: RAIN.spec },
@@ -95,6 +118,16 @@ export default function AlignmentWord() {
     gl.getDrawingBufferSize(_size)
     material.uniforms.uResolution.value.copy(_size)
     material.uniforms.uGlow.value = rig.alignGlow
+    // Once the drop starts to fall, its bead leaves the word (Splash draws the moving drop).
+    if (geometry) {
+      const attr = geometry.getAttribute('aParams')
+      const i = geometry.userData.fallIndex
+      const b = rig.fall > 0 ? 0 : geometry.userData.fallBrightness
+      if (attr.getY(i) !== b) {
+        attr.setY(i, b)
+        attr.needsUpdate = true
+      }
+    }
   })
 
   if (!geometry) return null

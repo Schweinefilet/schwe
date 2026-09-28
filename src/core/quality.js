@@ -4,8 +4,10 @@ import { getGPUTier } from 'detect-gpu'
 // Override for testing with ?tier=high|medium|low.
 export const TIERS = {
   high: { rainCount: 6000, heroDrops: 10, decoders: 2, videoHeight: 1080, dpr: 2, effects: ['grain', 'bloom', 'vignette', 'lut'], splash: 'vat' },
-  medium: { rainCount: 3000, heroDrops: 8, decoders: 1, videoHeight: 1080, dpr: 1.5, effects: ['grain', 'lut'], splash: 'vat' },
-  low: { rainCount: 1200, heroDrops: 4, decoders: 1, videoHeight: 720, dpr: 1, effects: ['lut'], splash: 'video' },
+  medium: { rainCount: 3000, heroDrops: 8, decoders: 1, videoHeight: 1080, dpr: 1.5, effects: ['grain', 'lut', 'vignette'], splash: 'vat' },
+  // Low keeps the vignette: the effect pass has to run anyway (it converts to sRGB), and the vignette
+  // merges into it for free.
+  low: { rainCount: 1200, heroDrops: 4, decoders: 1, videoHeight: 720, dpr: 1, effects: ['lut', 'vignette'], splash: 'vat' },
 }
 export const TIER_ORDER = ['high', 'medium', 'low']
 
@@ -13,9 +15,22 @@ const forced = new URLSearchParams(location.search).get('tier')
 
 export const quality = { name: 'high', ...TIERS.high }
 
+const listeners = new Set()
+export function onTierChange(fn) {
+  listeners.add(fn)
+  return () => listeners.delete(fn)
+}
+
 export function setTier(name) {
-  if (!TIERS[name]) return
+  if (!TIERS[name] || name === quality.name) return
   Object.assign(quality, { name }, TIERS[name])
+  listeners.forEach((fn) => fn(name))
+}
+
+export function stepDownTier() {
+  const next = TIER_ORDER[TIER_ORDER.indexOf(quality.name) + 1]
+  if (next) setTier(next)
+  return next ?? null
 }
 
 if (forced) setTier(forced)

@@ -18,6 +18,7 @@ uniform vec2 uClipTan;      // tan(half field of view) of the clip, horizontal a
 uniform float uExposure;
 uniform float uReflGain;
 uniform float uGlint;
+uniform float uEnvGain;     // brightness of the environment seen through the drop (like the rain beads' lens gain)
 uniform float uDive;        // 0: ball lens; 1: plain window showing the clip upright, filling the screen
 uniform vec2 uCoverTan;     // clip framing that exactly covers the screen, used at uDive = 1
 
@@ -42,7 +43,7 @@ vec3 behind(vec3 dir, vec3 axis, vec3 right, vec3 up) {
   vec3 clip = texture2D(uPoster, uPosterRect.xy + uv * uPosterRect.zw).rgb;
   // three uploads video frames without sRGB decoding (it decodes in its own materials), so decode here.
   if (uLive > 0.0) clip = mix(clip, srgbToLinear(texture2D(uVideo, uv).rgb), uLive);
-  return mix(envColor(dir), clip * uExposure, inside);
+  return mix(envColor(dir) * uEnvGain, clip * uExposure, inside);
 }
 
 vec3 throughDrop(vec3 rd, vec3 p1, vec3 n1, float ior, vec3 axis, vec3 right, vec3 up) {
