@@ -1,5 +1,5 @@
 import gsap from 'gsap'
-import { BEATS, CAMERA_KEYS, TIMELINE_END } from '../config.js'
+import { BEATS, CAMERA_KEYS, DIVE, TIMELINE_END } from '../config.js'
 import { rig } from './rig.js'
 import { setFrozen } from './uniforms.js'
 import { state } from './state.js'
@@ -17,6 +17,7 @@ export function buildMasterTimeline() {
     onUpdate() {
       const t = tl.time()
       state.progress = tl.progress()
+      state.time = t
       state.beat = beatAt(t)
       setFrozen(t >= tl.labels.freeze)
     },
@@ -28,8 +29,14 @@ export function buildMasterTimeline() {
   // Camera: advance along the spline one key per segment.
   for (let i = 1; i < CAMERA_KEYS.length; i++) {
     const prev = CAMERA_KEYS[i - 1]
-    tl.to(rig, { pathT: i, duration: CAMERA_KEYS[i].at - prev.at }, prev.at)
+    tl.to(rig, { pathT: i, duration: CAMERA_KEYS[i].at - prev.at, ease: CAMERA_KEYS[i].ease ?? 'none' }, prev.at)
   }
+
+  // Beat 5: the dive drop's optics turn from ball lens into a plain window and back.
+  tl.to(rig, { dive: 1, duration: DIVE.inEnd - DIVE.inStart, ease: 'power1.inOut' }, DIVE.inStart)
+  tl.to(rig, { cityType: 1, duration: 0.25 }, DIVE.typeIn)
+  tl.to(rig, { cityType: 0, duration: 0.25 }, DIVE.typeOut)
+  tl.to(rig, { dive: 0, duration: DIVE.outEnd - DIVE.outStart, ease: 'power1.inOut' }, DIVE.outStart)
 
   // Beat 6: word appears.
   tl.to(rig, { word: 1, duration: 1.5 }, 'align+=0.8')

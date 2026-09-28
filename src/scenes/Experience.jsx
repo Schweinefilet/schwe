@@ -8,7 +8,7 @@ import AlignmentWord from './AlignmentWord.jsx'
 import Puddle from './Puddle.jsx'
 import Effects from './Effects.jsx'
 
-export default function Experience() {
+export default function Experience({ clips }) {
   return (
     <>
       <color attach="background" args={['#000000']} />
@@ -16,7 +16,7 @@ export default function Experience() {
       <CameraRig />
       <Sky />
       <Rain />
-      <HeroDrops />
+      <HeroDrops clips={clips} />
       <Suspense fallback={null}>
         <AlignmentWord />
       </Suspense>

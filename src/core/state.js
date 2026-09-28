@@ -3,6 +3,7 @@
 export const state = {
   beat: 'loader',
   progress: 0,
+  time: 0, // master timeline time, in units
   unlocked: false,
   clips: null, // result of selectClips()
 }

@@ -6,3 +6,6 @@ dist
 # Generated clips and manifest (placeholders now, real footage later lives in R2)
 public/clips/*
 !public/clips/.gitkeep
+
+# Copied from node_modules/detect-gpu before dev and build
+public/benchmarks
