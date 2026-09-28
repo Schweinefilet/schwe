@@ -9,3 +9,7 @@ public/clips/*
 
 # Copied from node_modules/detect-gpu before dev and build
 public/benchmarks
+
+# Python bytecode (blender/splash scripts)
+__pycache__/
+*.pyc
