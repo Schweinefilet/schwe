@@ -3,3 +3,10 @@
 
 /clips/manifest.json
   Cache-Control: no-cache
+
+# Splash VAT and GPU benchmark data: large, rarely changed, but not content-hashed.
+/splash/*
+  Cache-Control: public, max-age=86400
+
+/benchmarks/*
+  Cache-Control: public, max-age=604800

@@ -31,6 +31,15 @@ export function initScroll() {
     animation: tl,
   })
 
+  // Dev hook for scripted screenshots: __schwe.goto(units) jumps the scroll to a timeline time.
+  if (import.meta.env.DEV) {
+    window.__schwe = {
+      lenis,
+      tl,
+      goto: (t) => lenis.scrollTo(st.start + (t / tl.duration()) * (st.end - st.start), { immediate: true, force: true }),
+    }
+  }
+
   return {
     enter() {
       lenis.start()

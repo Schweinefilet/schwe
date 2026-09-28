@@ -1,5 +1,7 @@
 import { useEffect, useRef } from 'react'
 import { state } from '../core/state.js'
+import { globalUniforms } from '../core/uniforms.js'
+import { liveCount } from '../content/videoManager.js'
 
 const WINDOW_MS = 250
 
@@ -27,7 +29,9 @@ export default function DevOverlay() {
           `fps    ${fps.toFixed(0)}\n` +
           `frame  ${(elapsed / frames).toFixed(1)} ms  (worst ${worst.toFixed(1)})\n` +
           `scroll ${(state.progress * 100).toFixed(1)} %\n` +
-          `beat   ${state.beat}`
+          `beat   ${state.beat}\n` +
+          `time×  ${globalUniforms.uTimeScale.value.toFixed(2)}\n` +
+          `video  ${liveCount()} live`
         windowStart = now
         frames = 0
         worst = 0

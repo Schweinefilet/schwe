@@ -12,7 +12,7 @@ import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { LIGHT_STATES, WEATHERS, clipId } from '../src/content/naming.js'
+import { LIGHT_STATES, clipId } from '../src/content/naming.js'
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const OUT_DIR = path.join(ROOT, 'public/clips')
@@ -23,6 +23,9 @@ const WIDTH = 1920
 const HEIGHT = 1080
 const FPS = 30
 const SECONDS = 10
+
+// Snow is a valid weather state but not part of the launch set, so no placeholders for it.
+const PLACEHOLDER_WEATHERS = ['clear', 'rain']
 
 const FFMPEG = process.env.FFMPEG || 'ffmpeg'
 const FONT_CANDIDATES = [
@@ -44,14 +47,65 @@ if (spawnSync(FFMPEG, ['-version']).error) {
 const FONT = FONT_CANDIDATES.find((f) => fs.existsSync(f))
 if (!FONT) fail('No font found for drawtext. Set FONT_FILE=/path/to/font.ttf')
 
-function drawFilters(label) {
+// ---- Placeholder scene --------------------------------------------------------------------------
+// A crude city: sky gradient, a skyline silhouette standing on a horizon at the lower third (the clip
+// spec), lit windows at night, and one light crossing the street so live video is easy to tell from a
+// poster. The label sits in the sky, so an upside-down image inside a drop is obvious.
+
+const HORIZON = Math.round(HEIGHT * (2 / 3))
+
+// Sky colors per light state: [top, horizon].
+const SKY = {
+  night: ['0a0d18', '2a2230'],
+  dawn: ['27304f', 'e39a73'],
+  day: ['6d9ccc', 'd7e3ea'],
+  dusk: ['1b2350', 'e0663a'],
+}
+
+const hex = (h) => [0, 2, 4].map((i) => parseInt(h.slice(i, i + 2), 16))
+const toHex = (rgb) => rgb.map((v) => Math.round(Math.max(0, Math.min(255, v))).toString(16).padStart(2, '0')).join('')
+const mixHex = (a, b, t) => toHex(hex(a).map((v, i) => v + (hex(b)[i] - v) * t))
+
+// Deterministic per-city randomness, so a city's skyline is the same in every light state.
+function rng(seed) {
+  let x = seed | 0 || 1
+  return () => ((x = (x * 1664525 + 1013904223) | 0) >>> 0) / 4294967296
+}
+
+function sceneFilter(job) {
+  const [top, horizon] = SKY[job.light].map((c) => mixHex(c, job.color, 0.3))
+  const lit = job.light === 'night' || job.light === 'dusk'
+  const bodyColor = job.light === 'day' ? mixHex('3a4048', job.color, 0.2) : mixHex('07080b', job.color, 0.15)
+  const groundColor = job.light === 'day' ? '4a4d52' : '101114'
+  const rand = rng(job.cityIndex * 7919 + 17)
+
+  const f = [`[0]drawbox=x=0:y=${HORIZON}:w=${WIDTH}:h=${HEIGHT - HORIZON}:color=0x${groundColor}:t=fill`]
+  let x = -40
+  while (x < WIDTH) {
+    const w = Math.round(90 + rand() * 150)
+    const h = Math.round(90 + rand() * 330)
+    const y = HORIZON - h
+    f.push(`drawbox=x=${x}:y=${y}:w=${w}:h=${h}:color=0x${bodyColor}:t=fill`)
+    if (lit) {
+      for (let row = y + 24; row < HORIZON - 30; row += 46) {
+        for (let col = x + 16; col < x + w - 26; col += 38) {
+          if (rand() < 0.35) f.push(`drawbox=x=${col}:y=${row}:w=14:h=20:color=0xffcf8a@0.85:t=fill`)
+        }
+      }
+    }
+    x += w + Math.round(rand() * 30)
+  }
+  if (job.weather === 'rain') f.push(`drawbox=x=0:y=0:w=${WIDTH}:h=${HEIGHT}:color=0x223344@0.35:t=fill`)
+
+  // One headlight crossing the street, looping seamlessly over the clip length.
+  const span = WIDTH + 200
+  f[f.length - 1] += `[scene];[scene][1]overlay=x='mod(t*${span / SECONDS},${span})-200':y=${HORIZON + 110}:eval=frame`
+
   const big = Math.round(HEIGHT * 0.06)
-  const small = Math.round(HEIGHT * 0.04)
-  const gap = Math.round(HEIGHT * 0.05)
-  return [
-    `drawtext=fontfile='${FONT}':text='${label}':fontcolor=white:fontsize=${big}:x=(w-text_w)/2:y=(h/2)-text_h-${gap / 2}`,
-    `drawtext=fontfile='${FONT}':timecode='00\\:00\\:00\\:00':rate=${FPS}:fontcolor=white@0.75:fontsize=${small}:x=(w-text_w)/2:y=(h/2)+${gap / 2}`,
-  ].join(',')
+  const small = Math.round(HEIGHT * 0.035)
+  f.push(`drawtext=fontfile='${FONT}':text='${job.id}':fontcolor=white:fontsize=${big}:x=(w-text_w)/2:y=${Math.round(HEIGHT * 0.12)}`)
+  f.push(`drawtext=fontfile='${FONT}':timecode='00\\:00\\:00\\:00':rate=${FPS}:fontcolor=white@0.75:fontsize=${small}:x=(w-text_w)/2:y=${Math.round(HEIGHT * 0.21)}`)
+  return { top, horizon, graph: f.join(',') }
 }
 
 function outputs(id) {
@@ -64,6 +118,18 @@ function outputs(id) {
     webm: {
       file: path.join(OUT_DIR, `${id}.webm`),
       args: ['-c:v', 'libvpx-vp9', '-pix_fmt', 'yuv420p', '-b:v', '0', '-crf', '36', '-deadline', 'realtime',
+        '-cpu-used', '8', '-row-mt', '1', '-g', String(FPS)],
+    },
+    mp4_720: {
+      file: path.join(OUT_DIR, `${id}_720.mp4`),
+      scale: true,
+      args: ['-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-profile:v', 'high', '-preset', 'veryfast', '-crf', '24',
+        '-g', String(FPS), '-movflags', '+faststart'],
+    },
+    webm_720: {
+      file: path.join(OUT_DIR, `${id}_720.webm`),
+      scale: true,
+      args: ['-c:v', 'libvpx-vp9', '-pix_fmt', 'yuv420p', '-b:v', '0', '-crf', '37', '-deadline', 'realtime',
         '-cpu-used', '8', '-row-mt', '1', '-g', String(FPS)],
     },
     poster: {
@@ -83,12 +149,16 @@ function run(args) {
 }
 
 async function makeOne(job) {
-  const input = ['-f', 'lavfi', '-i', `color=c=0x${job.color}:s=${WIDTH}x${HEIGHT}:r=${FPS}:d=${SECONDS}`]
-  const vf = ['-vf', drawFilters(job.id)]
+  const { top, horizon, graph } = sceneFilter(job)
+  const input = [
+    '-f', 'lavfi', '-i',
+    `gradients=s=${WIDTH}x${HEIGHT}:r=${FPS}:d=${SECONDS}:c0=0x${top}:c1=0x${horizon}:x0=0:y0=0:x1=0:y1=${HORIZON}:speed=0.00001`,
+    '-f', 'lavfi', '-i', `color=c=0xfff1c9:s=120x10:r=${FPS}:d=${SECONDS}`,
+  ]
   for (const out of job.missing) {
     // Write to a temp name first so an interrupted run never leaves a half-written file with a real name.
     const tmp = out.file.replace(/(\.\w+)$/, '.partial$1')
-    await run([...input, ...vf, '-an', ...out.args, tmp])
+    await run([...input, '-filter_complex', out.scale ? `${graph},scale=1280:720` : graph, '-an', ...out.args, tmp])
     fs.renameSync(tmp, out.file)
   }
 }
@@ -98,13 +168,13 @@ async function main() {
 
   const jobs = []
   let skipped = 0
-  for (const city of CITIES) {
+  for (const [cityIndex, city] of CITIES.entries()) {
     for (const light of LIGHT_STATES) {
-      for (const weather of WEATHERS) {
+      for (const weather of PLACEHOLDER_WEATHERS) {
         const id = clipId(city.id, light, weather)
         const missing = Object.values(outputs(id)).filter((o) => !fs.existsSync(o.file))
-        skipped += 3 - missing.length
-        if (missing.length) jobs.push({ id, color: city.color.replace('#', ''), missing })
+        skipped += Object.keys(outputs(id)).length - missing.length
+        if (missing.length) jobs.push({ id, cityIndex, light, weather, color: city.color.replace('#', ''), missing })
       }
     }
   }

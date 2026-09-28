@@ -23,6 +23,8 @@ export function clipUrls(entry) {
   return {
     mp4: url(entry.sources.mp4),
     webm: url(entry.sources.webm),
+    mp4_720: url(entry.sources.mp4_720),
+    webm_720: url(entry.sources.webm_720),
     poster: url(entry.poster),
   }
 }
