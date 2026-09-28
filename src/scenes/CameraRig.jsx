@@ -8,6 +8,8 @@ import { fall, fallPosition } from '../core/fall.js'
 const _pos = new THREE.Vector3()
 const _look = new THREE.Vector3()
 
+const PORTRAIT_PULLBACK = 1.1 // at 390×844 the camera stands ~1.6× farther from the splash
+
 const same = (a, b) => a.every((v, i) => v === b[i])
 
 export default function CameraRig() {
@@ -31,7 +33,14 @@ export default function CameraRig() {
       lookCurve.getPoint(u, _look)
     }
     // Beat 7: turn toward the falling drop and keep it framed on the way down.
-    if (rig.follow > 0) _look.lerp(fallPosition(rig.fall), rig.follow) // computed here too: no one-frame lag
+    if (rig.follow > 0) {
+      _look.lerp(fallPosition(rig.fall), rig.follow) // computed here too: no one-frame lag
+      // Portrait screens see a narrow slice horizontally; back off so the crown still fits.
+      if (camera.aspect < 1) {
+        const back = 1 + (1 - camera.aspect) * PORTRAIT_PULLBACK * rig.follow
+        _pos.sub(_look).multiplyScalar(back).add(_look)
+      }
+    }
     camera.position.copy(_pos)
     camera.lookAt(_look)
   })

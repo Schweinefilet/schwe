@@ -130,10 +130,13 @@ export function updateVideoBudget(camera, dt) {
       }
       if (slot.ready) slot.live = Math.min(1, slot.live + dt * FADE_PER_SECOND)
     } else if (slot.video) {
-      slot.live = Math.max(0, slot.live - dt * FADE_PER_SECOND)
+      // Release one frame after the fade reaches 0: drops read their slot before this runs, so a
+      // drop may still have this frame's video bound; tearing it down now would upload an empty one.
       if (slot.live === 0) {
         release(slot)
         inUse--
+      } else {
+        slot.live = Math.max(0, slot.live - dt * FADE_PER_SECOND)
       }
     }
   }
