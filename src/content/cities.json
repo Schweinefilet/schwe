@@ -1,0 +1,12 @@
+[
+  { "id": "sydney",      "name": "Sydney",      "lat": -33.8688, "lon": 151.2093, "tz": "Australia/Sydney",    "color": "#2b4a6f" },
+  { "id": "tokyo",       "name": "Tokyo",       "lat": 35.6762,  "lon": 139.6503, "tz": "Asia/Tokyo",          "color": "#6f2b4a" },
+  { "id": "hong-kong",   "name": "Hong Kong",   "lat": 22.3193,  "lon": 114.1694, "tz": "Asia/Hong_Kong",      "color": "#2b6f5c" },
+  { "id": "mumbai",      "name": "Mumbai",      "lat": 19.076,   "lon": 72.8777,  "tz": "Asia/Kolkata",        "color": "#8a5a1f" },
+  { "id": "istanbul",    "name": "Istanbul",    "lat": 41.0082,  "lon": 28.9784,  "tz": "Europe/Istanbul",     "color": "#4a2b6f" },
+  { "id": "paris",       "name": "Paris",       "lat": 48.8566,  "lon": 2.3522,   "tz": "Europe/Paris",        "color": "#6f5c2b" },
+  { "id": "london",      "name": "London",      "lat": 51.5072,  "lon": -0.1276,  "tz": "Europe/London",       "color": "#3d4f5a" },
+  { "id": "sao-paulo",   "name": "São Paulo",   "lat": -23.5505, "lon": -46.6333, "tz": "America/Sao_Paulo",   "color": "#2b6f2f" },
+  { "id": "new-york",    "name": "New York",    "lat": 40.7128,  "lon": -74.006,  "tz": "America/New_York",    "color": "#6f332b" },
+  { "id": "mexico-city", "name": "Mexico City", "lat": 19.4326,  "lon": -99.1332, "tz": "America/Mexico_City", "color": "#2b5f6f" }
+]

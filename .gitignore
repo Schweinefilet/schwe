@@ -1,0 +1,8 @@
+node_modules
+dist
+.wrangler
+.DS_Store
+
+# Generated clips and manifest (placeholders now, real footage later lives in R2)
+public/clips/*
+!public/clips/.gitkeep
