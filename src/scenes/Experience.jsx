@@ -1,6 +1,7 @@
 import { Suspense } from 'react'
 import FrameDriver from '../core/FrameDriver.jsx'
 import CameraRig from './CameraRig.jsx'
+import Sky from './Sky.jsx'
 import Rain from './Rain.jsx'
 import HeroDrops from './HeroDrops.jsx'
 import AlignmentWord from './AlignmentWord.jsx'
@@ -13,6 +14,7 @@ export default function Experience() {
       <color attach="background" args={['#000000']} />
       <FrameDriver />
       <CameraRig />
+      <Sky />
       <Rain />
       <HeroDrops />
       <Suspense fallback={null}>

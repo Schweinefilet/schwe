@@ -21,12 +21,19 @@ export const BEATS = [
 export const TIMELINE_END = 19
 
 // ---- Scene layout (world units, camera travels toward -z) ----------------
+// Drop count comes from the quality tier (core/quality.js).
 export const RAIN = {
-  count: 20000,
-  boxMin: [-25, 0, -90],
-  boxSize: [50, 28, 110],
-  speed: [14, 22], // units per simulated second, min/max
-  size: 6,
+  boxSize: [24, 18, 30], // the field repeats every box; it is centered ahead of the camera
+  boxLead: 0.3, // how far ahead of the camera the box center sits, as a fraction of its depth
+  speed: [9, 14], // units per simulated second, min/max
+  radius: [0.01, 0.03], // world units
+  shutter: 1 / 50, // motion-blur length in seconds; streak length = speed × shutter × uTimeScale
+  wind: [0.12, 0.04], // horizontal drift per unit of fall
+  fogDensity: 0.045,
+  lensGain: 30, // brightness of the street glow seen through a frozen bead
+  reflGain: 8,
+  spec: 3,
+  streakColor: [0.55, 0.6, 0.66],
 }
 
 export const HERO_RADIUS = 0.35

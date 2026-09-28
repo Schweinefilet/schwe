@@ -1,53 +1,82 @@
 import { useMemo } from 'react'
-import { useThree } from '@react-three/fiber'
+import { useFrame } from '@react-three/fiber'
 import * as THREE from 'three'
 import { RAIN } from '../config.js'
+import { quality } from '../core/quality.js'
 import { globalUniforms } from '../core/uniforms.js'
+import envChunk from '../shaders/env.glsl?raw'
 import vertexShader from '../shaders/rain.vert.glsl?raw'
-import fragmentShader from '../shaders/rain.frag.glsl?raw'
+import rainFrag from '../shaders/rain.frag.glsl?raw'
 
-// Beats 2–3 placeholder: falling points that freeze when uTimeScale reaches 0.
+const fragmentShader = `${envChunk}\n${rainFrag}`
+const _forward = new THREE.Vector3()
+const _size = new THREE.Vector2()
+
+// Beats 2–4: the rain field. One instanced draw call for every drop.
 export default function Rain() {
-  const dpr = useThree((s) => s.viewport.dpr)
-
   const geometry = useMemo(() => {
-    const { count, boxMin, boxSize, speed } = RAIN
-    const positions = new Float32Array(count * 3)
-    const speeds = new Float32Array(count)
+    const count = quality.rainCount
+    const { boxSize, speed, radius } = RAIN
+    const offsets = new Float32Array(count * 3)
+    const params = new Float32Array(count * 4)
     for (let i = 0; i < count; i++) {
-      positions[i * 3 + 0] = boxMin[0] + Math.random() * boxSize[0]
-      positions[i * 3 + 1] = boxMin[1] + Math.random() * boxSize[1]
-      positions[i * 3 + 2] = boxMin[2] + Math.random() * boxSize[2]
-      speeds[i] = speed[0] + Math.random() * (speed[1] - speed[0])
+      offsets[i * 3 + 0] = (Math.random() - 0.5) * boxSize[0]
+      offsets[i * 3 + 1] = (Math.random() - 0.5) * boxSize[1]
+      offsets[i * 3 + 2] = (Math.random() - 0.5) * boxSize[2]
+      // Bigger drops fall faster; most drops are small (squared random skews toward the minimum).
+      const s = Math.random() ** 2
+      params[i * 4 + 0] = speed[0] + s * (speed[1] - speed[0]) + Math.random() * 1.5
+      params[i * 4 + 1] = radius[0] + s * (radius[1] - radius[0])
+      params[i * 4 + 2] = 0.55 + Math.random() * 0.45
+      params[i * 4 + 3] = Math.random()
     }
-    const g = new THREE.BufferGeometry()
-    g.setAttribute('position', new THREE.BufferAttribute(positions, 3))
-    g.setAttribute('aSpeed', new THREE.BufferAttribute(speeds, 1))
+    const g = new THREE.InstancedBufferGeometry()
+    const quad = new THREE.PlaneGeometry(1, 1)
+    g.index = quad.index
+    g.setAttribute('position', quad.getAttribute('position'))
+    g.setAttribute('aOffset', new THREE.InstancedBufferAttribute(offsets, 3))
+    g.setAttribute('aParams', new THREE.InstancedBufferAttribute(params, 4))
+    g.instanceCount = count
     return g
   }, [])
 
-  const uniforms = useMemo(
-    () => ({
+  // Built by hand, not as <shaderMaterial uniforms={…}>: R3F copies a uniforms prop into a new object,
+  // which would cut the link to the shared globalUniforms and leave uTimeScale stuck at 1.
+  const material = useMemo(() => {
+    const uniforms = {
       uSimTime: globalUniforms.uSimTime,
-      uSize: { value: RAIN.size },
-      uPixelRatio: { value: 1 },
-      uBoxMin: { value: new THREE.Vector3(...RAIN.boxMin) },
+      uTimeScale: globalUniforms.uTimeScale,
+      uShutter: { value: RAIN.shutter },
+      uWind: { value: new THREE.Vector2(...RAIN.wind) },
+      uBoxCenter: { value: new THREE.Vector3() },
       uBoxSize: { value: new THREE.Vector3(...RAIN.boxSize) },
-      uColor: { value: new THREE.Color('#b8c6d6') },
-    }),
-    []
-  )
-  uniforms.uPixelRatio.value = dpr
+      uResolution: { value: new THREE.Vector2(1, 1) },
+      uFogDensity: { value: RAIN.fogDensity },
+      uLensGain: { value: RAIN.lensGain },
+      uReflGain: { value: RAIN.reflGain },
+      uSpec: { value: RAIN.spec },
+      uStreakColor: { value: new THREE.Color(...RAIN.streakColor) },
+    }
+    return new THREE.ShaderMaterial({
+      vertexShader,
+      fragmentShader,
+      uniforms,
+      transparent: true,
+      depthWrite: false,
+      blending: THREE.AdditiveBlending,
+    })
+  }, [])
+  const { uniforms } = material
+
+  useFrame(({ camera, gl }) => {
+    // Center the repeating box ahead of the camera so few drops are wasted behind it.
+    camera.getWorldDirection(_forward)
+    uniforms.uBoxCenter.value.copy(camera.position).addScaledVector(_forward, RAIN.boxSize[2] * RAIN.boxLead)
+    gl.getDrawingBufferSize(_size)
+    uniforms.uResolution.value.copy(_size)
+  })
 
   return (
-    <points geometry={geometry} frustumCulled={false}>
-      <shaderMaterial
-        vertexShader={vertexShader}
-        fragmentShader={fragmentShader}
-        uniforms={uniforms}
-        transparent
-        depthWrite={false}
-      />
-    </points>
+    <mesh geometry={geometry} material={material} frustumCulled={false} />
   )
 }
