@@ -9,7 +9,7 @@ import { unlockAudio } from './audio/audioEngine.js'
 import { detectTier, quality } from './core/quality.js'
 import { loadManifest } from './content/manifest.js'
 import { selectClips } from './content/clipSelector.js'
-import { CITIES, HERO_DROPS, TIMELINE_END, VH_PER_UNIT } from './config.js'
+import { CAMERA_FOV, CITIES, HERO_DROPS, TIMELINE_END, VH_PER_UNIT } from './config.js'
 
 // Dynamic import behind the DEV flag, so production builds don't include the overlay.
 const DevOverlay = import.meta.env.DEV ? lazy(() => import('./dev/DevOverlay.jsx')) : null
@@ -70,7 +70,7 @@ export default function App() {
           frameloop="never"
           dpr={[1, quality.dpr]}
           gl={{ antialias: false, powerPreference: 'high-performance' }}
-          camera={{ fov: 50, near: 0.02, far: 200 }}
+          camera={{ fov: CAMERA_FOV, near: 0.02, far: 200 }}
           style={{ position: 'fixed', inset: 0, pointerEvents: 'none' }}
         >
           <Experience clips={clips} />

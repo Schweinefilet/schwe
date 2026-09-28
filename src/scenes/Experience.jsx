@@ -1,4 +1,3 @@
-import { Suspense } from 'react'
 import FrameDriver from '../core/FrameDriver.jsx'
 import CameraRig from './CameraRig.jsx'
 import Sky from './Sky.jsx'
@@ -17,9 +16,7 @@ export default function Experience({ clips }) {
       <Sky />
       <Rain />
       <HeroDrops clips={clips} />
-      <Suspense fallback={null}>
-        <AlignmentWord />
-      </Suspense>
+      <AlignmentWord />
       <Puddle />
       <Effects />
     </>

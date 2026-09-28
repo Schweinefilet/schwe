@@ -10,6 +10,7 @@ uniform vec3 uBoxCenter;  // the field repeats every uBoxSize, centered here (tr
 uniform vec3 uBoxSize;
 uniform vec2 uResolution; // drawing buffer size in pixels
 uniform float uFogDensity;
+uniform float uFade;      // whole-field opacity (the timeline dims rain while the word holds)
 
 attribute vec3 aOffset;   // start position inside one box
 attribute vec4 aParams;   // x: fall speed, y: radius (world), z: brightness, w: unused
@@ -79,5 +80,5 @@ void main() {
 
   float fog = exp(-depth * uFogDensity);
   float nearFade = smoothstep(0.6, 3.0, depth); // drops this close would be out of focus
-  vAlpha = edge * fog * nearFade * coverage * aParams.z;
+  vAlpha = edge * fog * nearFade * coverage * aParams.z * uFade;
 }

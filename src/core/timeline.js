@@ -1,5 +1,5 @@
 import gsap from 'gsap'
-import { BEATS, CAMERA_KEYS, DIVE, TIMELINE_END } from '../config.js'
+import { ALIGN, BEATS, CAMERA_KEYS, DIVE, TIMELINE_END } from '../config.js'
 import { rig } from './rig.js'
 import { setFrozen } from './uniforms.js'
 import { state } from './state.js'
@@ -38,8 +38,10 @@ export function buildMasterTimeline() {
   tl.to(rig, { cityType: 0, duration: 0.25 }, DIVE.typeOut)
   tl.to(rig, { dive: 0, duration: DIVE.outEnd - DIVE.outStart, ease: 'power1.inOut' }, DIVE.outStart)
 
-  // Beat 6: word appears.
-  tl.to(rig, { word: 1, duration: 1.5 }, 'align+=0.8')
+  // Beat 6: the rain field recedes as the camera settles on the eye, and the word glints as it locks.
+  tl.to(rig, { rainFade: 0.45, duration: ALIGN.arrive - 12 }, 12)
+  tl.to(rig, { alignGlow: 1.9, duration: 0.12, ease: 'power2.out' }, ALIGN.arrive - 0.06)
+  tl.to(rig, { alignGlow: 1.25, duration: 0.6, ease: 'power2.inOut' }, ALIGN.arrive + 0.06)
 
   // Beat 7: one drop falls, ripple spreads, fade to black.
   tl.to(rig, { dropY: 0, duration: 1.6, ease: 'power2.in' }, 'splash+=0.6')

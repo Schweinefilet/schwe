@@ -4,6 +4,7 @@ import * as THREE from 'three'
 import { RAIN } from '../config.js'
 import { quality } from '../core/quality.js'
 import { globalUniforms } from '../core/uniforms.js'
+import { rig } from '../core/rig.js'
 import envChunk from '../shaders/env.glsl?raw'
 import vertexShader from '../shaders/rain.vert.glsl?raw'
 import rainFrag from '../shaders/rain.frag.glsl?raw'
@@ -52,6 +53,7 @@ export default function Rain() {
       uBoxSize: { value: new THREE.Vector3(...RAIN.boxSize) },
       uResolution: { value: new THREE.Vector2(1, 1) },
       uFogDensity: { value: RAIN.fogDensity },
+      uFade: { value: 1 },
       uLensGain: { value: RAIN.lensGain },
       uReflGain: { value: RAIN.reflGain },
       uSpec: { value: RAIN.spec },
@@ -74,6 +76,7 @@ export default function Rain() {
     uniforms.uBoxCenter.value.copy(camera.position).addScaledVector(_forward, RAIN.boxSize[2] * RAIN.boxLead)
     gl.getDrawingBufferSize(_size)
     uniforms.uResolution.value.copy(_size)
+    uniforms.uFade.value = rig.rainFade
   })
 
   return (

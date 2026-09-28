@@ -1,23 +1,102 @@
-import { useRef } from 'react'
-import { useFrame } from '@react-three/fiber'
-import { Text } from '@react-three/drei'
-import { WORD } from '../config.js'
+import { useEffect, useMemo, useState } from 'react'
+import { useFrame, useThree } from '@react-three/fiber'
+import * as THREE from 'three'
+import { ALIGN, RAIN } from '../config.js'
+import { quality } from '../core/quality.js'
 import { rig } from '../core/rig.js'
+import { sampleWord } from '../content/wordPoints.js'
+import envChunk from '../shaders/env.glsl?raw'
+import vertexShader from '../shaders/align.vert.glsl?raw'
+import rainFrag from '../shaders/rain.frag.glsl?raw'
 
-// Beat 6 placeholder: flat text that fades in at the alignment viewpoint.
+const _size = new THREE.Vector2()
+
+// Beat 6: anamorphic alignment. Each sampled point of the word becomes a ray from the target eye;
+// a drop sits at a random depth along it. From the eye every drop lands on its letter; from anywhere
+// else the drops look like more frozen rain. Radii grow with depth so all beads project to the same
+// size from the eye, which keeps the strokes even.
 export default function AlignmentWord() {
-  const ref = useRef()
+  const aspect = useThree((s) => Math.round((s.size.width / s.size.height) * 20) / 20) // rebuild on real shape changes only
+  const [word, setWord] = useState(null)
 
-  useFrame(() => {
-    const t = ref.current
-    if (!t) return
-    t.visible = rig.word > 0.001
-    t.fillOpacity = rig.word
+  useEffect(() => {
+    let cancelled = false
+    sampleWord(ALIGN.text, ALIGN.count[quality.name]).then((w) => !cancelled && setWord(w))
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  const geometry = useMemo(() => {
+    if (!word) return null
+    const eye = new THREE.Vector3(...ALIGN.eye)
+    const forward = new THREE.Vector3(...ALIGN.target).sub(eye).normalize()
+    const right = new THREE.Vector3().crossVectors(forward, new THREE.Vector3(0, 1, 0)).normalize()
+    const up = new THREE.Vector3().crossVectors(right, forward)
+
+    // Word size in tan-of-angle units at the eye: a share of the screen width, but never taller than
+    // a share of its height. Recomputed for the screen's aspect, so it fits portrait phones too.
+    const tanY = Math.tan(THREE.MathUtils.degToRad(ALIGN.fov / 2))
+    const tanX = tanY * aspect
+    const halfW = Math.min(ALIGN.widthFrac * tanX, ALIGN.maxHeightFrac * tanY * word.aspect)
+    // Beads shrink with the word (portrait phones), so letters keep the same texture at any size.
+    const beadAngle = ALIGN.beadAngle * Math.min(1, halfW / (ALIGN.widthFrac * tanY * (16 / 9)))
+
+    let s = 7
+    const rand = () => ((s = (s * 16807) % 2147483647) - 1) / 2147483646
+    const n = word.points.length / 2
+    const offsets = new Float32Array(n * 3)
+    const params = new Float32Array(n * 4)
+    const dir = new THREE.Vector3()
+    for (let i = 0; i < n; i++) {
+      const x = word.points[i * 2] * halfW
+      const y = word.points[i * 2 + 1] * halfW
+      dir.copy(forward).addScaledVector(right, x).addScaledVector(up, y).normalize()
+      const t = ALIGN.depth[0] + rand() * (ALIGN.depth[1] - ALIGN.depth[0])
+      offsets.set([eye.x + dir.x * t, eye.y + dir.y * t, eye.z + dir.z * t], i * 3)
+      params[i * 4 + 0] = beadAngle * t * (0.8 + rand() * 0.4)
+      params[i * 4 + 1] = 0.8 + rand() * 0.4
+    }
+    const g = new THREE.InstancedBufferGeometry()
+    const quad = new THREE.PlaneGeometry(1, 1)
+    g.index = quad.index
+    g.setAttribute('position', quad.getAttribute('position'))
+    g.setAttribute('aOffset', new THREE.InstancedBufferAttribute(offsets, 3))
+    g.setAttribute('aParams', new THREE.InstancedBufferAttribute(params, 4))
+    g.instanceCount = n
+    return g
+  }, [word, aspect])
+
+  useEffect(() => () => geometry?.dispose(), [geometry])
+
+  // Same bead shading as frozen rain; built by hand so uniforms stay shared (see Rain.jsx).
+  const material = useMemo(
+    () =>
+      new THREE.ShaderMaterial({
+        vertexShader,
+        fragmentShader: `${envChunk}\n${rainFrag}`,
+        uniforms: {
+          uResolution: { value: new THREE.Vector2(1, 1) },
+          uFogDensity: { value: RAIN.fogDensity },
+          uGlow: { value: 1 },
+          uLensGain: { value: RAIN.lensGain },
+          uReflGain: { value: RAIN.reflGain },
+          uSpec: { value: RAIN.spec },
+          uStreakColor: { value: new THREE.Color(...RAIN.streakColor) },
+        },
+        transparent: true,
+        depthWrite: false,
+        blending: THREE.AdditiveBlending,
+      }),
+    []
+  )
+
+  useFrame(({ gl }) => {
+    gl.getDrawingBufferSize(_size)
+    material.uniforms.uResolution.value.copy(_size)
+    material.uniforms.uGlow.value = rig.alignGlow
   })
 
-  return (
-    <Text ref={ref} position={WORD.pos} fontSize={WORD.fontSize} anchorX="center" anchorY="middle" color="#ffffff">
-      {WORD.text}
-    </Text>
-  )
+  if (!geometry) return null
+  return <mesh geometry={geometry} material={material} frustumCulled={false} />
 }

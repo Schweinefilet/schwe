@@ -15,8 +15,8 @@ export const BEATS = [
   { name: 'freeze', at: 1.08 }, // just past rain, so the first scroll triggers the freeze
   { name: 'drift', at: 2.5 },
   { name: 'dive', at: 8 },
-  { name: 'align', at: 12 },
-  { name: 'splash', at: 15 },
+  { name: 'align', at: 11.5 },
+  { name: 'splash', at: 14.5 },
 ]
 export const TIMELINE_END = 19
 
@@ -55,7 +55,22 @@ export const DIVE_DROP_INDEX = 9
 export const HERO_DROPS = HERO_POSITIONS.map((pos, i) => ({ pos, city: CITIES[i % CITIES.length].id, dive: i === DIVE_DROP_INDEX }))
 const D = HERO_POSITIONS[DIVE_DROP_INDEX]
 
-export const WORD = { text: 'schwe', pos: [0, 4, -64], fontSize: 2 }
+export const CAMERA_FOV = 50 // vertical, degrees
+
+// Beat 6. From `eye` looking at `target`, the scattered drops spell `text`.
+export const ALIGN = {
+  text: 'schwe',
+  eye: [0, 4.8, -41],
+  target: [0, 4.8, -60],
+  fov: CAMERA_FOV,
+  depth: [3.5, 18], // drops sit at a random distance from the eye in this range
+  widthFrac: 0.62, // word width as a share of the screen width…
+  maxHeightFrac: 0.4, // …unless that would make it taller than this share of the screen height
+  beadAngle: 0.0032, // bead radius as an angle seen from the eye (≈2.5 px at 720p, 16:9; scaled with the word)
+  count: { high: 2600, medium: 1800, low: 1000 },
+  arrive: 13, // camera reaches the eye
+  holdUntil: 14.5,
+}
 export const PUDDLE = { pos: [0, 0, -73], size: 12, dropStartY: 6 }
 
 // Camera waypoints. Position and look target are each a Catmull-Rom spline through these points;
@@ -63,6 +78,7 @@ export const PUDDLE = { pos: [0, 0, -73], size: 12, dropStartY: 6 }
 // key: 'power2.out' settles into a hold, 'power2.in' leaves one. Two identical consecutive keys are
 // an exact hold (the camera does not move at all between them).
 const R = HERO.radius
+const { eye: ALIGN_EYE, target: ALIGN_TARGET, arrive: ALIGN_AT, holdUntil: ALIGN_HOLD } = ALIGN
 const DIVE_EYE = [D[0], D[1], D[2] + 1.28 * R] // close enough that the drop covers every screen corner
 export const CAMERA_KEYS = [
   { at: 0,    pos: [0, 16, 16],                          look: [0, 24, -20] },           // loader: high, facing dark sky
@@ -74,8 +90,11 @@ export const CAMERA_KEYS = [
   { at: 9.4,  pos: DIVE_EYE,                             look: D, ease: 'power2.out' },  // drop fills the frame
   { at: 10.6, pos: DIVE_EYE,                             look: D },                      // inside the city
   { at: 11.5, pos: [D[0] - 0.5, D[1] + 0.5, D[2] + 1.8], look: [D[0], D[1], D[2] - 6], ease: 'power2.in' }, // pulled back out
-  { at: 12,   pos: [0, 4, -50],                          look: [0, 4, -64] },            // align viewpoint
-  { at: 15,   pos: [0, 4, -52.5],                        look: [0, 4, -64] },            // splash start
+  // Swing in from the side: parallax keeps the word scrambled until the last stretch of the approach.
+  { at: 12.3, pos: [ALIGN_EYE[0] - 2.4, ALIGN_EYE[1] + 0.9, ALIGN_EYE[2] + 3.2], look: [ALIGN_TARGET[0] - 1.5, ALIGN_TARGET[1], ALIGN_TARGET[2]] },
+  { at: ALIGN_AT, pos: ALIGN_EYE,                        look: ALIGN_TARGET, ease: 'power1.out' }, // the word locks in
+  { at: ALIGN_HOLD, pos: ALIGN_EYE,                      look: ALIGN_TARGET },           // hold for a beat
+  { at: 15.5, pos: [0, 4, -52.5],                        look: [0, 4, -64] },            // splash start
   { at: 17,   pos: [0, 2.2, -66],                        look: [0, 0, -73] },
   { at: 19,   pos: [0, 1.6, -68.5],                      look: [0, 0, -73] },            // end
 ]
