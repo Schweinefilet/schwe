@@ -121,7 +121,17 @@ function build() {
   cityFilter.connect(cityGain).connect(master)
   let city = loop(noiseBuffer(8, 'brown'), cityFilter)
 
-  layers = { rain, rainFilter, rainGain, city, cityFilter, cityGain }
+  // The ending's city: its rain rises under the one falling drop (only when it is raining there now).
+  // A second source on the rain bed's buffer, band-limited so it reads as nearer and heavier.
+  const fallFilter = ctx.createBiquadFilter()
+  fallFilter.type = 'lowpass'
+  fallFilter.frequency.value = 3500
+  const fallGain = ctx.createGain()
+  fallGain.gain.value = 0
+  fallFilter.connect(fallGain).connect(master)
+  loop(rain.buffer, fallFilter)
+
+  layers = { rain, rainFilter, rainGain, city, cityFilter, cityGain, fallFilter, fallGain }
 
   // Licensed files, when configured, replace the synthesized loops.
   loadFile(AUDIO.files.rain).then((b) => {
@@ -135,6 +145,13 @@ function build() {
     city.stop()
     city = layers.city = loop(b, cityFilter)
     cityFilter.frequency.value = 20000
+  })
+
+  const rainCity = state.rainCity?.kind === 'now' ? state.rainCity.city : null
+  loadFile(rainCity && AUDIO.files.ambience?.[rainCity]).then((b) => {
+    if (!b) return
+    loop(b, fallFilter)
+    fallFilter.frequency.value = 20000
   })
 
   gsap.ticker.add(update)
@@ -226,6 +243,7 @@ const CUES = [
   { at: SPLASH.ringStart, dir: 1, play: () => bloop(220) },
   { at: SPLASH.ringStart + 0.35, dir: 1, play: () => bloop(180, 0.07) },
   { at: SPLASH.ringStart + 0.75, dir: 1, play: () => bloop(150, 0.05) },
+  { at: SPLASH.answerAt, dir: 1, play: () => chime([392, 587.33], 0.04, 2.5) },
 ]
 
 // ---- Per frame -----------------------------------------------------------------------------------
@@ -246,6 +264,10 @@ function update() {
 
   // City: only while the drop fills the screen.
   setSmooth(layers.cityGain.gain, fadeOut * inCity * AUDIO.cityLevel)
+
+  // Ending: the rain city's rain rises with the fall and gives way to the splash.
+  const raining = state.rainCity?.kind === 'now' ? 1 : 0
+  setSmooth(layers.fallGain.gain, raining * fadeOut * rig.fall * (1 - 0.6 * rig.splash) * AUDIO.cityLevel)
 
   // Cues: fire those whose moment lies between the last frame's time and this one.
   if (t !== lastTime) {

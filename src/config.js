@@ -96,6 +96,8 @@ export const SPLASH = {
   ringStart: 17.3,
   ringEnd: 19,
   fadeStart: 18.2,
+  answerAt: 17.5, // the ending's type fades in as the rings spread; it leaves with the fade
+  fallPinFrom: 13, // the falling drop's clip starts decoding when the camera arrives at the word
   groundY: 0,
   puddleSize: 80, // the wet ground, fading into darkness with distance
 }

@@ -12,7 +12,7 @@ import Puddle from './Puddle.jsx'
 import Splash from './Splash.jsx'
 import Effects from './Effects.jsx'
 
-export default function Experience({ clips, diveCity }) {
+export default function Experience({ clips, diveCity, rainCity }) {
   return (
     <>
       <color attach="background" args={['#000000']} />
@@ -24,7 +24,7 @@ export default function Experience({ clips, diveCity }) {
       <HeroDrops clips={clips} diveCity={diveCity} />
       <AlignmentWord />
       <Puddle />
-      <Splash />
+      <Splash clips={clips} rainCity={rainCity} />
       <Effects />
     </>
   )

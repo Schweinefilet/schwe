@@ -3,6 +3,7 @@
 
 const ENDPOINT = 'https://api.open-meteo.com/v1/forecast'
 const TIMEOUT_MS = 4000
+const RAIN_MM = 0.1 // a 15-minute forecast slot with at least this much rain counts as rain arriving
 
 // WMO weather code → clip variant and a short label for the on-screen type.
 // Fog and cloud count as clear for clip choice (bible: launch set).
@@ -23,12 +24,17 @@ export function describeWeather(code) {
   return { variant: 'clear', label: 'clear' }
 }
 
-// Returns { [cityId]: { variant, label, tempC } }. Cities missing from the response get clear.
+// Returns { [cityId]: { variant, label, tempC, mmPerHour, rainInMinutes } }. Cities missing from the
+// response get clear. Rain amounts count rain and showers only, never snow.
+// mmPerHour: current rain rate. rainInMinutes: minutes until the first 15-minute slot in the next 6 h
+// with rain (0 = the current slot), or null.
 export async function fetchWeather(cities) {
   const params = new URLSearchParams({
     latitude: cities.map((c) => c.lat).join(','),
     longitude: cities.map((c) => c.lon).join(','),
-    current: 'weather_code,temperature_2m',
+    current: 'weather_code,temperature_2m,rain,showers',
+    minutely_15: 'rain,showers',
+    forecast_minutely_15: '24',
     timezone: 'UTC',
   })
   const ctrl = new AbortController()
@@ -41,13 +47,40 @@ export async function fetchWeather(cities) {
     return Object.fromEntries(
       cities.map((c, i) => {
         const cur = list[i]?.current
-        return [c.id, { ...describeWeather(cur?.weather_code), tempC: cur?.temperature_2m ?? null }]
+        return [
+          c.id,
+          {
+            ...describeWeather(cur?.weather_code),
+            tempC: cur?.temperature_2m ?? null,
+            mmPerHour: rainRate(cur),
+            rainInMinutes: minutesUntilRain(list[i]?.minutely_15, cur?.time),
+          },
+        ]
       })
     )
   } catch (err) {
     console.warn('[weather] unavailable, assuming clear:', err.message)
-    return Object.fromEntries(cities.map((c) => [c.id, { ...describeWeather(null), tempC: null }]))
+    return Object.fromEntries(cities.map((c) => [c.id, { ...describeWeather(null), tempC: null, mmPerHour: null, rainInMinutes: null }]))
   } finally {
     clearTimeout(timer)
   }
+}
+
+// `current` values are sums over its interval (900 s), so scale them to an hourly rate.
+function rainRate(cur) {
+  if (!cur || cur.rain == null) return null
+  const mm = (cur.rain ?? 0) + (cur.showers ?? 0)
+  return (mm * 3600) / (cur.interval || 900)
+}
+
+// Times are UTC (timezone=UTC in the request) without a zone suffix.
+const utc = (t) => Date.parse(`${t}Z`)
+
+function minutesUntilRain(m15, nowTime) {
+  if (!m15?.time || !nowTime) return null
+  const now = utc(nowTime)
+  for (let i = 0; i < m15.time.length; i++) {
+    if ((m15.rain?.[i] ?? 0) + (m15.showers?.[i] ?? 0) >= RAIN_MM) return Math.max(0, Math.round((utc(m15.time[i]) - now) / 60000))
+  }
+  return null
 }

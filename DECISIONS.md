@@ -48,3 +48,27 @@
 - Tier: detect-gpu with self-hosted benchmarks; desktop tier 3 → high, tier ≥ 2 → medium, else low; phones cap at medium. Live drop after 2 s averaging > 20 ms; stalls > 250 ms ignored; 4 s cooldown.
 - Still page for prefers-reduced-motion and no WebGL: public/still.jpg (saved from /?lab=drop with S) + city list.
 - Dev tools: /?lab=drop, ?tier=, ?at=ISO, ?still, window.__schwe.goto(units).
+
+## 2026-09-28 — Dependency sync after the Phase 9 merge
+- After any pull that changes package-lock.json, run `npm ci` (not `npm install`) so node_modules matches the lockfile exactly.
+- Missing-import errors for @fontsource / detect-gpu / suncalc mean node_modules is stale, not that code is wrong.
+
+## 2026-09-28 — Dive city chosen by the world
+- Each visit dives into the most interesting city now: rain clip +3; dusk/dawn 2, night 1, day 0; random tie-break (content/diveChoice.js).
+- Scored on the clip that will actually play, not raw weather (snow and missing rain clips don't count as rain).
+- Chosen once per visit from the first selection; the 10-min reselect never changes it. Fallback: DEFAULT_DIVE_CITY (mexico-city).
+- Drop positions and camera path fixed; heroDropsFor(city) swaps the chosen city into slot DIVE_DROP_INDEX.
+- Loader "enter" fades in only after the choice (≤4 s weather timeout), so layout and ambience are fixed before scroll.
+- Ambience reads state.diveCity; AUDIO.diveCity and HERO_DROPS removed.
+- Dev-only ?dive=<city> forces the pick; not in production builds.
+
+## 2026-09-28 — Direction: "where is it raining now?"
+- The site answers where it is raining hardest right now; the one drop that falls in beat 7 carries that city. Plan B (tap to visit any drop during the drift) deferred to a later phase.
+- Weather request adds current rain+showers (mm per 900 s → mm/h) and minutely_15 rain+showers for 6 h. Snow never counts as rain.
+- Ending choice (content/rainChoice.js), once per visit before "enter": 'now' = heaviest mm/h among cities whose rain clip plays (tie → WMO severity); else 'soon' = earliest ≥0.1 mm slot; else 'none'. Weather failure → 'none'. Never invented.
+- Dive city excludes the ending city, so each visit shows two cities.
+- Falling drop: 'fall' video slot, 720p, pinned from SPLASH.fallPinFrom (13) to impact; city poster until live; envOnly when 'none'.
+- Ending type (ui/EndType.jsx, rig.endType) in at SPLASH.answerAt (17.5), leaves with #fade. Copy: "Raining hardest now" / "Rain reaches X in about N min" / "Nowhere else is it raining right now."
+- Sound: second source on the rain bed under the fall (lowpass 3.5 kHz, 'now' only), ducked by the splash; chime at the answer. AUDIO.files.ambience[city] replaces it when licensed.
+- Title: "schwe: where is it raining now?".
+- Dev-only ?rain=<city> | <city>@<minutes> | none.

@@ -51,6 +51,8 @@ export async function selectClips(manifest, cities, date = new Date(), weather =
       weather: w.variant,
       weatherLabel: w.label,
       tempC: w.tempC,
+      mmPerHour: w.mmPerHour ?? null,
+      rainInMinutes: w.rainInMinutes ?? null,
       clip: entry?.id ?? null,
       urls: clipUrls(entry),
     }

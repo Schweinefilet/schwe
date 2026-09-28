@@ -50,6 +50,7 @@ export function buildMasterTimeline() {
   tl.to(rig, { fall: 1, duration: SPLASH.impactAt - SPLASH.fallAt, ease: 'sine.in' }, SPLASH.fallAt)
   tl.to(rig, { splash: 1, duration: SPLASH.splashEnd - SPLASH.impactAt }, SPLASH.impactAt)
   tl.to(rig, { ring: 1, duration: SPLASH.ringEnd - SPLASH.ringStart }, SPLASH.ringStart)
+  tl.to(rig, { endType: 1, duration: 0.3 }, SPLASH.answerAt)
   tl.to('#fade', { opacity: 1, duration: TIMELINE_END - SPLASH.fadeStart }, SPLASH.fadeStart)
 
   // Pin total duration so scroll maps 1:1 to units even if the last tween ends early.

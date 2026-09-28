@@ -3,6 +3,7 @@ import { Canvas } from '@react-three/fiber'
 import Experience from './scenes/Experience.jsx'
 import Loader from './ui/Loader.jsx'
 import CityType from './ui/CityType.jsx'
+import EndType from './ui/EndType.jsx'
 import StillPage from './ui/StillPage.jsx'
 import { initScroll } from './core/scroll.js'
 import { state } from './core/state.js'
@@ -12,6 +13,7 @@ import { startPerfGuard } from './core/perfGuard.js'
 import { loadManifest } from './content/manifest.js'
 import { selectClips } from './content/clipSelector.js'
 import { chooseDiveCity } from './content/diveChoice.js'
+import { chooseRainCity } from './content/rainChoice.js'
 import { CAMERA_FOV, CITIES, DEFAULT_DIVE_CITY, TIMELINE_END, VH_PER_UNIT } from './config.js'
 
 // Dynamic import behind the DEV flag, so production builds don't include the overlay.
@@ -22,6 +24,9 @@ const RESELECT_MS = 10 * 60 * 1000
 const AT = import.meta.env.DEV ? new URLSearchParams(location.search).get('at') : null
 // Dev: ?dive=new-york forces the dive city instead of letting the world choose.
 const FORCE_DIVE = import.meta.env.DEV ? new URLSearchParams(location.search).get('dive') : null
+// Dev: ?rain=mumbai forces the ending to that city, ?rain=london@40 to "rain reaches London in 40 min",
+// ?rain=none to the dry ending.
+const FORCE_RAIN = import.meta.env.DEV ? new URLSearchParams(location.search).get('rain') : null
 // Dev: ?still forces the still page.
 const FORCE_STILL = import.meta.env.DEV && new URLSearchParams(location.search).has('still')
 const REDUCED_MOTION = window.matchMedia('(prefers-reduced-motion: reduce)').matches
@@ -32,6 +37,7 @@ const TRACK_HEIGHT = `${TIMELINE_END * VH_PER_UNIT + 100}vh`
 export default function App() {
   const [clips, setClips] = useState(null)
   const [diveCity, setDiveCity] = useState(null)
+  const [rainCity, setRainCity] = useState(null)
   const [device, setDevice] = useState(null) // { tier, webgl } once GPU detection finishes
   const still = FORCE_STILL || REDUCED_MOTION || device?.webgl === false
 
@@ -62,8 +68,11 @@ export default function App() {
           state.clips = selection
           setClips(selection)
           // Chosen once per visit: the 10-minute reselect refreshes clips but never moves the dive.
+          // The ending's rain city is chosen first so the dive can avoid it.
           if (!state.diveCity) {
-            state.diveCity = FORCE_DIVE ?? chooseDiveCity(selection, DEFAULT_DIVE_CITY)
+            state.rainCity = FORCE_RAIN ? forcedRain(FORCE_RAIN, selection) : chooseRainCity(selection)
+            state.diveCity = FORCE_DIVE ?? chooseDiveCity(selection, DEFAULT_DIVE_CITY, { exclude: state.rainCity.city })
+            setRainCity(state.rainCity)
             setDiveCity(state.diveCity)
           }
           if (import.meta.env.DEV) console.table(selection.map(({ urls, ...row }) => row))
@@ -72,7 +81,9 @@ export default function App() {
           // Never leave the loader without "enter": fall back to the default dive city.
           console.warn('[clips] selection failed:', err)
           if (cancelled || state.diveCity) return
+          state.rainCity = { kind: 'none' }
           state.diveCity = DEFAULT_DIVE_CITY
+          setRainCity(state.rainCity)
           setDiveCity(state.diveCity)
         })
     select()
@@ -86,10 +97,10 @@ export default function App() {
   // prefers-reduced-motion and no-WebGL visitors get the still page: a frame of the frozen rain and
   // the cities as they are right now. No scroll animation.
   if (still) return <StillPage clips={clips} />
-  return <Site clips={clips} device={device} diveCity={diveCity} />
+  return <Site clips={clips} device={device} diveCity={diveCity} rainCity={rainCity} />
 }
 
-function Site({ clips, device, diveCity }) {
+function Site({ clips, device, diveCity, rainCity }) {
   const scroll = useRef(null)
 
   useEffect(() => {
@@ -113,11 +124,12 @@ function Site({ clips, device, diveCity }) {
           camera={{ fov: CAMERA_FOV, near: 0.02, far: 200 }}
           style={{ position: 'fixed', inset: 0, pointerEvents: 'none' }}
         >
-          <Experience clips={clips} diveCity={diveCity ?? DEFAULT_DIVE_CITY} />
+          <Experience clips={clips} diveCity={diveCity ?? DEFAULT_DIVE_CITY} rainCity={rainCity} />
         </Canvas>
       )}
       <div id="scroll-track" style={{ height: TRACK_HEIGHT }} />
       <CityType clips={clips} cityId={diveCity ?? DEFAULT_DIVE_CITY} />
+      <EndType clips={clips} rainCity={rainCity} />
       <div id="fade" />
       <Loader onEnter={handleEnter} ready={diveCity !== null} />
       {DevOverlay && (
@@ -127,4 +139,14 @@ function Site({ clips, device, diveCity }) {
       )}
     </>
   )
+}
+
+// Dev only: builds a rain choice from ?rain=, using the selection's real data where it has it.
+function forcedRain(param, selection) {
+  if (param === 'none') return { kind: 'none' }
+  const [city, minutes] = param.split('@')
+  if (minutes != null) return { kind: 'soon', city, minutes: Number(minutes) }
+  const row = selection.find((r) => r.city === city)
+  const raining = row?.weather === 'rain'
+  return { kind: 'now', city, mmPerHour: raining ? row.mmPerHour : null, label: raining ? row.weatherLabel : 'rain' }
 }

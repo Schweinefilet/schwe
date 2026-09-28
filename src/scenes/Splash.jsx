@@ -5,6 +5,7 @@ import { SPLASH, WATER } from '../config.js'
 import { rig } from '../core/rig.js'
 import { state } from '../core/state.js'
 import { fall, fallPosition } from '../core/fall.js'
+import { pinDrop, registerDrop, unregisterDrop } from '../content/videoManager.js'
 import envChunk from '../shaders/env.glsl?raw'
 import waterChunk from '../shaders/water.glsl?raw'
 import vertexShader from '../shaders/splash.vert.glsl?raw'
@@ -58,7 +59,7 @@ function loadData(base) {
 
 // Beat 7: one drop falls, then the baked crown splash plays. The VAT frame follows scroll, so
 // scrolling back up plays the splash in reverse and lifts the drop back into the word.
-export default function Splash() {
+export default function Splash({ clips, rainCity }) {
   const [data, setData] = useState(null)
   const vatMesh = useRef()
   const drop = useRef()
@@ -122,7 +123,18 @@ export default function Splash() {
     [vat]
   )
 
+  // The falling drop carries the ending's city (where it is raining hardest, or where rain arrives
+  // first). Its clip decodes from the word's arrival to the impact; outside that it holds no decoder.
+  const urls = (rainCity?.city && clips?.find((c) => c.city === rainCity.city)?.urls) || null
+  useEffect(() => {
+    if (!urls) return
+    registerDrop(FALL_SLOT, { position: FALL_ORIGIN, radius: SPLASH.fallRadius, urls, full: false })
+    return () => unregisterDrop(FALL_SLOT)
+  }, [urls])
+  const poster = usePoster(urls?.poster)
+
   useFrame(() => {
+    if (urls) pinDrop(FALL_SLOT, state.time >= SPLASH.fallPinFrom && state.time <= SPLASH.impactAt)
     fallPosition(rig.fall)
     // Hand-off: the VAT's first frame holds the sim's own drop exactly where the falling drop ends.
     const handedOff = !!vat && rig.fall >= 1
@@ -140,7 +152,11 @@ export default function Splash() {
       <group ref={drop} visible={false}>
         {/* A function, not fall.pos: children run their frame callbacks before this component does,
             so reading fall.pos there would draw the drop one frame behind the camera. */}
-        <HeroDrop position={FALL_ORIGIN} radius={SPLASH.fallRadius} positionRef={currentFallPosition} envOnly dispersion={false} />
+        {urls ? (
+          <HeroDrop key="city" position={FALL_ORIGIN} radius={SPLASH.fallRadius} positionRef={currentFallPosition} slotKey={FALL_SLOT} poster={poster} dispersion={false} />
+        ) : (
+          <HeroDrop key="env" position={FALL_ORIGIN} radius={SPLASH.fallRadius} positionRef={currentFallPosition} envOnly dispersion={false} />
+        )}
       </group>
       {vat && <mesh ref={vatMesh} geometry={vat.geometry} material={vat.material} scale={vat.scale} frustumCulled={false} visible={false} />}
     </>
@@ -148,4 +164,26 @@ export default function Splash() {
 }
 
 const FALL_ORIGIN = [0, 0, 0]
+const FALL_SLOT = 'fall'
+
+// The city's poster, shown until its video is live (a slow network never leaves the drop black).
+function usePoster(url) {
+  const [texture, setTexture] = useState(null)
+  useEffect(() => {
+    if (!url) return
+    let tex = null
+    let cancelled = false
+    new THREE.TextureLoader().load(url, (t) => {
+      t.colorSpace = THREE.SRGBColorSpace
+      if (cancelled) t.dispose()
+      else setTexture((tex = t))
+    })
+    return () => {
+      cancelled = true
+      tex?.dispose()
+      setTexture(null)
+    }
+  }, [url])
+  return texture
+}
 const currentFallPosition = () => fallPosition(rig.fall)

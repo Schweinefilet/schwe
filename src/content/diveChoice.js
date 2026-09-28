@@ -9,11 +9,13 @@ function score(row) {
   return (weather === 'rain' ? RAIN_SCORE : 0) + (LIGHT_SCORE[light] ?? 0)
 }
 
-// `selection`: rows from selectClips(). Ties are broken at random, so visits vary.
-export function chooseDiveCity(selection, fallback, random = Math.random) {
+// `selection`: rows from selectClips(). Ties are broken at random, so visits vary. `exclude`: a city
+// that must not be picked (the ending's rain city, so the visitor sees two different cities).
+export function chooseDiveCity(selection, fallback, { exclude = null, random = Math.random } = {}) {
   let best = []
   let bestScore = -Infinity
   for (const row of selection ?? []) {
+    if (row.city === exclude) continue
     const s = score(row)
     if (s > bestScore) {
       best = [row]

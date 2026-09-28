@@ -32,7 +32,8 @@ export default function DevOverlay() {
           `beat   ${state.beat}\n` +
           `time×  ${globalUniforms.uTimeScale.value.toFixed(2)}\n` +
           `video  ${liveCount()} live\n` +
-          `dive   ${state.diveCity ?? '…'}`
+          `dive   ${state.diveCity ?? '…'}\n` +
+          `rain   ${rainLine(state.rainCity)}`
         windowStart = now
         frames = 0
         worst = 0
@@ -44,4 +45,11 @@ export default function DevOverlay() {
   }, [])
 
   return <pre ref={ref} className="dev-overlay" />
+}
+
+function rainLine(r) {
+  if (!r) return '…'
+  if (r.kind === 'now') return `${r.city} ${r.mmPerHour?.toFixed(1) ?? '?'} mm/h`
+  if (r.kind === 'soon') return `soon ${r.city} ${r.minutes}m`
+  return 'none'
 }
