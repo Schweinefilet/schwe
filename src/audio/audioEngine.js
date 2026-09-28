@@ -129,7 +129,7 @@ function build() {
     rain.stop()
     layers.rain = loop(b, rainFilter)
   })
-  const diveCity = AUDIO.diveCity
+  const diveCity = state.diveCity // fixed before "enter" can be clicked
   loadFile(AUDIO.files.ambience?.[diveCity]).then((b) => {
     if (!b) return
     city.stop()

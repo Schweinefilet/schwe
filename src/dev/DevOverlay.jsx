@@ -31,7 +31,8 @@ export default function DevOverlay() {
           `scroll ${(state.progress * 100).toFixed(1)} %\n` +
           `beat   ${state.beat}\n` +
           `time×  ${globalUniforms.uTimeScale.value.toFixed(2)}\n` +
-          `video  ${liveCount()} live`
+          `video  ${liveCount()} live\n` +
+          `dive   ${state.diveCity ?? '…'}`
         windowStart = now
         frames = 0
         worst = 0

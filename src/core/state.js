@@ -6,4 +6,5 @@ export const state = {
   time: 0, // master timeline time, in units
   unlocked: false,
   clips: null, // result of selectClips()
+  diveCity: null, // chosen once per visit from the first selection
 }

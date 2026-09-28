@@ -1,6 +1,6 @@
 import { useEffect, useMemo } from 'react'
 import { useFrame } from '@react-three/fiber'
-import { DIVE, HERO, HERO_DROPS } from '../config.js'
+import { DIVE, HERO, heroDropsFor } from '../config.js'
 import { quality } from '../core/quality.js'
 import { createPosterAtlas } from '../content/posterAtlas.js'
 import { pinDrop, registerDrop, unregisterDrop, updateVideoBudget } from '../content/videoManager.js'
@@ -9,16 +9,16 @@ import { useTier } from '../core/useTier.js'
 import HeroDrop from './HeroDrop.jsx'
 
 // The dive drop is always kept; lower tiers show fewer of the others.
-const pickVisible = () => [
-  ...HERO_DROPS.filter((d) => d.dive),
-  ...HERO_DROPS.filter((d) => !d.dive).slice(0, quality.heroDrops - 1),
+const pickVisible = (drops) => [
+  ...drops.filter((d) => d.dive),
+  ...drops.filter((d) => !d.dive).slice(0, quality.heroDrops - 1),
 ]
 
 // Beats 4–5: the hero drops. Posters come from one atlas; the video budget manager decides which
 // drops play live video.
-export default function HeroDrops({ clips }) {
+export default function HeroDrops({ clips, diveCity }) {
   const tier = useTier()
-  const visible = useMemo(pickVisible, [tier])
+  const visible = useMemo(() => pickVisible(heroDropsFor(diveCity)), [tier, diveCity])
   const atlas = useMemo(() => createPosterAtlas(), [])
   useEffect(() => () => atlas.dispose(), [atlas])
   const rects = useMemo(() => visible.map((_, i) => atlas.rectAt(i)), [atlas, visible])
@@ -33,7 +33,6 @@ export default function HeroDrops({ clips }) {
 
   useEffect(() => () => visible.forEach((d) => unregisterDrop(d.city)), [visible])
 
-  const diveCity = visible.find((d) => d.dive).city
   useFrame(({ camera }, dt) => {
     // The dive drop holds a decoder through the whole dive, whatever else is on screen.
     pinDrop(diveCity, state.time >= DIVE.pinFrom && state.time <= DIVE.pinTo)

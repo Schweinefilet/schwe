@@ -53,6 +53,15 @@ body {
   font-size: 0.75rem;
   letter-spacing: 0.3em;
   cursor: pointer;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.8s ease, visibility 0s 0.8s;
+}
+
+.loader__enter.is-ready {
+  opacity: 1;
+  visibility: visible;
+  transition: opacity 0.8s ease;
 }
 
 .dev-overlay {

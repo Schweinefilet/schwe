@@ -56,7 +56,15 @@ const HERO_POSITIONS = [
   [-0.65, 4.7, -31], [0.6, 4.1, -36],
 ]
 export const DIVE_DROP_INDEX = 9
-export const HERO_DROPS = HERO_POSITIONS.map((pos, i) => ({ pos, city: CITIES[i % CITIES.length].id, dive: i === DIVE_DROP_INDEX }))
+export const DEFAULT_DIVE_CITY = CITIES[DIVE_DROP_INDEX].id
+// The dive city is chosen per visit (content/diveChoice.js). It swaps into the dive slot with the
+// city that was there; positions and the camera path never change.
+export function heroDropsFor(diveCity) {
+  const order = CITIES.map((c) => c.id)
+  const from = order.indexOf(diveCity)
+  if (from >= 0) [order[from], order[DIVE_DROP_INDEX]] = [order[DIVE_DROP_INDEX], order[from]]
+  return HERO_POSITIONS.map((pos, i) => ({ pos, city: order[i % order.length], dive: i === DIVE_DROP_INDEX }))
+}
 const D = HERO_POSITIONS[DIVE_DROP_INDEX]
 
 export const CAMERA_FOV = 50 // vertical, degrees
@@ -145,7 +153,6 @@ export const DIVE = {
 export const AUDIO = {
   master: 0.9,
   cityLevel: 0.35,
-  diveCity: HERO_DROPS.find((d) => d.dive).city,
   files: {
     rain: null, // e.g. 'audio/rain.mp3' — loops; the freeze pitches this same file down into the hum
     align: null,

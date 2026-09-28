@@ -2,8 +2,8 @@ import { useRef, useState } from 'react'
 import gsap from 'gsap'
 
 // Beat 1: black screen, a single faint drop, the word "enter". The click is the user gesture that
-// unlocks audio.
-export default function Loader({ onEnter }) {
+// unlocks audio. "enter" appears once `ready` (the dive city is chosen), so nothing changes after it.
+export default function Loader({ onEnter, ready }) {
   const ref = useRef()
   const [gone, setGone] = useState(false)
 
@@ -16,7 +16,7 @@ export default function Loader({ onEnter }) {
   return (
     <div ref={ref} className="loader">
       <div className="loader__drop" aria-hidden="true" />
-      <button className="loader__enter" onClick={handleEnter}>
+      <button className={`loader__enter${ready ? ' is-ready' : ''}`} onClick={handleEnter} disabled={!ready}>
         enter
       </button>
     </div>

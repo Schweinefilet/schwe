@@ -11,15 +11,17 @@ import { detectTier, quality } from './core/quality.js'
 import { startPerfGuard } from './core/perfGuard.js'
 import { loadManifest } from './content/manifest.js'
 import { selectClips } from './content/clipSelector.js'
-import { CAMERA_FOV, CITIES, HERO_DROPS, TIMELINE_END, VH_PER_UNIT } from './config.js'
+import { chooseDiveCity } from './content/diveChoice.js'
+import { CAMERA_FOV, CITIES, DEFAULT_DIVE_CITY, TIMELINE_END, VH_PER_UNIT } from './config.js'
 
 // Dynamic import behind the DEV flag, so production builds don't include the overlay.
 const DevOverlay = import.meta.env.DEV ? lazy(() => import('./dev/DevOverlay.jsx')) : null
 
 const RESELECT_MS = 10 * 60 * 1000
-const DIVE_CITY = HERO_DROPS.find((d) => d.dive).city
 // Dev: ?at=2026-09-28T03:00Z pretends it is that moment, to check clip choice without changing the clock.
 const AT = import.meta.env.DEV ? new URLSearchParams(location.search).get('at') : null
+// Dev: ?dive=new-york forces the dive city instead of letting the world choose.
+const FORCE_DIVE = import.meta.env.DEV ? new URLSearchParams(location.search).get('dive') : null
 // Dev: ?still forces the still page.
 const FORCE_STILL = import.meta.env.DEV && new URLSearchParams(location.search).has('still')
 const REDUCED_MOTION = window.matchMedia('(prefers-reduced-motion: reduce)').matches
@@ -29,6 +31,7 @@ const TRACK_HEIGHT = `${TIMELINE_END * VH_PER_UNIT + 100}vh`
 
 export default function App() {
   const [clips, setClips] = useState(null)
+  const [diveCity, setDiveCity] = useState(null)
   const [device, setDevice] = useState(null) // { tier, webgl } once GPU detection finishes
   const still = FORCE_STILL || REDUCED_MOTION || device?.webgl === false
 
@@ -58,7 +61,19 @@ export default function App() {
           if (cancelled) return
           state.clips = selection
           setClips(selection)
+          // Chosen once per visit: the 10-minute reselect refreshes clips but never moves the dive.
+          if (!state.diveCity) {
+            state.diveCity = FORCE_DIVE ?? chooseDiveCity(selection, DEFAULT_DIVE_CITY)
+            setDiveCity(state.diveCity)
+          }
           if (import.meta.env.DEV) console.table(selection.map(({ urls, ...row }) => row))
+        })
+        .catch((err) => {
+          // Never leave the loader without "enter": fall back to the default dive city.
+          console.warn('[clips] selection failed:', err)
+          if (cancelled || state.diveCity) return
+          state.diveCity = DEFAULT_DIVE_CITY
+          setDiveCity(state.diveCity)
         })
     select()
     const timer = setInterval(select, RESELECT_MS)
@@ -71,10 +86,10 @@ export default function App() {
   // prefers-reduced-motion and no-WebGL visitors get the still page: a frame of the frozen rain and
   // the cities as they are right now. No scroll animation.
   if (still) return <StillPage clips={clips} />
-  return <Site clips={clips} device={device} />
+  return <Site clips={clips} device={device} diveCity={diveCity} />
 }
 
-function Site({ clips, device }) {
+function Site({ clips, device, diveCity }) {
   const scroll = useRef(null)
 
   useEffect(() => {
@@ -98,13 +113,13 @@ function Site({ clips, device }) {
           camera={{ fov: CAMERA_FOV, near: 0.02, far: 200 }}
           style={{ position: 'fixed', inset: 0, pointerEvents: 'none' }}
         >
-          <Experience clips={clips} />
+          <Experience clips={clips} diveCity={diveCity ?? DEFAULT_DIVE_CITY} />
         </Canvas>
       )}
       <div id="scroll-track" style={{ height: TRACK_HEIGHT }} />
-      <CityType clips={clips} cityId={DIVE_CITY} />
+      <CityType clips={clips} cityId={diveCity ?? DEFAULT_DIVE_CITY} />
       <div id="fade" />
-      <Loader onEnter={handleEnter} />
+      <Loader onEnter={handleEnter} ready={diveCity !== null} />
       {DevOverlay && (
         <Suspense fallback={null}>
           <DevOverlay />
