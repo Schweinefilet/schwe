@@ -191,3 +191,89 @@ body {
     animation: none;
   }
 }
+
+/* ?bench only. */
+.bench-status {
+  position: fixed;
+  top: 8px;
+  right: 8px;
+  z-index: 100;
+  font: 11px/1.4 ui-monospace, Menlo, monospace;
+  color: #9f9;
+  pointer-events: none;
+}
+
+.bench-panel {
+  position: fixed;
+  inset: max(16px, env(safe-area-inset-top)) 16px max(16px, env(safe-area-inset-bottom));
+  z-index: 200;
+  overflow: auto;
+  overscroll-behavior: contain;
+  padding: 16px;
+  background: rgba(0, 0, 0, 0.88);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  font: 12px/1.5 ui-monospace, Menlo, monospace;
+}
+
+.bench-panel h2 {
+  margin: 0 0 8px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.bench-panel p {
+  margin: 0 0 12px;
+  opacity: 0.8;
+}
+
+.bench-panel table {
+  border-collapse: collapse;
+  white-space: nowrap;
+}
+
+.bench-panel th,
+.bench-panel td {
+  padding: 2px 10px 2px 0;
+  text-align: right;
+}
+
+.bench-panel th:first-child,
+.bench-panel td:first-child,
+.bench-panel th:nth-child(2),
+.bench-panel td:nth-child(2) {
+  text-align: left;
+}
+
+.bench-panel tr.is-bad td {
+  color: #f99;
+}
+
+.bench-panel tbody tr:last-child td {
+  border-top: 1px solid rgba(255, 255, 255, 0.2);
+  font-weight: 600;
+}
+
+.bench-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 14px 0 10px;
+}
+
+.bench-actions button {
+  min-height: 44px;
+  padding: 0 14px;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  background: none;
+  color: #fff;
+  font: inherit;
+}
+
+.bench-panel textarea {
+  width: 100%;
+  box-sizing: border-box;
+  background: #000;
+  color: #ccc;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  font: 11px/1.4 ui-monospace, Menlo, monospace;
+}

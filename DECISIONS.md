@@ -72,3 +72,14 @@
 - Sound: second source on the rain bed under the fall (lowpass 3.5 kHz, 'now' only), ducked by the splash; chime at the answer. AUDIO.files.ambience[city] replaces it when licensed.
 - Title: "schwe: where is it raining now?".
 - Dev-only ?rain=<city> | <city>@<minutes> | none.
+
+## 2026-09-28 — Housekeeping, tests, benchmark mode
+- Work lands on main directly (no feature branches). Commits end with the Co-Authored-By line; nothing is pushed without asking.
+- __pycache__/ and *.pyc ignored. favicon.svg: a frozen drop drawn by hand in SVG (dark lens, inverted street glow, rim, glint).
+- `npm test`: node's built-in runner, no test dependency. Covers rainChoice, diveChoice, weather parsing (mocked Open-Meteo) and bench stats.
+- `npm run smoke`: Vite + headless Chrome (puppeteer-core, CHROME env) through every beat forward and back for the natural ending and each ?rain= ending. Checks beats, freeze/unfreeze, ending text, dive ≠ ending city, decoder budget, page errors. Frame rates from it are meaningless (software GPU).
+- Benchmark mode `?bench` (production too, its own ~3 KB chunk): after "enter", 4 s idle at rain, then a constant-speed pass to the end (1.6 s per unit) and back, scroll locked. Per frame: interval, main-thread CPU ms, beat, tier, dir, live videos. Report per beat × tier: fps, p50/p95/p99/max, % over 20 ms (tier guard budget), % over 33 ms, CPU p95, plus tier changes. Hand back via "download json" (includes raw frames) or "copy summary" (plain table).
+- GPU time is not measured (not reliably exposed); CPU ms low + interval high = GPU-bound.
+- Display rate reported only when idle frames sit within 6% of a common refresh rate; otherwise unknown.
+- Build id (short commit, +dirty) is compiled in via __BUILD__ so every report names the build it measured.
+- Combine ?bench with ?tier=high|medium|low to measure one tier; the live tier guard is off when a tier is forced.

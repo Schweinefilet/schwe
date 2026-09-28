@@ -14,6 +14,8 @@ export const TIER_ORDER = ['high', 'medium', 'low']
 const forced = new URLSearchParams(location.search).get('tier')
 
 export const quality = { name: 'high', ...TIERS.high }
+// detect-gpu's raw result (GPU name, score, isMobile), kept for benchmark reports.
+export const detected = { result: null }
 
 const listeners = new Set()
 export function onTierChange(fn) {
@@ -50,6 +52,7 @@ export async function detectTier() {
   } catch (err) {
     console.warn('[quality] GPU detection failed, using medium:', err.message)
   }
+  detected.result = result
   const webgl = !result || (result.type !== 'WEBGL_UNSUPPORTED' && result.type !== 'BLOCKLISTED')
 
   if (!forced) {

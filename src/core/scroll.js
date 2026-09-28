@@ -48,7 +48,17 @@ export function initScroll() {
     }
   }
 
+  const timeToScroll = (t) => st.start + (t / tl.duration()) * (st.end - st.start)
+
   return {
+    labels: tl.labels,
+    duration: () => tl.duration(),
+    // Benchmark mode: scroll to timeline time `t` at a constant speed; resolves when it arrives.
+    scrollToTime: (t, seconds) =>
+      new Promise((resolve) =>
+        lenis.scrollTo(timeToScroll(t), { duration: seconds, easing: (x) => x, lock: true, force: true, onComplete: resolve })
+      ),
+    setLocked: (on) => (on ? lenis.stop() : lenis.start()),
     enter() {
       lenis.start()
       lenis.scrollTo(st.labelToScroll('rain'), { duration: ENTER_SCROLL_SECONDS, lock: true })

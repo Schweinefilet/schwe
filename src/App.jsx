@@ -18,6 +18,9 @@ import { CAMERA_FOV, CITIES, DEFAULT_DIVE_CITY, TIMELINE_END, VH_PER_UNIT } from
 
 // Dynamic import behind the DEV flag, so production builds don't include the overlay.
 const DevOverlay = import.meta.env.DEV ? lazy(() => import('./dev/DevOverlay.jsx')) : null
+// ?bench (production too): scripted run that measures frame times per beat and tier on a real device.
+// Its own chunk, so normal visits never download it.
+const Bench = new URLSearchParams(location.search).has('bench') ? lazy(() => import('./bench/Bench.jsx')) : null
 
 const RESELECT_MS = 10 * 60 * 1000
 // Dev: ?at=2026-09-28T03:00Z pretends it is that moment, to check clip choice without changing the clock.
@@ -135,6 +138,11 @@ function Site({ clips, device, diveCity, rainCity }) {
       {DevOverlay && (
         <Suspense fallback={null}>
           <DevOverlay />
+        </Suspense>
+      )}
+      {Bench && (
+        <Suspense fallback={null}>
+          <Bench scroll={scroll} />
         </Suspense>
       )}
     </>

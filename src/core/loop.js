@@ -6,10 +6,13 @@ import gsap from 'gsap'
 // The Canvas runs with frameloop="never", so this is the only thing that renders.
 let lenis = null
 let advance = null
+let frameHook = null // benchmark mode: (frameStart ms, cpu ms) after each frame
 
 function tick(time) {
+  const t0 = frameHook ? performance.now() : 0
   lenis?.raf(time * 1000)
   advance?.(time) // R3F expects seconds when frameloop="never"
+  frameHook?.(t0, performance.now() - t0)
 }
 
 gsap.ticker.add(tick)
@@ -18,3 +21,4 @@ import.meta.hot?.dispose(() => gsap.ticker.remove(tick))
 
 export const setLenis = (l) => (lenis = l)
 export const setAdvance = (fn) => (advance = fn)
+export const setFrameHook = (fn) => (frameHook = fn)
