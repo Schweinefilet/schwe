@@ -73,12 +73,18 @@ def read_bobj(path):
 
 
 def cluster(v, n, tris, cell_fine, cell_coarse, surface_z):
-    """Vertex clustering with a coarse grid on flat calm water. Returns (verts, normals, tris)."""
+    """Vertex clustering with a coarse grid on flat calm water. Returns (verts, normals, tris).
+
+    Vertices only merge if they also face the same way (dominant normal axis and sign). The crown is
+    a sheet thinner than a cell; without this, its front and back surfaces merge, their triangles
+    collapse, and the sheet fills with holes."""
     flat = (n[:, 2] > 0.985) & (np.abs(v[:, 2] - surface_z) < 0.0015)
     cell = np.where(flat, cell_coarse, cell_fine)[:, None]
-    g = np.floor(v / cell).astype(np.int64) + 500_000  # < 2^19 per axis, so the packed key fits int64
-    key = (g[:, 0] << 42) ^ (g[:, 1] << 21) ^ g[:, 2]
-    key = key * 2 + flat  # coarse and fine cells never share an id
+    g = np.floor(v / cell).astype(np.int64) + 65_536  # < 2^17 per axis, so the packed key fits int64
+    axis = np.abs(n).argmax(axis=1)
+    facing = axis * 2 + (n[np.arange(len(n)), axis] > 0)  # 6 directions
+    key = (g[:, 0] << 34) | (g[:, 1] << 17) | g[:, 2]
+    key = (key * 2 + flat) * 8 + facing  # coarse and fine cells, and opposite faces, never share an id
     uniq, cid = np.unique(key, return_inverse=True)
     cid = cid.ravel()
     k = len(uniq)
