@@ -5,7 +5,10 @@ import { ENTER_SCROLL_SECONDS } from '../config.js'
 import { setLenis } from './loop.js'
 import { buildMasterTimeline } from './timeline.js'
 import { resetRig } from './rig.js'
-import { resetUniforms } from './uniforms.js'
+import { globalUniforms, resetUniforms } from './uniforms.js'
+import { state } from './state.js'
+import { quality } from './quality.js'
+import { liveCount } from '../content/videoManager.js'
 
 gsap.registerPlugin(ScrollTrigger)
 
@@ -31,11 +34,16 @@ export function initScroll() {
     animation: tl,
   })
 
-  // Dev hook for scripted screenshots: __schwe.goto(units) jumps the scroll to a timeline time.
+  // Dev hook for scripted checks (scripts/smoke.mjs): __schwe.goto(units) jumps the scroll to a
+  // timeline time; state, uniforms and the live video count are readable.
   if (import.meta.env.DEV) {
     window.__schwe = {
       lenis,
       tl,
+      state,
+      quality,
+      uniforms: globalUniforms,
+      liveCount,
       goto: (t) => lenis.scrollTo(st.start + (t / tl.duration()) * (st.end - st.start), { immediate: true, force: true }),
     }
   }
