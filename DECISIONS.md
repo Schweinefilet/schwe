@@ -33,6 +33,7 @@
 - Dive: camera stops 1.28 R from the dive drop (covers all screen corners). rig.dive eases IOR 1.333 → 1.0 and clip framing → cover-fit; at 1 the drop is the fullscreen clip from the same decoder. No separate fullscreen plane.
 - Camera keys: per-segment eases; identical consecutive keys are exact holds.
 - Alignment: Inter Tight 600 (OFL, @fontsource, self-hosted), seeded jittered-grid sampling; drops at random depth 3.5–18 from the eye; radius ∝ depth. Word width 62% of screen width, capped at 40% height; beads scale with it. Eye [0, 4.8, −41] → target [0, 4.8, −60]. Side swing-in from 12.3; arrive 13; hold to 14.5.
+- Alignment drops are hidden until the dive is over (rig.wordReveal, 11.9 → 12.5): the drift flies close to the word's sight line, where it would already read in the distance. Pull-out swings 1.6 units off-axis.
 - Beats now: loader 0, rain 1, freeze 1.08, drift 2.5, dive 8, align 11.5, splash 14.5, end 19.
 - Splash: Blender 4.2 LTS Mantaflow (the pip bpy wheel's Mantaflow is broken), res 160, pool + 6 mm drop at 4 m/s, time scale 0.05, 72 frames. Bake ≈ 20 min on 4 CPU cores.
 - VAT export is plain numpy (vat_from_cache.py) reading Mantaflow's .bobj.gz cache directly: crop radius 60 mm, vertex clustering (fine on the crown, 5× coarser on calm water, cell size searched per frame) to ≤ 6000 tris. Re-export takes ~30 s without re-simulating.

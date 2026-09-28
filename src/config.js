@@ -114,7 +114,7 @@ export const CAMERA_KEYS = [
   { at: 8,    pos: [D[0] + 0.35, D[1] + 0.15, D[2] + 4.5], look: D },                    // dive: approach
   { at: 9.4,  pos: DIVE_EYE,                             look: D, ease: 'power2.out' },  // drop fills the frame
   { at: 10.6, pos: DIVE_EYE,                             look: D },                      // inside the city
-  { at: 11.5, pos: [D[0] - 0.5, D[1] + 0.5, D[2] + 1.8], look: [D[0], D[1], D[2] - 6], ease: 'power2.in' }, // pulled back out
+  { at: 11.5, pos: [D[0] - 1.6, D[1] + 0.6, D[2] + 1.8], look: [D[0], D[1], D[2] - 6], ease: 'power2.in' }, // pulled back out, off the word's axis
   // Swing in from the side: parallax keeps the word scrambled until the last stretch of the approach.
   { at: 12.3, pos: [ALIGN_EYE[0] - 2.4, ALIGN_EYE[1] + 0.9, ALIGN_EYE[2] + 3.2], look: [ALIGN_TARGET[0] - 1.5, ALIGN_TARGET[1], ALIGN_TARGET[2]] },
   { at: ALIGN_AT, pos: ALIGN_EYE,                        look: ALIGN_TARGET, ease: 'power1.out' }, // the word locks in

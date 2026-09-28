@@ -101,7 +101,7 @@ export default function AlignmentWord() {
           uResolution: { value: new THREE.Vector2(1, 1) },
           uFogDensity: { value: RAIN.fogDensity },
           uGlow: { value: 1 },
-          uEye: { value: new THREE.Vector3(...ALIGN.eye) },
+          uReveal: { value: 0 },
           uLensGain: { value: RAIN.lensGain },
           uReflGain: { value: RAIN.reflGain },
           uSpec: { value: RAIN.spec },
@@ -118,6 +118,7 @@ export default function AlignmentWord() {
     gl.getDrawingBufferSize(_size)
     material.uniforms.uResolution.value.copy(_size)
     material.uniforms.uGlow.value = rig.alignGlow
+    material.uniforms.uReveal.value = rig.wordReveal
     // Once the drop starts to fall, its bead leaves the word (Splash draws the moving drop).
     if (geometry) {
       const attr = geometry.getAttribute('aParams')

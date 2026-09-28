@@ -39,6 +39,7 @@ export function buildMasterTimeline() {
   tl.to(rig, { dive: 0, duration: DIVE.outEnd - DIVE.outStart, ease: 'power1.inOut' }, DIVE.outStart)
 
   // Beat 6: the rain field recedes as the camera settles on the eye, and the word glints as it locks.
+  tl.to(rig, { wordReveal: 1, duration: 0.6, ease: 'sine.inOut' }, 11.9) // joins while the camera is well off-axis
   tl.to(rig, { rainFade: 0.45, duration: ALIGN.arrive - 12 }, 12)
   tl.to(rig, { alignGlow: 1.9, duration: 0.12, ease: 'power2.out' }, ALIGN.arrive - 0.06)
   tl.to(rig, { alignGlow: 1.25, duration: 0.6, ease: 'power2.inOut' }, ALIGN.arrive + 0.06)

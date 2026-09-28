@@ -5,7 +5,7 @@
 uniform vec2 uResolution;
 uniform float uFogDensity;
 uniform float uGlow;      // brightness pulse when the word locks in
-uniform vec3 uEye;        // the viewpoint where the word reads
+uniform float uReveal;    // 0 → 1 after the dive: the word's drops join the field only then
 
 attribute vec3 aOffset;   // world position
 attribute vec4 aParams;   // x: radius (world), y: brightness
@@ -38,8 +38,7 @@ void main() {
 
   vLocal = local;
   vRadius = r;
-  // From far away the word's drops would bunch into a visible smudge on the horizon, so they emerge
-  // only as the camera closes in on the viewpoint.
-  float nearEye = 1.0 - smoothstep(12.0, 22.0, distance(cameraPosition, uEye));
-  vAlpha = nearEye * exp(-depth * uFogDensity) * smoothstep(0.6, 3.0, depth) * (rTrue / r) * aParams.y * uGlow;
+  // The drift flies close to the word's sight line, where the word would already read in the
+  // distance; the drops join the field only after the dive, while the camera is well off-axis.
+  vAlpha = uReveal * exp(-depth * uFogDensity) * smoothstep(0.6, 3.0, depth) * (rTrue / r) * aParams.y * uGlow;
 }
