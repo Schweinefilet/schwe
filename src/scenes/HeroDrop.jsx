@@ -31,7 +31,7 @@ const proxy = new THREE.SphereGeometry(1.06, 32, 24)
 // `sky` (lab): { glsl, uniforms } from a CitySky (src/sky/citySky.js). The drop then refracts that
 // city's computed sky instead of a clip. Its uniforms are spread in by reference, so the CitySky
 // updates them without touching the material.
-export function createDropMaterial({ radius = HERO.radius, dispersion = true, sky = null } = {}) {
+export function createDropMaterial({ radius = HERO.radius, dispersion = true, sky = null, still = true } = {}) {
   const halfFov = THREE.MathUtils.degToRad(HERO.clipFov / 2)
   const defines = dispersion ? { DISPERSION: '' } : {}
   if (sky) defines.SKY = ''
@@ -61,6 +61,7 @@ export function createDropMaterial({ radius = HERO.radius, dispersion = true, sk
       // Shared by reference, so the drop hides and fades exactly as the rain does (drop.frag.glsl).
       uTimeScale: globalUniforms.uTimeScale,
       uFocus: globalUniforms.uFocus,
+      uStill: { value: still ? 1 : 0 },
       uBoxCenter: globalUniforms.uBoxCenter,
       uBoxSize: { value: new THREE.Vector3(...RAIN.boxSize) },
       uFogDensity: { value: RAIN.fogDensity },
@@ -89,6 +90,7 @@ function coverTan(camera, out) {
 // every frame (the falling drop).
 // `envOnly`: no clip at all, the drop refracts only the environment.
 // `sky`: a computed city sky instead of a clip (see createDropMaterial).
+// `still`: a still bead, hidden while the rain around it moves; false for the drop that falls.
 export default function HeroDrop({
   position,
   radius = HERO.radius,
@@ -101,8 +103,9 @@ export default function HeroDrop({
   positionRef = null,
   envOnly = false,
   sky = null,
+  still = true,
 }) {
-  const material = useMemo(() => createDropMaterial({ radius, dispersion, sky }), [radius, dispersion, sky])
+  const material = useMemo(() => createDropMaterial({ radius, dispersion, sky, still }), [radius, dispersion, sky, still])
   const u = material.uniforms
   const mesh = useRef()
 

@@ -145,6 +145,7 @@ export default function AlignmentWord() {
           uFogDensity: { value: RAIN.fogDensity },
           uBoxCenter: globalUniforms.uBoxCenter,
           uBoxSize: { value: new THREE.Vector3(...RAIN.boxSize) },
+          uTimeScale: globalUniforms.uTimeScale,
           uVisible: { value: new THREE.Vector2(...ALIGN.visibleWithin) },
           uLensGain: { value: RAIN.lensGain },
           uReflGain: { value: RAIN.reflGain },

@@ -15,19 +15,15 @@ export const globalUniforms = {
   uFocus: { value: 1 },
 }
 
-let frozen = false
+let target = 1
 
-// Called from the master timeline whenever scroll crosses the freeze label. The target is a pure
-// function of scroll; only the rate of change is time-based, so rewinding always restores it.
-export function setFrozen(next) {
-  if (next === frozen) return
-  frozen = next
-  gsap.to(globalUniforms.uTimeScale, {
-    value: next ? 0 : 1,
-    duration: FREEZE_SECONDS,
-    ease: 'power2.inOut',
-    overwrite: true,
-  })
+// Called from the master timeline on every update with the time scale the scroll position calls for
+// (1 falling, 0 frozen, a slow fall again at the end). The target is a pure function of scroll; only
+// the rate of change is time-based (`seconds`, `ease`), so rewinding always restores it.
+export function setTimeTarget(value, seconds = FREEZE_SECONDS, ease = 'power2.inOut') {
+  if (value === target) return
+  target = value
+  gsap.to(globalUniforms.uTimeScale, { value, duration: seconds, ease, overwrite: true })
 }
 
 export function stepSimTime(dt) {
@@ -36,6 +32,6 @@ export function stepSimTime(dt) {
 
 export function resetUniforms() {
   gsap.killTweensOf(globalUniforms.uTimeScale)
-  frozen = false
+  target = 1
   globalUniforms.uTimeScale.value = 1
 }

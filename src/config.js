@@ -229,6 +229,9 @@ export const SPLASH = {
   ringSeconds: 7.5, // the ripples' own clock over ringStart → ringEnd (the pace of the original 4 s over 1.7 units)
   quietAt: SPLASH_AT + 5.0, // the sound fades out over 0.8 units from here, as the water calms
   answerAt: SPLASH_AT + 3.0, // the ending's type fades in as the rings spread, and stays
+  // As the drop meets the water the frozen moment ends: the rain around eases to `timeScale` of its
+  // speed over `seconds` (real time) and keeps falling slowly on the held last frame.
+  rainAgain: { at: SPLASH_AT + 2.5, timeScale: 0.2, seconds: 3 },
   // Once the scroll passes autoFrom going down, the ending plays itself (the scroll moves with it,
   // locked) to the end at about autoRate units per second, then holds on the last frame.
   autoFrom: SPLASH_AT + 0.1, // the drop leaves the word (fallAt)

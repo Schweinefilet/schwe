@@ -7,6 +7,7 @@ uniform float uFogDensity;
 uniform vec3 uBoxCenter;  // the rain field's box (shared with Rain): fade at its faces like rain
 uniform vec3 uBoxSize;
 uniform vec2 uVisible;    // fade out between these distances from the camera (see ALIGN.visibleWithin)
+uniform float uTimeScale; // the rain's: a still bead among moving rain would stand out, so it hides
 
 attribute vec3 aOffset;   // world position
 attribute vec4 aParams;   // x: radius (world; 0 hides the drop), y: streak brightness (unused: never moves)
@@ -50,5 +51,5 @@ void main() {
   vLocal = local;
   vRadius = r;
   float far = 1.0 - smoothstep(uVisible.x, uVisible.y, depth);
-  vAlpha = edge * far * exp(-depth * uFogDensity) * smoothstep(0.6, 3.0, depth) * (rTrue / r);
+  vAlpha = edge * far * exp(-depth * uFogDensity) * smoothstep(0.6, 3.0, depth) * (rTrue / r) * (1.0 - smoothstep(0.005, 0.1, uTimeScale));
 }

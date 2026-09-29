@@ -1,7 +1,7 @@
 import gsap from 'gsap'
 import { BEATS, DIVE, SPLASH, TIMELINE_END } from '../config.js'
 import { rig } from './rig.js'
-import { setFrozen } from './uniforms.js'
+import { setTimeTarget } from './uniforms.js'
 import { state } from './state.js'
 
 function beatAt(time) {
@@ -19,7 +19,11 @@ export function buildMasterTimeline() {
       state.progress = tl.progress()
       state.time = t
       state.beat = beatAt(t)
-      setFrozen(t >= tl.labels.freeze)
+      // Falling at the top, frozen from the freeze, and falling again slowly once the drop meets the water.
+      const again = SPLASH.rainAgain
+      if (t < tl.labels.freeze) setTimeTarget(1)
+      else if (t < again.at) setTimeTarget(0)
+      else setTimeTarget(again.timeScale, again.seconds, 'sine.inOut')
     },
   })
 

@@ -27,6 +27,7 @@ uniform vec3 uBoxCenter;    // the rain field's box, whose faces it fades at
 uniform vec3 uBoxSize;
 uniform float uFogDensity;
 uniform float uFocus;       // the lens: 1 focused on the rain, 0 on the backdrop (the first shot)
+uniform float uStill;       // 1: a still bead, hidden while the rain moves; 0: the falling drop, always shown
 
 varying vec3 vWorld;
 
@@ -151,6 +152,6 @@ void main() {
   vec3 e = abs(uCenter - uBoxCenter) / (0.5 * uBoxSize);
   float edge = 1.0 - smoothstep(0.75, 1.0, max(max(e.x, e.y), e.z));
   float asRain = mix(edge * exp(-length(ro - uCenter) * uFogDensity), 1.0, nearMix);
-  float still = (1.0 - smoothstep(0.005, 0.1, uTimeScale)) * smoothstep(0.6, 1.0, uFocus);
+  float still = mix(1.0, (1.0 - smoothstep(0.005, 0.1, uTimeScale)) * smoothstep(0.6, 1.0, uFocus), uStill);
   gl_FragColor = vec4(col, alpha * asRain * still);
 }

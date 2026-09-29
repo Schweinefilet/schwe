@@ -70,18 +70,21 @@ async function runCase(browser, base, c) {
       endText: [...document.querySelector('.end-type').children].map((el) => el.textContent).join(' / '),
     }))
 
-  // Forward through every beat.
+  // Forward through every beat. At the word, time has frozen (the 1.5 s freeze, well past).
   for (let i = 1; i < beats.length; i++) {
     await goto(mid(i))
     const s = await read()
     check(s.beat === beats[i][0], `forward: expected beat ${beats[i][0]} at ${mid(i).toFixed(2)}, got ${s.beat}`)
+    if (beats[i][0] === 'align') {
+      await sleep(1200)
+      check((await read()).timeScale < 0.01, 'time did not freeze')
+    }
   }
-  await sleep(1200) // let the 1.5 s freeze finish
-  check((await read()).timeScale < 0.01, 'time did not freeze')
 
-  // The ending.
-  await goto(end - 1.1, 1500)
+  // The ending: the rain falls again, slowly (SPLASH.rainAgain eases over 3 s).
+  await goto(end - 1.1, 3500)
   const e = await read()
+  check(e.timeScale > 0.15 && e.timeScale < 0.25, `rain not falling slowly at the end (time scale ${e.timeScale.toFixed(2)})`)
   check(e.endOpacity > 0.99, `ending text not shown (opacity ${e.endOpacity})`)
   if (c.kind) check(e.rain?.kind === c.kind, `ending kind: expected ${c.kind}, got ${e.rain?.kind}`)
   if (c.city) check(e.rain?.city === c.city, `ending city: expected ${c.city}, got ${e.rain?.city}`)

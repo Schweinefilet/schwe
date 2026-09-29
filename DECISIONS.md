@@ -283,3 +283,9 @@ Still provisional:
 - Jerk, world units/s³, with the site's follower at a steady 0.6 units/s scroll (before: the committed straight path): start 318 → 152, drift 843 → 121, into the dive 531 → 7, out of the dive 908 → 29, the word pass 1,564 → 188.
 - The dev-only preview switch (?camera=) is removed; sky-stills reads DRIFT_PASSES. npm test 66/66, smoke 5/5; bundle 1,506.2 kB.
 - Tests (test/drift.test.js): the drift starts at the top and comes to rest inside the drop, passes each drop at its pass distance, is slowest at each pass and never goes backwards; smoothKeys keeps its pins exact and a hold still. smoothKeys now solves its pins' corrections together, so pins close to each other are exact too. npm test 70/70.
+
+## 2026-09-29 — The rain falls again, slowly, as the drop meets the water
+- User: the surrounding rain should start to fall again slowly during the end animation. SPLASH.rainAgain: from the impact (SPLASH_AT + 2.5) the time scale eases 0 → 0.2 over 3 s real time (sine.inOut) and stays there on the held last frame; scrolling back above the impact freezes it again (1.5 s, as the freeze). The time scale is a pure function of scroll as before (uniforms.js setTimeTarget replaces setFrozen: 1 above the freeze, 0 from it, 0.2 from the impact).
+- The falling drop is exempt from the rule that hides a still city drop while the rain moves (HeroDrop `still`, drop.frag uStill), so scrolling back into the fall never hides it. The word's drops now follow that rule too (align.vert), so no frozen bead stands still among moving rain.
+- Sound follows the time scale as before: the rain returns low and slow, and still fades out from SPLASH.quietAt.
+- Smoke now checks the freeze at the word and the slow rain (time scale 0.15–0.25) at the end. Checked: review/ending-rain-again.jpg; the falling drop stays visible when scrolling back into the fall. npm test 70/70, smoke 5/5.

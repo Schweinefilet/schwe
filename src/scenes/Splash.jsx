@@ -197,11 +197,11 @@ export default function Splash({ clips, rainCity }) {
         {/* A function, not fall.pos: children run their frame callbacks before this component does,
             so reading fall.pos there would draw the drop one frame behind the camera. */}
         {sky ? (
-          <HeroDrop key={`sky-${skyCity}`} position={FALL_ORIGIN} radius={SPLASH.fallRadius} positionRef={currentFallPosition} sky={sky} dispersion={false} />
+          <HeroDrop key={`sky-${skyCity}`} position={FALL_ORIGIN} radius={SPLASH.fallRadius} positionRef={currentFallPosition} sky={sky} dispersion={false} still={false} />
         ) : urls ? (
-          <HeroDrop key="city" position={FALL_ORIGIN} radius={SPLASH.fallRadius} positionRef={currentFallPosition} slotKey={FALL_SLOT} poster={poster} dispersion={false} />
+          <HeroDrop key="city" position={FALL_ORIGIN} radius={SPLASH.fallRadius} positionRef={currentFallPosition} slotKey={FALL_SLOT} poster={poster} dispersion={false} still={false} />
         ) : (
-          <HeroDrop key="env" position={FALL_ORIGIN} radius={SPLASH.fallRadius} positionRef={currentFallPosition} envOnly dispersion={false} />
+          <HeroDrop key="env" position={FALL_ORIGIN} radius={SPLASH.fallRadius} positionRef={currentFallPosition} envOnly dispersion={false} still={false} />
         )}
       </group>
       {vat && <mesh ref={vatMesh} geometry={vat.geometry} material={vat.material} scale={vat.scale} frustumCulled={false} visible={false} />}
