@@ -121,7 +121,7 @@
 ## 2026-09-29 — Word density halved
 - ALIGN.count 900/650/450 → 450/325/225 (high/medium/low): more natural, closer to the surrounding rain. Still legible from the eye on every tier and in portrait; the approach patch (≈12.6) is lighter.
 
-## 2026-09-29 — Sky in a drop: lab prototype (PROVISIONAL until the look is approved)
+## 2026-09-29 — Sky in a drop: lab prototype (approved; what is final and what is still provisional: "Sky in the main scene" below)
 - Provisional. A second content source beside footage, in /?lab=drop only. Footage pipeline, ingest scripts, video budget and the main timeline are untouched; the site never sets the SKY define (≈1.3 KB of shader text ships, never compiled).
 - Model: Hillaire 2020 (Rayleigh, Mie, ozone, planet shadow, multiple scattering approximated). Chosen over analytic fits (Preetham, Hosek-Wilkie: no twilight below the horizon) and single-scattering marches (blue hour too dark, too heavy full-screen).
 - Bruneton 2017 stays open for later: the only interface is the per-city sky-view texture (atmosphere.glsl layout) plus a transmittance texture in Bruneton's parameterization. Any model object with shared / init() / renderSkyView() can replace src/sky/hillaire.js.
@@ -139,3 +139,26 @@
 - `npm run sky:stills`: headless stills to review/ (Tokyo night rain, Mumbai dusk, London overcast midday, Sydney clear dawn; drift and dive; sky-sheet.jpg). Weather comes from the sliders: previews, not live readings.
 - Known limits: three-wavelength RGB renders the blue-hour zenith violet-grey, not deep blue (a spectral model such as Bruneton's would fix it); city nights are dim and nearly featureless (true, but a night drop carries little); a sky cannot name its city (no skyline); low cloud near sunset reads as flat dark slabs on the horizon.
 - Performance: estimated 1–1.5 ms per city refresh and 2–4 ms extra for the full-screen dive on a low-tier phone. Not yet measured on a device; the lab readout is the place to measure.
+
+## 2026-09-29 — Sky in the main scene
+Final (approved from the prototype):
+- The sky is the default content source for every hero drop: the drift drops, the dive drop and the falling drop. `CONTENT.source` in config.js ('sky' | 'footage') is the one switch; the lab's ?clip= still shows one clip. Footage mode is unchanged and still passes smoke: the video budget, poster atlas and decoder pins run only in it. In sky mode the clip manifest is not fetched.
+- Model: Hillaire 2020. The atmosphere model's only interface is its object (glsl, shared, init / initSteps, renderSkyView): the per-city sky-view texture plus a transmittance texture in Bruneton's layout. Bruneton 2017 stays deferred.
+- Sharp parts per pixel (sun, moon lit by the real sun direction, catalogue stars, clouds). The dive keeps the per-pixel shader and its existing timings; no high-res dive texture.
+- Stars: Yale BSC5 as built by `npm run sky:stars` (904 to V 4.5, precessed, sidereal time). Facing: the sun's azimuth, the moon's once the sun is below −12° and the moon is up, 15° up.
+- Exposure: the center-weighted meter in the shader, L → 0.2 × (L / 3000)^0.2. The highlight shoulder (linear to 0.6, rolling off to 1) is approved: the sky arrives in footage's 0..1 range and the one LUT grades both. Pre-exposure now follows the sun and moon only, so weather never re-renders a texture.
+- Wavelengths: 610 / 550 / 465 nm (the sRGB primaries' dominant wavelengths) replace Hillaire's 680 / 550 / 440, which turned the blue-hour zenith violet. Rayleigh 8.960 / 13.558 / 26.535 and ozone 2.505 / 1.881 / 0.197 (×10⁻³ per km), from Bruneton 2017's constants and IUP Bremen ozone cross-sections (src/sky/spectrum.js). Noon zenith chromaticity moved toward measured clear skies. A 630 nm red was tried: lavender zenith, slightly more orange glow; rejected. The lab's ?wl=hillaire renders the old set for comparison.
+- Rain choice with the sky: every city where it is raining counts (weather variant 'rain'; snow never), no clip gate. The dive choice scores the light and weather the sky shows. Footage keeps both clip gates (src/content/contentSource.js). Selection rows now carry cloudCover and the WMO code.
+- src/sky/skyManager.js: one CitySky per drawn city (tier's visible drops plus the ending's city); inputs re-read every 15 s and on each 10-minute reselect; new weather eases in (0.5 s time constant, 98% in 2 s); at most one piece of GPU work per frame (a setup step or one city's texture).
+- Loader: "enter" waits for the skies to be prepared (tables drawn one per frame, star catalogue, cloud noise built in a Web Worker, each drawn city's texture, the SKY drop variants compiled by prewarm), capped at 6 s so it never hangs.
+- stars.bin is preloaded by index.html and cached 7 days (/sky/* in public/_headers). Production bundle 1,433.9 → 1,475.3 kB (gzip 415.5 → 432.3), plus a 1.3 kB worker.
+- public/still.jpg re-saved from the lab: Mumbai at dusk, 30% cloud, orbit view.
+- Dev: ?weather=tokyo:1:6 (cloud 0..1 : rain mm/h) sets a city's weather as if read live, so sky, type and rain choice agree. src/core/clock.js `now()` makes ?at= move the city and ending type's clock too (they read the real clock before). `npm run sky:stills -- --timeline` (real site at each city's drift key and inside the dive) and `-- --still`.
+- Smoke: in sky mode it checks the skies were prepared before "enter" and that no video ever decodes.
+- Night sky brightness data: World Atlas of Artificial Night Sky Brightness (Falchi et al. 2016), doi:10.5880/GFZ.1.4.2016.001, license CC BY-NC 4.0 (DataCite record). schwe.org is non-commercial (confirmed). Credit on the still page, shown only once values are in use. `npm run sky:glow -- --in World_Atlas_2015.tif` (GFZ GeoTIFF, 5×5-pixel mean; `geotiff` dev dependency) or `-- --values "sydney=…,…"` (lightpollutionmap.info World Atlas 2015 point readouts, FAQ 31, same values; that site asks to be credited "Jurij Stare, www.lightpollutionmap.info"). Its FAQ 29 downloads are rendered RGB images, not values: not usable. Every city needs a value or nothing is written; the natural sky (0.171 mcd/m²) is added.
+
+Still provisional:
+- Per-city glow values: pending the atlas data. Until then the one constant (0.012 cd/m²) lights every city.
+- Horizon clouds: below ~15° the deck's pattern gives way to its average (opacity to the cover fraction, colour to the haze), aerial fade 25 km. Removes the flat slabs; to be judged on screen.
+- Performance: unmeasured on devices. Awaiting ?bench on the Mac at high and low, before and after, drift / dive / splash beats. Estimates stand: ≈1–1.5 ms per city refresh on low (one per frame), 2–4 ms extra for the full-screen dive on a low-tier phone.
+- City nights render dim and nearly featureless (true to a city night; the drops carry little then). No change proposed.

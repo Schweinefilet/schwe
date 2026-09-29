@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import gsap from 'gsap'
 import { CITIES } from '../config.js'
 import { localTimeString } from '../content/clipSelector.js'
+import { now } from '../core/clock.js'
 import { rig } from '../core/rig.js'
 
 // Beat 5: small type in a corner while the camera is inside the drop: city, local time, weather.
@@ -10,11 +11,11 @@ export default function CityType({ clips, cityId }) {
   const ref = useRef()
   const city = CITIES.find((c) => c.id === cityId)
   const entry = clips?.find((c) => c.city === cityId)
-  const [time, setTime] = useState(() => (city ? localTimeString(city) : ''))
+  const [time, setTime] = useState(() => (city ? localTimeString(city, now()) : ''))
 
   useEffect(() => {
     if (!city) return
-    const tick = () => setTime(localTimeString(city))
+    const tick = () => setTime(localTimeString(city, now()))
     tick()
     const timer = setInterval(tick, 30 * 1000)
     return () => clearInterval(timer)

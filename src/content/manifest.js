@@ -1,7 +1,7 @@
 import { MANIFEST_FILE } from './naming.js'
 
 // Where clips live. Local dev: public/clips. Production: set VITE_CLIP_BASE_URL to the R2 URL (trailing slash).
-export const CLIP_BASE = import.meta.env.VITE_CLIP_BASE_URL ?? '/clips/'
+export const CLIP_BASE = import.meta.env?.VITE_CLIP_BASE_URL ?? '/clips/' // env is Vite's; absent in node tests
 
 const EMPTY = { version: 1, clips: [] }
 

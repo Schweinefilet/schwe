@@ -1,44 +1,49 @@
 import * as THREE from 'three'
 import { SKY } from '../config.js'
-import atmosphere from '../shaders/sky/atmosphere.glsl?raw'
 import skyChunk from '../shaders/sky/sky.glsl?raw'
-import { createCloudNoise } from './cloudNoise.js'
+import { loadCloudNoise } from './cloudNoise.js'
 import { createHillaire, lutTarget } from './hillaire.js'
 import { loadStarTexture } from './stars.js'
 
 // Sky as a drop's content source. createSkyGlobals() builds what every city shares, once per visit:
-// the atmosphere model's tables, the star catalogue and the cloud noise. A CitySky holds one city's
-// sky-view texture and the uniforms its drop reads; set() takes new inputs (src/sky/inputs.js) and
-// the texture is re-rendered only when an input it depends on has changed.
+// the atmosphere model's tables, the star catalogue and the cloud noise. It returns at once; `ready`
+// resolves when the catalogue and noise have arrived, and the model's tables are drawn by the caller
+// (atmosphere.init(), or atmosphere.initSteps() one per frame). A CitySky holds one city's sky-view
+// texture and the uniforms its drop reads; set() takes new inputs (src/sky/inputs.js) and the texture
+// is re-rendered only when an input it depends on has changed.
 
-const GLSL = `${atmosphere}\n${skyChunk}`
-
-export async function createSkyGlobals(renderer, { model = createHillaire } = {}) {
-  const atmosphereModel = model(renderer)
-  atmosphereModel.init()
-  const stars = await loadStarTexture(`${import.meta.env.BASE_URL}${SKY.stars.url}`, SKY.stars.cells).catch((err) => {
-    console.warn('[sky] star catalogue unavailable, sky without stars:', err.message)
-    return null
-  })
+// `coefficients`: the atmosphere at the channels' wavelengths (SKY.atmosphere; the lab can swap it).
+export function createSkyGlobals(renderer, { model = createHillaire, coefficients = SKY.atmosphere } = {}) {
+  const atmosphereModel = model(renderer, { coefficients })
   const glow = SKY.cityGlow
   const uniforms = {
     ...atmosphereModel.shared,
-    uSkyStars: { value: stars?.texture ?? null },
+    uSkyStars: { value: null },
     uSkyStarCells: { value: SKY.stars.cells },
     uSkySeeing: { value: THREE.MathUtils.degToRad(SKY.stars.seeingDeg) },
-    uSkyCloudNoise: { value: createCloudNoise() },
+    uSkyCloudNoise: { value: null },
     uSkyCityShape: { value: new THREE.Vector3(glow.horizon, glow.cloud, glow.ground) },
   }
-  return {
+  const globals = {
     atmosphere: atmosphereModel,
-    stars,
+    stars: null, // until it loads (or if it fails) the sky has no stars
     uniforms,
     dispose() {
       atmosphereModel.dispose()
-      stars?.texture.dispose()
-      uniforms.uSkyCloudNoise.value.dispose()
+      uniforms.uSkyStars.value?.dispose()
+      uniforms.uSkyCloudNoise.value?.dispose()
     },
   }
+  const stars = loadStarTexture(`${import.meta.env.BASE_URL}${SKY.stars.url}`, SKY.stars.cells).then(
+    (s) => {
+      globals.stars = s
+      uniforms.uSkyStars.value = s.texture
+    },
+    (err) => console.warn('[sky] star catalogue unavailable, sky without stars:', err.message)
+  )
+  const noise = loadCloudNoise().then((t) => (uniforms.uSkyCloudNoise.value = t))
+  globals.ready = Promise.all([stars, noise]).then(() => globals)
+  return globals
 }
 
 export class CitySky {
@@ -72,7 +77,7 @@ export class CitySky {
       uSkyMeter: { value: new THREE.Vector3(SKY.exposure.key, SKY.exposure.ref, SKY.exposure.range) },
     }
     // What HeroDrop needs to draw this sky: the shader code and the uniforms, shared by reference.
-    this.content = { glsl: GLSL, uniforms: this.uniforms }
+    this.content = { glsl: `${globals.atmosphere.glsl}\n${skyChunk}`, uniforms: this.uniforms }
   }
 
   get dirty() {
@@ -94,12 +99,17 @@ export class CitySky {
     u.uSkyMoon.value.set(inputs.moon.radius, inputs.moonDisk, inputs.earthshine)
     u.uSkyMoonTint.value.fromArray(inputs.moonTint)
     u.uSkyStarScale.value = this.globals.stars ? inputs.starScale : 0
-    const c = inputs.clouds
-    u.uSkyCloud.value.set(c.cover, c.tau, c.baseKm, c.tileKm)
-    u.uSkyCloudOffset.value.fromArray(c.offset)
+    u.uSkyCloudOffset.value.fromArray(inputs.clouds.offset)
     u.uSkyCityGlow.value.fromArray(inputs.cityGlow)
-    u.uSkyHaze.value = inputs.haze
     u.uSkyPreExposure.value = inputs.exposure
+    this.setWeather(inputs.clouds, inputs.haze)
+  }
+
+  // Weather only (cloud deck and haze): the site eases these between readings, so a new reading never
+  // cuts. Never re-renders the texture, which does not depend on weather.
+  setWeather({ cover, tau, baseKm, tileKm }, haze) {
+    this.uniforms.uSkyCloud.value.set(cover, tau, baseKm, tileKm)
+    this.uniforms.uSkyHaze.value = haze
   }
 
   render(renderer) {

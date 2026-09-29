@@ -1,5 +1,8 @@
-// The ending answers "where is it raining hardest right now?". Only cities whose rain clip actually
-// plays count as raining (a missing rain clip falls back to clear, and the drop must show rain).
+import { isRaining, usesFootage } from './contentSource.js'
+
+// The ending answers "where is it raining hardest right now?", among the cities whose drop will show
+// rain: with the sky, every city where it is raining; with footage, only those whose rain clip plays
+// (a missing rain clip falls back to clear, and the drop must show rain).
 // Returns one of:
 //   { kind: 'now',  city, mmPerHour, label }   hardest rain right now
 //   { kind: 'soon', city, minutes }            nowhere raining: the city rain reaches first (next 6 h)
@@ -9,10 +12,11 @@
 const SEVERITY = ['drizzle', 'freezing rain', 'light rain', 'rain', 'heavy rain', 'thunderstorm']
 const severity = (label) => SEVERITY.indexOf(label)
 
-export function chooseRainCity(selection) {
-  const rows = (selection ?? []).filter((r) => r.clip)
+// `source`: CONTENT.source ('sky' or 'footage').
+export function chooseRainCity(selection, { source = 'sky' } = {}) {
+  const rows = (selection ?? []).filter((r) => !usesFootage(source) || r.clip)
 
-  const raining = rows.filter((r) => r.clip.endsWith('_rain'))
+  const raining = rows.filter((r) => isRaining(r, source))
   if (raining.length) {
     raining.sort((a, b) => (b.mmPerHour ?? 0) - (a.mmPerHour ?? 0) || severity(b.weatherLabel) - severity(a.weatherLabel))
     const r = raining[0]

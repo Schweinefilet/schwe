@@ -171,6 +171,19 @@ body {
   white-space: nowrap;
 }
 
+.still__credit {
+  width: min(420px, calc(100% - 32px));
+  margin: 8vh auto 0;
+  font-size: 0.6rem;
+  line-height: 1.6;
+  letter-spacing: 0.06em;
+  opacity: 0.45;
+}
+
+.still__credit a {
+  color: inherit;
+}
+
 .loader__drop {
   width: 10px;
   height: 10px;

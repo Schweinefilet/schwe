@@ -190,10 +190,15 @@ vec4 skyClouds(vec3 d, float foot, vec3 zenith, vec3 far) {
   float cover = smoothstep(threshold - w, threshold + w, n.r);
   float tau = cover * uSkyCloud.y * (0.55 + 0.9 * n.g);
   float alpha = 1.0 - exp(-tau);
+  // Low down the deck is seen edge-on and its pattern stretches into flat slabs. Up to about 15° the
+  // pattern gives way to its own average: opacity eases to the cover fraction, colour to the haze.
+  // Under full cover that is the deck's own colour, so overcast still meets the horizon.
+  float edge = smoothstep(0.0, 0.26, d.y);
+  alpha = mix(uSkyCloud.x, alpha, edge);
   if (alpha < 1e-3) return vec4(0.0);
   vec3 C = cloudRadiance(p, d, tau, zenith);
-  // Far cloud fades into the light under the sky: haze between here and there.
-  return vec4(mix(C, far, 1.0 - exp(-t / 40.0)), alpha);
+  C = mix(C, far, 1.0 - exp(-t / 25.0)); // far cloud fades into the light under the sky
+  return vec4(mix(far, C, edge), alpha);
 }
 
 // Center-weighted metering of what the view faces, read from the sky itself (the same few texels

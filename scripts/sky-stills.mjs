@@ -5,6 +5,14 @@
 // review/sky-sheet.jpg: every scene in a row (drift frame, the drop at 1:1, dive).
 //
 //   npm run sky:stills          (CHROME=/path/to/chrome, default: the macOS Google Chrome app)
+//     --only mumbai-dusk,…      just these scenes
+//     --query wl=hillaire       extra lab query (here: Hillaire's original wavelengths)
+//     --suffix before           appended to every file name, so runs can sit side by side
+//   npm run sky:stills -- --timeline
+//     the real site instead of the lab: each scene at its city's drift key and inside the dive
+//     (t = 10.1, city type showing), 1920×1080 page screenshots → review/timeline-*.jpg
+//   npm run sky:stills -- --still
+//     re-saves public/still.jpg (the still page's image) from the lab: Mumbai at dusk, orbit view
 //
 // Headless Chrome renders in software: the stills show the look, never the speed.
 
@@ -17,6 +25,13 @@ const CHROME = process.env.CHROME || '/Applications/Google Chrome.app/Contents/M
 const OUT = 'review'
 const W = 1920
 const H = 1080
+const arg = (name) => {
+  const i = process.argv.indexOf(`--${name}`)
+  return i >= 0 ? process.argv[i + 1] : null
+}
+const ONLY = arg('only')?.split(',')
+const QUERY = arg('query') ? `&${arg('query')}` : ''
+const SUFFIX = arg('suffix') ? `-${arg('suffix')}` : ''
 
 // The first minute in [from, to) where the sun at `city` crosses `alt` degrees, rising or setting.
 function sunCrossing(lat, lon, alt, from, to, rising) {
@@ -35,6 +50,14 @@ const SCENES = [
   { name: 'sydney-clear-dawn', city: 'sydney', at: sunCrossing(-33.8688, 151.2093, -3, '2026-09-28T17:00Z', '2026-09-28T22:00Z', true), set: { cloud: 0, rain: 0, fog: false } },
 ]
 
+// Real-timeline scenes. Weather via the dev ?weather= option, so sky, type and rain choice agree; the
+// ending is forced elsewhere (?rain=none) so the dive city is free to be the scene's city.
+const TIMELINE = [
+  { name: 'tokyo-night-rain', city: 'tokyo', at: '2026-09-29T14:30Z', weather: 'tokyo:1:6' },
+  { name: 'mumbai-dusk', city: 'mumbai', at: SCENES[1].at, weather: 'mumbai:0.3:0' },
+  { name: 'tokyo-clear-crescent', city: 'tokyo', at: '2026-10-05T17:20Z', weather: 'tokyo:0:0' },
+]
+
 const frames = (page, n) =>
   page.evaluate((n) => new Promise((done) => {
     let left = n
@@ -43,7 +66,7 @@ const frames = (page, n) =>
   }), n)
 
 async function capture(page, base, scene) {
-  await page.goto(`${base}?lab=drop&city=${scene.city}&at=${scene.at}`, { waitUntil: 'domcontentloaded' })
+  await page.goto(`${base}?lab=drop&city=${scene.city}&at=${scene.at}${QUERY}`, { waitUntil: 'domcontentloaded' })
   await page.waitForFunction(() => window.__lab, { timeout: 30000 })
   await page.evaluate((o) => window.__lab.set(o), scene.set)
   const shots = {}
@@ -58,7 +81,7 @@ async function capture(page, base, scene) {
       const p = new camera.position.constructor(0, 0, 0).project(camera) // the drop's centre on screen
       return { url: canvas.toDataURL('image/jpeg', 0.94), x: (p.x + 1) / 2, y: (1 - p.y) / 2, inputs: window.__lab.inputs() }
     })
-    const file = `${OUT}/sky-${scene.name}-${view}.jpg`
+    const file = `${OUT}/sky-${scene.name}-${view}${SUFFIX}.jpg`
     await writeFile(file, Buffer.from(shot.url.split(',')[1], 'base64'))
     shots[view] = shot
     const i = shot.inputs
@@ -90,7 +113,46 @@ async function sheet(page, rows) {
     }
     return canvas.toDataURL('image/jpeg', 0.9)
   }, rows, W, H)
-  await writeFile(`${OUT}/sky-sheet.jpg`, Buffer.from(url.split(',')[1], 'base64'))
+  await writeFile(`${OUT}/sky-sheet${SUFFIX}.jpg`, Buffer.from(url.split(',')[1], 'base64'))
+}
+
+async function timelineShot(page, base, scene, { dive, time, file }) {
+  const q = `?at=${scene.at}&weather=${scene.weather}&dive=${dive}&rain=none&tier=high`
+  await page.goto(base + q, { waitUntil: 'domcontentloaded' })
+  await page.waitForSelector('.loader__enter.is-ready', { timeout: 60000 })
+  await page.click('.loader__enter')
+  await page.waitForFunction(() => window.__schwe?.state.beat === 'rain', { timeout: 30000 })
+  await page.evaluate((t) => window.__schwe.goto(t), time)
+  await new Promise((r) => setTimeout(r, 2500)) // the freeze eases over 1.5 s of real time
+  await page.waitForFunction(() => window.__schwe.skySettled(), { timeout: 60000, polling: 250 })
+  await page.addStyleTag({ content: '.dev-overlay { display: none !important; }' })
+  await frames(page, 3)
+  await page.screenshot({ path: file, type: 'jpeg', quality: 92 })
+  console.log(file, `t=${time}`)
+}
+
+async function timeline(page, base, server) {
+  const { CITIES, CAMERA_KEYS, DRIFT, DIVE } = await server.ssrLoadModule('/src/config.js')
+  const driftKeys = CAMERA_KEYS.filter((k) => k.speed === DRIFT.ease && k.at > DRIFT.start && k.at < DRIFT.end)
+  for (const scene of TIMELINE.filter((s) => !ONLY || ONLY.includes(s.name))) {
+    // With the default dive city in the dive slot, drop i of the drift is CITIES[i].
+    const i = CITIES.findIndex((c) => c.id === scene.city)
+    await timelineShot(page, base, scene, { dive: 'mexico-city', time: driftKeys[i].at, file: `${OUT}/timeline-${scene.name}-drift${SUFFIX}.jpg` })
+    await timelineShot(page, base, scene, { dive: scene.city, time: (DIVE.inEnd + DIVE.outStart) / 2, file: `${OUT}/timeline-${scene.name}-dive${SUFFIX}.jpg` })
+  }
+}
+
+async function still(page, base) {
+  const scene = SCENES[1] // Mumbai at dusk
+  await page.goto(`${base}?lab=drop&city=${scene.city}&at=${scene.at}`, { waitUntil: 'domcontentloaded' })
+  await page.waitForFunction(() => window.__lab, { timeout: 30000 })
+  await page.evaluate((o) => window.__lab.set({ ...o, view: 'orbit', dive: 0 }), scene.set)
+  await frames(page, 2)
+  await page.waitForFunction(() => window.__lab.ready(), { timeout: 60000, polling: 250 })
+  await frames(page, 3)
+  const url = await page.evaluate(() => document.querySelector('canvas').toDataURL('image/jpeg', 0.9))
+  await writeFile('public/still.jpg', Buffer.from(url.split(',')[1], 'base64'))
+  console.log('public/still.jpg')
 }
 
 await mkdir(OUT, { recursive: true })
@@ -108,10 +170,16 @@ try {
   await page.setViewport({ width: W, height: H, deviceScaleFactor: 1 })
   page.on('pageerror', (e) => console.error('page error:', e.message))
   page.on('console', (m) => m.type() === 'error' && console.error('console:', m.text()))
-  const rows = []
-  for (const scene of SCENES) rows.push({ name: `${scene.name}  ${scene.at}`, ...(await capture(page, base, scene)) })
-  await sheet(page, rows)
-  console.log(`${OUT}/sky-sheet.jpg`)
+  if (process.argv.includes('--timeline')) await timeline(page, base, server)
+  else if (process.argv.includes('--still')) await still(page, base)
+  else {
+    const rows = []
+    for (const scene of SCENES.filter((s) => !ONLY || ONLY.includes(s.name))) {
+      rows.push({ name: `${scene.name}  ${scene.at}${QUERY.replace('&', '  ')}`, ...(await capture(page, base, scene)) })
+    }
+    await sheet(page, rows)
+    console.log(`${OUT}/sky-sheet${SUFFIX}.jpg`)
+  }
 } finally {
   await browser.close()
   await server.close()

@@ -1,0 +1,5 @@
+{
+  "about": "Artificial zenith sky brightness per city in mcd/m² (natural sky not included; the sky adds 0.171). From Falchi et al. 2016, The New World Atlas of Artificial Night Sky Brightness, doi:10.5880/GFZ.1.4.2016.001, CC BY-NC 4.0. Written by scripts/build-city-glow.mjs; empty until the atlas values are in, and then SKY.cityGlow.zenith is only the fallback.",
+  "source": null,
+  "values": {}
+}

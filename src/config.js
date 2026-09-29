@@ -1,6 +1,14 @@
 import cities from './content/cities.json'
+import { SRGB_RGB } from './sky/spectrum.js'
+import cityGlowAtlas from './content/cityGlow.json'
 
 export const CITIES = cities
+
+// ---- Content -----------------------------------------------------------------
+// What the city drops show. 'sky': each city's sky computed from its real sun, moon, stars and weather
+// (SKY below). 'footage': licensed clips (public/clips, the video budget, poster atlas and decoder pins
+// run only in this mode). The drop lab also takes ?clip= to show one clip.
+export const CONTENT = { source: 'sky' }
 
 // ---- Scroll ----------------------------------------------------------------
 // Timeline time is measured in "units". One unit = VH_PER_UNIT of scroll distance.
@@ -213,6 +221,9 @@ export const DIVE = {
 // Hillaire 2020 (src/sky/hillaire.js); the per-city sky-view texture is the only thing a drop reads
 // from the atmosphere model, so another model (Bruneton's precomputed one) can fill the same texture.
 export const SKY = {
+  // Scattering and absorption at the wavelengths the channels stand for: the sRGB primaries' dominant
+  // wavelengths (610, 550, 465 nm). Hillaire's 680/550/440 turned the blue-hour zenith violet.
+  atmosphere: SRGB_RGB,
   viewHeightKm: 0.2, // the viewer stands on a rooftop
   groundAlbedo: 0.08, // a city seen from above: dark
   skyView: { high: [192, 108], medium: [192, 108], low: [128, 64] }, // per-city texture size by tier
@@ -227,9 +238,11 @@ export const SKY = {
   moonLux: 0.3, // full moon above the atmosphere; other phases follow Allen's phase law
   moonColour: [1.0, 0.93, 0.84], // moonlight is a little redder than sunlight
   earthshine: 1.2e-4, // dark limb radiance as a share of the full-moon disk's, at new moon
-  // The city's own light: one constant for all ten (all are megacities; per-city values would be
-  // invented). Zenith luminance of a clear city night sky ≈ 17.8 mag/arcsec².
-  cityGlow: { colour: [1.0, 0.72, 0.48], zenith: 0.012, horizon: 4, cloud: 5, ground: 3 },
+  // The city's own light at the zenith of a clear night: per city from the World Atlas of Artificial
+  // Night Sky Brightness (Falchi et al. 2016, CC BY-NC 4.0) once src/content/cityGlow.json has values;
+  // until then `zenith` (cd/m², ≈ 17.8 mag/arcsec²) for all ten. The atlas has no colour, so the
+  // colour and the horizon, cloud-base and ground ratios are one set for every city.
+  cityGlow: { atlas: cityGlowAtlas, colour: [1.0, 0.72, 0.48], zenith: 0.012, horizon: 4, cloud: 5, ground: 3 },
   clouds: { baseKm: 2.0, rainBaseKm: 1.0, tileKm: 40, tauMin: 3, tauMax: 25, tauPerMm: 4 },
   // Extinction from rain, per km: 0.25 × R^0.63 (R in mm/h). Fog (WMO 45, 48): visibility 0.5 km.
   rainHaze: { coef: 0.25, exp: 0.63, fogPerKm: 7.8 },

@@ -1,12 +1,14 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useFrame, useThree } from '@react-three/fiber'
 import * as THREE from 'three'
-import { SPLASH, WATER } from '../config.js'
+import { CONTENT, SPLASH, WATER } from '../config.js'
 import { rig } from '../core/rig.js'
 import { state } from '../core/state.js'
 import { fall, fallPosition } from '../core/fall.js'
 import { prewarm } from '../core/prewarm.js'
+import { usesFootage } from '../content/contentSource.js'
 import { pinDrop, registerDrop, unregisterDrop } from '../content/videoManager.js'
+import { acquireSky, releaseSky, skyContent, startSky } from '../sky/skyManager.js'
 import envChunk from '../shaders/env.glsl?raw'
 import waterChunk from '../shaders/water.glsl?raw'
 import vertexShader from '../shaders/splash.vert.glsl?raw'
@@ -128,8 +130,20 @@ export default function Splash({ clips, rainCity }) {
   )
 
   // The falling drop carries the ending's city (where it is raining hardest, or where rain arrives
-  // first). Its clip decodes from the word's arrival to the impact; outside that it holds no decoder.
-  const urls = (rainCity?.city && clips?.find((c) => c.city === rainCity.city)?.urls) || null
+  // first): its sky, or with footage its clip, which decodes from the word's arrival to the impact and
+  // holds no decoder outside that. With no rain anywhere it is the storm you are in (envOnly).
+  const { gl, camera, scene } = useThree()
+  const footage = usesFootage(CONTENT.source)
+  const fallCity = rainCity?.city ?? null
+  const urls = (footage && fallCity && clips?.find((c) => c.city === fallCity)?.urls) || null
+  const skyCity = footage ? null : fallCity
+  if (skyCity) startSky(gl)
+  const sky = skyCity ? skyContent(skyCity) : null
+  useEffect(() => {
+    if (!skyCity) return
+    acquireSky(skyCity)
+    return () => releaseSky(skyCity)
+  }, [skyCity])
   useEffect(() => {
     if (!urls) return
     registerDrop(FALL_SLOT, { position: FALL_ORIGIN, radius: SPLASH.fallRadius, urls, full: false })
@@ -140,8 +154,7 @@ export default function Splash({ clips, rainCity }) {
   // Prepare beat 7 ahead of time: the falling drop (its material variant and poster) while the loader
   // is up, the baked splash (shader and data textures) as soon as it downloads during the drift.
   // Otherwise both compile on the frames they first appear: the fall's start and the impact.
-  const { gl, camera, scene } = useThree()
-  useEffect(() => prewarm(gl, drop.current, camera, scene, [poster]), [gl, camera, scene, poster, urls])
+  useEffect(() => prewarm(gl, drop.current, camera, scene, [poster]), [gl, camera, scene, poster, urls, sky])
   // The splash data arrives mid-drift, so its preparation is spread out: one texture upload per
   // frame (each is 2048×648), then the shader compile.
   const warmQueue = useRef([])
@@ -175,7 +188,9 @@ export default function Splash({ clips, rainCity }) {
       <group ref={drop} visible={false}>
         {/* A function, not fall.pos: children run their frame callbacks before this component does,
             so reading fall.pos there would draw the drop one frame behind the camera. */}
-        {urls ? (
+        {sky ? (
+          <HeroDrop key={`sky-${skyCity}`} position={FALL_ORIGIN} radius={SPLASH.fallRadius} positionRef={currentFallPosition} sky={sky} dispersion={false} />
+        ) : urls ? (
           <HeroDrop key="city" position={FALL_ORIGIN} radius={SPLASH.fallRadius} positionRef={currentFallPosition} slotKey={FALL_SLOT} poster={poster} dispersion={false} />
         ) : (
           <HeroDrop key="env" position={FALL_ORIGIN} radius={SPLASH.fallRadius} positionRef={currentFallPosition} envOnly dispersion={false} />

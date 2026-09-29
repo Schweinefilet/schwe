@@ -2,17 +2,18 @@ import { useEffect, useRef, useState } from 'react'
 import gsap from 'gsap'
 import { CITIES } from '../config.js'
 import { localTimeString } from '../content/clipSelector.js'
+import { now } from '../core/clock.js'
 import { rig } from '../core/rig.js'
 
 // Beat 7: the answer, as the rings spread. Opacity follows rig.endType on the shared ticker.
 export default function EndType({ clips, rainCity }) {
   const ref = useRef()
   const city = CITIES.find((c) => c.id === rainCity?.city)
-  const [time, setTime] = useState(() => (city ? localTimeString(city) : ''))
+  const [time, setTime] = useState(() => (city ? localTimeString(city, now()) : ''))
 
   useEffect(() => {
     if (!city) return
-    const tick = () => setTime(localTimeString(city))
+    const tick = () => setTime(localTimeString(city, now()))
     tick()
     const timer = setInterval(tick, 30 * 1000)
     return () => clearInterval(timer)

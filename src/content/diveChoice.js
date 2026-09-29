@@ -1,22 +1,25 @@
-// Picks the city the camera dives into: the most interesting one right now, judged by the clip that
-// will actually play (a missing rain clip falls back to clear, so it doesn't count as rain).
+import { shown } from './contentSource.js'
+
+// Picks the city the camera dives into: the most interesting one right now, judged by what its drop
+// will show (contentSource.js: the sky as it is, or the clip that actually plays).
 const LIGHT_SCORE = { dusk: 2, dawn: 2, night: 1, day: 0 }
 const RAIN_SCORE = 3
 
-function score(row) {
-  if (!row.clip) return -Infinity
-  const [, light, weather] = row.clip.split('_') // city ids are kebab-case, so "_" splits cleanly
-  return (weather === 'rain' ? RAIN_SCORE : 0) + (LIGHT_SCORE[light] ?? 0)
+function score(row, source) {
+  const s = shown(row, source)
+  if (!s) return -Infinity
+  return (s.weather === 'rain' ? RAIN_SCORE : 0) + (LIGHT_SCORE[s.light] ?? 0)
 }
 
 // `selection`: rows from selectClips(). Ties are broken at random, so visits vary. `exclude`: a city
 // that must not be picked (the ending's rain city, so the visitor sees two different cities).
-export function chooseDiveCity(selection, fallback, { exclude = null, random = Math.random } = {}) {
+// `source`: CONTENT.source ('sky' or 'footage').
+export function chooseDiveCity(selection, fallback, { exclude = null, random = Math.random, source = 'sky' } = {}) {
   let best = []
   let bestScore = -Infinity
   for (const row of selection ?? []) {
     if (row.city === exclude) continue
-    const s = score(row)
+    const s = score(row, source)
     if (s > bestScore) {
       best = [row]
       bestScore = s

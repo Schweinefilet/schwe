@@ -12,6 +12,7 @@ import { fetchWeather } from '../content/weather.js'
 import { localTimeString } from '../content/clipSelector.js'
 import { skyInputs } from '../sky/inputs.js'
 import { CitySky, createSkyGlobals } from '../sky/citySky.js'
+import { HILLAIRE_RGB } from '../sky/spectrum.js'
 import { createGpuTimer } from './gpuTimer.js'
 import Sky from '../scenes/Sky.jsx'
 import Rain from '../scenes/Rain.jsx'
@@ -26,12 +27,14 @@ import Effects from '../scenes/Effects.jsx'
 //   ?city=tokyo           the city (default: the default dive city)
 //   ?at=2026-09-29T14:30Z  the moment (default: now, following the clock)
 //   ?clip=tokyo_night_clear  show that clip instead of a sky
+//   ?wl=hillaire          Hillaire's original wavelengths (680/550/440 nm), for before/after comparison
 // Sliders preview extremes: cloud cover, rain, local time of day. Views: orbit, drift (the drop at
 // true size, posed exactly as at a drift key), dive (the dive's eye; the dive slider eases the optics).
 // window.__lab drives it from scripts (scripts/sky-stills.mjs).
 
 const params = new URLSearchParams(location.search)
 const CLIP = params.get('clip')
+const COEFFICIENTS = params.get('wl') === 'hillaire' ? HILLAIRE_RGB : SKY.atmosphere
 const CITY = CITIES.find((c) => c.id === params.get('city')) ?? CITIES.find((c) => c.id === DEFAULT_DIVE_CITY)
 const AT = parseAt(params.get('at'))
 
@@ -137,14 +140,14 @@ function SkyContent() {
   useEffect(() => {
     let alive = true
     let city = null
+    const globals = createSkyGlobals(gl, { coefficients: COEFFICIENTS })
     const q = timer?.begin()
-    const pending = createSkyGlobals(gl) // the atmosphere tables draw synchronously, inside the query
+    globals.atmosphere.init() // the per-visit tables, timed
     timer?.end(q, (ms) => (stats.tablesMs = ms))
-    pending.then((globals) => {
-      if (!alive) return globals.dispose()
+    globals.ready.then(() => {
+      if (!alive) return
       stats.stars = globals.stars
       city = new CitySky(globals, SKY.skyView[quality.name])
-      city.globalsToDispose = globals
       stats.sky = city
       if (labInputs) city.set(labInputs)
       applyInputs = (inputs) => city.set(inputs)
@@ -154,7 +157,7 @@ function SkyContent() {
       alive = false
       applyInputs = () => {}
       city?.dispose()
-      city?.globalsToDispose.dispose()
+      globals.dispose()
     }
   }, [gl, timer])
 

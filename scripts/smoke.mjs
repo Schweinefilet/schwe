@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 // Headless check of the whole film, once per ending: starts the dev server, clicks "enter", walks
 // every beat forward and back, and checks beat labels, the freeze and its rewind, the ending's text,
-// the video decoder budget, and page errors. Exit code 1 on any failure.
+// the video decoder budget, and page errors. With the sky as the content source: every drawn city's sky
+// is prepared before "enter" appears, and no video ever decodes. Exit code 1 on any failure.
 //
 // Headless Chrome renders in software, so frame rates here mean nothing; use ?bench on real devices.
 //
@@ -32,6 +33,9 @@ async function runCase(browser, base, c) {
 
   await page.goto(base + c.query, { waitUntil: 'domcontentloaded' })
   await page.waitForSelector('.loader__enter.is-ready', { timeout: 15000 })
+  // Sky mode (skyReady exists): "enter" should wait for the skies, not appear on the 6 s cap.
+  const skyMode = await page.evaluate(() => typeof window.__schwe?.skyReady === 'function')
+  if (skyMode) check(await page.evaluate(() => window.__schwe.skyReady()), 'enter appeared before the city skies were prepared')
   await sleep(900) // the button fades in
   await page.click('.loader__enter')
   await page.waitForFunction(() => window.__schwe?.state.beat === 'rain', { timeout: 10000 })
@@ -97,9 +101,11 @@ async function runCase(browser, base, c) {
 
   const budget = await page.evaluate(() => window.__budget)
   check(budget.over === 0, `video decoders over budget on ${budget.over} frames`)
+  if (skyMode) check(budget.max === 0, `sky mode decoded video (${budget.max} live)`)
   check(pageErrors.length === 0, `page errors: ${pageErrors.join('; ')}`)
 
-  const summary = `${e.rain?.kind ?? '?'}${e.rain?.city ? ` ${e.rain.city}` : ''}, dive ${e.dive}, max live video ${budget.max}`
+  const source = skyMode ? `sky (${(await page.evaluate(() => window.__schwe.skyStats())).cities.length} cities)` : 'footage'
+  const summary = `${e.rain?.kind ?? '?'}${e.rain?.city ? ` ${e.rain.city}` : ''}, dive ${e.dive}, ${source}, max live video ${budget.max}`
   await page.close()
   return { failures, summary, ending: e.endText.trim() }
 }

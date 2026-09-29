@@ -1,11 +1,14 @@
-import { useEffect, useMemo } from 'react'
-import { useFrame } from '@react-three/fiber'
-import { DIVE, HERO, heroDropsFor } from '../config.js'
+import { useEffect, useMemo, useRef } from 'react'
+import { useFrame, useThree } from '@react-three/fiber'
+import { CONTENT, DIVE, HERO, heroDropsFor } from '../config.js'
 import { quality } from '../core/quality.js'
+import { prewarm } from '../core/prewarm.js'
 import { createPosterAtlas } from '../content/posterAtlas.js'
+import { usesFootage } from '../content/contentSource.js'
 import { pinDrop, registerDrop, unregisterDrop, updateVideoBudget } from '../content/videoManager.js'
 import { state } from '../core/state.js'
 import { useTier } from '../core/useTier.js'
+import { acquireSky, releaseSky, skyContent, startSky } from '../sky/skyManager.js'
 import HeroDrop from './HeroDrop.jsx'
 
 // The dive drop is always kept; lower tiers show fewer of the others.
@@ -14,9 +17,39 @@ const pickVisible = (drops) => [
   ...drops.filter((d) => !d.dive).slice(0, quality.heroDrops - 1),
 ]
 
-// Beats 4–5: the hero drops. Posters come from one atlas; the video budget manager decides which
-// drops play live video.
+// Beats 4–5: the hero drops. Each holds its city: its computed sky, or with footage its clip.
 export default function HeroDrops({ clips, diveCity }) {
+  return usesFootage(CONTENT.source) ? <FootageDrops clips={clips} diveCity={diveCity} /> : <SkyDrops diveCity={diveCity} />
+}
+
+// Each drop refracts its city's sky (src/sky/skyManager.js keeps them current). The dive drop is the
+// same shader: its sharp parts are computed per pixel, so it holds up full-screen.
+function SkyDrops({ diveCity }) {
+  const tier = useTier()
+  const { gl, camera, scene } = useThree()
+  startSky(gl)
+  const visible = useMemo(() => pickVisible(heroDropsFor(diveCity)), [tier, diveCity])
+  const group = useRef()
+
+  useEffect(() => {
+    visible.forEach((d) => acquireSky(d.city))
+    return () => visible.forEach((d) => releaseSky(d.city))
+  }, [visible])
+
+  // Compile the drop's sky variant now (under the loader), not on the frame a drop first comes into view.
+  useEffect(() => prewarm(gl, group.current, camera, scene), [gl, camera, scene, visible])
+
+  return (
+    <group ref={group}>
+      {visible.map((drop) => (
+        <HeroDrop key={drop.city} position={drop.pos} sky={skyContent(drop.city)} dispersion={quality.name === 'high'} dive={drop.dive} />
+      ))}
+    </group>
+  )
+}
+
+// Footage: posters from one atlas; the video budget manager decides which drops play live video.
+function FootageDrops({ clips, diveCity }) {
   const tier = useTier()
   const visible = useMemo(() => pickVisible(heroDropsFor(diveCity)), [tier, diveCity])
   const atlas = useMemo(() => createPosterAtlas(), [])

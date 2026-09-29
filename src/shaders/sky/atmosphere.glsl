@@ -9,15 +9,15 @@
 #define PI 3.14159265359
 #endif
 
+// RAYLEIGH_SCATTERING and OZONE_ABSORPTION (per km at sea level, at the wavelengths the red, green and
+// blue channels stand for) are prepended by the model from SKY.atmosphere (src/sky/spectrum.js).
 const float PLANET_R = 6360.0;
 const float TOP_R = 6460.0;
-const vec3 RAYLEIGH_SCATTERING = vec3(5.802, 13.558, 33.1) * 1e-3; // per km at sea level
 const float RAYLEIGH_H = 8.0;
 const float MIE_SCATTERING = 3.996e-3;
 const float MIE_EXTINCTION = 4.440e-3;
 const float MIE_H = 1.2;
 const float MIE_G = 0.8;
-const vec3 OZONE_ABSORPTION = vec3(0.650, 1.881, 0.085) * 1e-3; // a 30 km thick layer peaking at 25 km
 const float EARTH_ALBEDO = 0.3; // light the ground returns to the air, for multiple scattering
 const vec2 T_SIZE = vec2(256.0, 64.0);
 const float MS_SIZE = 32.0;
@@ -35,7 +35,7 @@ struct Medium {
 Medium sampleMedium(float h) {
   float r = exp(-h / RAYLEIGH_H);
   float m = exp(-h / MIE_H);
-  float o = max(0.0, 1.0 - abs(h - 25.0) / 15.0);
+  float o = max(0.0, 1.0 - abs(h - 25.0) / 15.0); // ozone: a 30 km thick layer peaking at 25 km
   Medium s;
   s.rayleigh = RAYLEIGH_SCATTERING * r;
   s.mie = MIE_SCATTERING * m;

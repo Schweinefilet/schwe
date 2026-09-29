@@ -6,8 +6,9 @@ import skyviewFrag from '../shaders/sky/skyview.frag.glsl?raw'
 
 // The atmosphere model: Hillaire 2020. What the rest of the sky code relies on is only this object's
 // shape, so a different model can replace it:
+//   glsl              the shader code sky shaders prepend (atmosphere.glsl with this model's coefficients)
 //   shared            uniforms every sky shader samples (uTransmittance, Bruneton's layout; uMultiScattering)
-//   init()            per-visit precompute
+//   init()            per-visit precompute; initSteps() gives the same as one function per frame
 //   renderSkyView(target, inputs, { viewHeightKm, groundAlbedo })
 //                     one city's clear sky, every direction, into its sky-view texture (atmosphere.glsl layout)
 // Units: km; light values arrive already multiplied by the city's exposure.
@@ -19,8 +20,10 @@ const triangle = new THREE.BufferGeometry()
 triangle.setAttribute('position', new THREE.Float32BufferAttribute([-1, -1, 0, 3, -1, 0, -1, 3, 0], 3))
 const camera = new THREE.Camera()
 
-function makePass(fragment, uniforms) {
-  const material = new THREE.ShaderMaterial({ vertexShader, fragmentShader: `${atmosphere}\n${fragment}`, uniforms, depthTest: false, depthWrite: false })
+const vec3 = (v) => `vec3(${v.map((x) => x.toExponential(6)).join(', ')})`
+
+function makePass(glsl, fragment, uniforms) {
+  const material = new THREE.ShaderMaterial({ vertexShader, fragmentShader: `${glsl}\n${fragment}`, uniforms, depthTest: false, depthWrite: false })
   const mesh = new THREE.Mesh(triangle, material)
   mesh.frustumCulled = false
   const scene = new THREE.Scene()
@@ -49,15 +52,19 @@ export function drawPass(renderer, pass, target) {
   renderer.setRenderTarget(previous)
 }
 
-export function createHillaire(renderer) {
+// coefficients: { rayleigh, ozone } per km, as in src/sky/spectrum.js.
+export function createHillaire(renderer, { coefficients }) {
+  const glsl = `const vec3 RAYLEIGH_SCATTERING = ${vec3(coefficients.rayleigh)};
+const vec3 OZONE_ABSORPTION = ${vec3(coefficients.ozone)};
+${atmosphere}`
   const transmittance = lutTarget(256, 64)
   const multi = lutTarget(32, 32)
   const shared = {
     uTransmittance: { value: transmittance.texture },
     uMultiScattering: { value: multi.texture },
   }
-  const transmittancePass = makePass(transmittanceFrag, {})
-  const multiPass = makePass(multiscatterFrag, { ...shared })
+  const transmittancePass = makePass(glsl, transmittanceFrag, {})
+  const multiPass = makePass(glsl, multiscatterFrag, { ...shared })
   const skyUniforms = {
     ...shared,
     uSize: { value: new THREE.Vector2() },
@@ -69,14 +76,17 @@ export function createHillaire(renderer) {
     uMoonE: { value: new THREE.Vector3() },
     uMoonOn: { value: 0 },
   }
-  const skyPass = makePass(skyviewFrag, skyUniforms)
+  const skyPass = makePass(glsl, skyviewFrag, skyUniforms)
 
   return {
     name: 'hillaire',
+    glsl,
     shared,
+    initSteps() {
+      return [() => drawPass(renderer, transmittancePass, transmittance), () => drawPass(renderer, multiPass, multi)]
+    },
     init() {
-      drawPass(renderer, transmittancePass, transmittance)
-      drawPass(renderer, multiPass, multi)
+      for (const step of this.initSteps()) step()
     },
     renderSkyView(target, inputs, { viewHeightKm, groundAlbedo }) {
       const u = skyUniforms

@@ -28,9 +28,11 @@ export function skyInputs({ city, date, weather = null, override = {}, sky }) {
   const psi = (Math.acos(Math.max(-1, Math.min(1, 2 * illum.fraction - 1))) * 180) / Math.PI
   const moonLaw = moonPhaseLaw(psi)
 
-  // Pre-exposure: keeps the sky-view texture and the light values inside half-float range. The final
-  // exposure is metered in the shader from what the view actually faces (sky.glsl, skyMeter).
-  const metered = meteredLuminance({ sunAlt: sunPos.altitude, moonAlt: moonPos.altitude, moonLaw, cloud, rain }, sky)
+  // Pre-exposure: keeps the sky-view texture and the light values inside half-float range. It follows
+  // the sun and moon only, so a weather change never re-renders the texture; the final exposure is
+  // metered in the shader from what the view actually faces, weather included (sky.glsl, skyMeter).
+  const glowZenith = cityGlowZenith(city.id, sky.cityGlow)
+  const metered = meteredLuminance({ sunAlt: sunPos.altitude, moonAlt: moonPos.altitude, moonLaw, cloud: 0, rain: 0, cityZenith: glowZenith }, sky)
   const exposure = exposureFor(metered, sky.exposure)
 
   // The view faces the sun, or the moon once the sun is well down and the moon is up.
@@ -69,7 +71,7 @@ export function skyInputs({ city, date, weather = null, override = {}, sky }) {
     moonDisk: ((sky.moonLux * exposure) / (Math.PI * moonRadius ** 2)) * (moonLaw / Math.max(lommelSeeligerPhase(psi), 1e-3)),
     earthshine: sky.earthshine * (1 - illum.fraction),
     starScale: sunPos.altitude < -4 ? sky.stars.lux0 * exposure : 0,
-    cityGlow: tint(glow.colour).map((c) => c * glow.zenith * exposure),
+    cityGlow: tint(glow.colour).map((c) => c * glowZenith * exposure),
     clouds: {
       cover: cloud,
       tau: sky.clouds.tauMin + (sky.clouds.tauMax - sky.clouds.tauMin) * cloud + sky.clouds.tauPerMm * rain,
@@ -86,14 +88,22 @@ export function skyInputs({ city, date, weather = null, override = {}, sky }) {
 // What a camera meters: sky luminance (cd/m²) from sun, moon and the city's own light. The sky's share
 // of the light is about 15% under a high sun, all of it once the sun is down or behind cloud. Cloud
 // cuts the light (Kasten-Czeplak); rain darkens it further.
-export function meteredLuminance({ sunAlt, moonAlt, moonLaw, cloud, rain }, sky) {
+export function meteredLuminance({ sunAlt, moonAlt, moonLaw, cloud, rain, cityZenith = null }, sky) {
   const cut = (1 - 0.75 * cloud ** 3.4) / (1 + 0.08 * rain)
   const clearShare = sunAlt <= 0 ? 1 : 0.15 + 0.85 * Math.exp(-sunAlt / 6)
   const diffuse = clearShare + (1 - clearShare) * cloud
   const sun = (sunLux(sunAlt) * cut * diffuse) / Math.PI
   const moon = (sky.moonLux * moonLaw * Math.max(Math.sin((moonAlt * Math.PI) / 180), 0) * cut * 0.15) / Math.PI
-  const city = sky.cityGlow.zenith * (1 + 3 * cloud)
+  const city = (cityZenith ?? sky.cityGlow.zenith) * (1 + 3 * cloud)
   return sun + moon + city
+}
+
+// The city's own light at the zenith of a clear night (cd/m²): its World Atlas value plus the natural
+// sky where src/content/cityGlow.json has one, else the one shared constant.
+export const NATURAL_SKY_MCD = 0.171168465 // 22.00 mag/arcsec²
+export function cityGlowZenith(cityId, glow) {
+  const artificial = glow.atlas?.values?.[cityId]
+  return artificial == null ? glow.zenith : (artificial + NATURAL_SKY_MCD) / 1000
 }
 
 // A metered luminance L comes out at key × (L / ref)^range: brighter skies still read brighter, over a
