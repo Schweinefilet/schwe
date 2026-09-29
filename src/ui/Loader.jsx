@@ -1,8 +1,8 @@
 import { useRef, useState } from 'react'
 import gsap from 'gsap'
 
-// Beat 1: black screen, a single faint drop, the word "enter". The click is the user gesture that
-// unlocks audio. "enter" appears once `ready` (the dive city is chosen and, with the sky as the source,
+// A black screen over the rain, a single faint drop, the word "enter". The click is the user gesture
+// that unlocks audio and scrolling; the screen fades and the page stays where it is, at the rain. "enter" appears once `ready` (the dive city is chosen and, with the sky as the source,
 // the city skies are prepared), so nothing changes after it.
 export default function Loader({ onEnter, ready }) {
   const ref = useRef()

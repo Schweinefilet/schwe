@@ -91,7 +91,7 @@ async function runCase(browser, base, c) {
 
   // Back through every beat to the top: the text leaves and time runs again.
   for (let i = beats.length - 1; i >= 0; i--) {
-    await goto(i === 0 ? 0.5 : mid(i))
+    await goto(i === 0 ? beats[0][1] : mid(i))
     const s = await read()
     check(s.beat === beats[i][0], `rewind: expected beat ${beats[i][0]}, got ${s.beat}`)
     if (beats[i][0] === 'align') check(s.endOpacity === 0, 'ending text still visible after rewinding to align')

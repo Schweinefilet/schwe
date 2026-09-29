@@ -20,7 +20,7 @@ import { usesFootage } from './content/contentSource.js'
 import { onSkyReady } from './sky/skyManager.js'
 import { onBackdropReady } from './content/backdrop.js'
 import { now } from './core/clock.js'
-import { CAMERA_FOV, CITIES, CONTENT, DEFAULT_DIVE_CITY, TIMELINE_END, VH_PER_UNIT } from './config.js'
+import { CAMERA_FOV, CITIES, CONTENT, DEFAULT_DIVE_CITY, TIMELINE_END, TIMELINE_START, VH_PER_UNIT } from './config.js'
 
 const NO_CLIPS = { version: 1, clips: [] }
 
@@ -43,8 +43,8 @@ const FORCE_WEATHER = import.meta.env.DEV ? new URLSearchParams(location.search)
 const FORCE_STILL = import.meta.env.DEV && new URLSearchParams(location.search).has('still')
 const REDUCED_MOTION = window.matchMedia('(prefers-reduced-motion: reduce)').matches
 
-// Scroll distance = track height − one viewport, so add 100vh to map exactly TIMELINE_END units.
-const TRACK_HEIGHT = `${TIMELINE_END * VH_PER_UNIT + 100}vh`
+// Scroll distance = track height − one viewport, so add 100vh to map exactly the timeline's units.
+const TRACK_HEIGHT = `${(TIMELINE_END - TIMELINE_START) * VH_PER_UNIT + 100}vh`
 
 export default function App() {
   const [clips, setClips] = useState(null)

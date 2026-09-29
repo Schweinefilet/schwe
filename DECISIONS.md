@@ -212,3 +212,9 @@ Still provisional:
 
 ## 2026-09-29 — The s gets inner lines too
 - User: the s needs the same treatment as the c and e. ALIGN.sketch.inner.letters 'ce' → 'sce'. The s has no enclosed counter; closing it bridges both of its open bowls, so it gets two open arcs (the upper bowl, opening right; the lower bowl, opening left), ending at the stroke ends like the c's. No code change: the tracer already handles open counters. Checked fully drawn at the eye (headless, 2×).
+
+## 2026-09-29 — "enter" only fades the loader; the top of the page is the rain
+- User: pressing "enter" should not scroll the page, only fade the intro screen. The auto-scroll (ENTER_SCROLL_SECONDS, 2.4 s from the loader pose to the rain) is removed, and so is the loader pose: the camera key at 0 (high, facing the dark sky) and the 'loader' beat. Supersedes "After enter, the site auto-scrolls" (Phase 1 scaffold).
+- The top of the page is the rain beat: TIMELINE_START = 1 (BEATS[0]); the scroll track covers 1 → TIMELINE_END, so the page is 100vh shorter. Every beat keeps its time in units, so no other constant moved. The loader is a black screen over the rain until "enter", which unlocks audio and scrolling while the screen fades (1.2 s).
+- The camera path now starts at the rain key, at rest. goto(t), the bench and smoke map timeline time to scroll through TIMELINE_START.
+- Checked headless: before and after the click scrollY 0, time 1, beat rain; the first wheel scroll reaches the freeze. npm test 57/57, smoke 5/5.

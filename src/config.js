@@ -14,11 +14,10 @@ export const CONTENT = { source: 'sky' }
 // Timeline time is measured in "units". One unit = VH_PER_UNIT of scroll distance.
 export const VH_PER_UNIT = 100
 export const FREEZE_SECONDS = 1.5 // real time for uTimeScale to ease 1 → 0 (and back on rewind)
-export const ENTER_SCROLL_SECONDS = 2.4 // auto-scroll from the loader pose to the rain beat after "enter"
 
-// The seven beats, in order. `at` is the label position in timeline units.
+// The beats, in order. `at` is the label position in timeline units. The loader is a screen over the
+// first one, not a beat: "enter" only fades it, and the top of the page is the rain.
 export const BEATS = [
-  { name: 'loader', at: 0 },
   { name: 'rain', at: 1 },
   { name: 'freeze', at: 1.08 }, // just past rain, so the first scroll triggers the freeze
   { name: 'drift', at: 2.5 },
@@ -27,6 +26,7 @@ export const BEATS = [
   { name: 'splash', at: 13.3 }, // SPLASH_AT; the camera passes the word's eye at 13 without stopping
 ]
 const SPLASH_AT = 13.3 // beat 7 timings below are offsets from this
+export const TIMELINE_START = BEATS[0].at // the top of the page
 export const TIMELINE_END = SPLASH_AT + 4.5
 
 // ---- Scene layout (world units, camera travels toward -z) ----------------
@@ -198,7 +198,6 @@ const driftKeys = HERO_POSITIONS.slice(0, DRIFT_DROPS).map((drop, i) => {
 })
 
 export const CAMERA_KEYS = [
-  { at: 0,    pos: [0, 16, 16],                          look: [0, 24, -20] },           // loader: high, facing dark sky
   { at: 1,    pos: [0, 5, 14],                           look: [0, 4, 0] },              // rain
   { at: 1.08, pos: [0, 5, 13.9],                         look: [0, 4, 0] },              // freeze
   { at: DRIFT.start, pos: [0, DRIFT.y, 10],              look: [0, DRIFT.y, 0] },        // drift start

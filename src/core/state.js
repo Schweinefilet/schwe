@@ -1,9 +1,9 @@
 // App-wide mutable state read by non-React consumers (dev overlay, later: video manager, audio).
 // Mutated directly; nothing here triggers React renders.
 export const state = {
-  beat: 'loader',
+  beat: 'rain',
   progress: 0,
-  time: 0, // master timeline time, in units
+  time: 1, // master timeline time, in units (the top of the page is the rain beat, at 1)
   unlocked: false,
   clips: null, // result of selectClips()
   diveCity: null, // chosen once per visit from the first selection
