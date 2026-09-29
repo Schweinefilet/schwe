@@ -10,6 +10,7 @@ import { state } from '../core/state.js'
 import { useTier } from '../core/useTier.js'
 import { acquireSky, releaseSky, skyContent, startSky } from '../sky/skyManager.js'
 import HeroDrop from './HeroDrop.jsx'
+import DropLabelAnchors from './DropLabelAnchors.jsx'
 
 // The dive drop is always kept; lower tiers show fewer of the others.
 const pickVisible = (drops) => [
@@ -44,6 +45,7 @@ function SkyDrops({ diveCity }) {
       {visible.map((drop) => (
         <HeroDrop key={drop.city} position={drop.pos} sky={skyContent(drop.city)} dispersion={quality.name === 'high'} dive={drop.dive} />
       ))}
+      <DropLabelAnchors drops={visible} />
     </group>
   )
 }
@@ -72,15 +74,20 @@ function FootageDrops({ clips, diveCity }) {
     updateVideoBudget(camera, Math.min(dt, 0.1))
   })
 
-  return visible.map((drop, i) => (
-    <HeroDrop
-      key={drop.city}
-      position={drop.pos}
-      poster={atlas.texture}
-      rect={rects[i]}
-      slotKey={drop.city}
-      dispersion={quality.name === 'high'}
-      dive={drop.dive}
-    />
-  ))
+  return (
+    <>
+      {visible.map((drop, i) => (
+        <HeroDrop
+          key={drop.city}
+          position={drop.pos}
+          poster={atlas.texture}
+          rect={rects[i]}
+          slotKey={drop.city}
+          dispersion={quality.name === 'high'}
+          dive={drop.dive}
+        />
+      ))}
+      <DropLabelAnchors drops={visible} />
+    </>
+  )
 }
