@@ -42,7 +42,6 @@ export function buildMasterTimeline() {
   tl.to(rig, { follow: 1, duration: 0.7, ease: 'sine.inOut' }, SPLASH.fallAt - 0.1)
   tl.to(rig, { fall: 1, duration: SPLASH.impactAt - SPLASH.fallAt, ease: 'sine.in' }, SPLASH.fallAt)
   tl.to(rig, { splash: 1, duration: SPLASH.splashEnd - SPLASH.impactAt }, SPLASH.impactAt)
-  tl.to(rig, { settle: 1, duration: SPLASH.settleEnd - SPLASH.splashEnd }, SPLASH.splashEnd)
   tl.to(rig, { ring: 1, duration: SPLASH.ringEnd - SPLASH.ringStart }, SPLASH.ringStart)
   tl.to(rig, { endType: 1, duration: 0.3 }, SPLASH.answerAt)
 

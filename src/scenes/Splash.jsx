@@ -61,10 +61,11 @@ function loadData(base) {
     tex('splash_hi.png'),
     tex('splash_lo.png'),
     tex('splash_nrm.png'),
-  ]).then(([meta, hi, lo, nrm]) => ({ meta, hi, lo, nrm }))
+    tex('splash_idx.png'),
+  ]).then(([meta, hi, lo, nrm, idx]) => ({ meta, hi, lo, nrm, idx }))
 }
 
-// Beat 7: one drop falls, then the baked crown splash plays and the water settles. The VAT frame
+// Beat 7: one drop falls, then the baked splash plays until only a swell is left. The VAT frame
 // follows the timeline, so scrolling back up plays the splash in reverse and lifts the drop back into
 // the word.
 export default function Splash({ clips, rainCity }) {
@@ -92,7 +93,7 @@ export default function Splash({ clips, rainCity }) {
   const vat = useMemo(() => {
     if (!data) return null
     const { meta } = data
-    const n = meta.vertsPerFrame
+    const n = meta.maxCorners
     const geometry = new THREE.BufferGeometry()
     geometry.setAttribute('position', new THREE.BufferAttribute(new Float32Array(n * 3), 3)) // unused; three requires it
     geometry.setAttribute('aIndex', new THREE.BufferAttribute(Float32Array.from({ length: n }, (_, i) => i), 1))
@@ -104,15 +105,15 @@ export default function Splash({ clips, rainCity }) {
         uHi: { value: data.hi },
         uLo: { value: data.lo },
         uNrm: { value: data.nrm },
-        uFrame: { value: 0 },
+        uIdx: { value: data.idx },
+        uVertRow: { value: 0 },
+        uIdxRow: { value: 0 },
         uWidth: { value: meta.width },
-        uRowsPerFrame: { value: meta.rowsPerFrame },
         uBoundsMin: { value: new THREE.Vector3(...meta.boundsMin) },
         uBoundsMax: { value: new THREE.Vector3(...meta.boundsMax) },
         uQuantMax: { value: meta.quantMax ?? 65535 },
         uCrop: { value: Math.min(-meta.boundsMin[0], meta.boundsMax[0]) },
         uSurface: { value: meta.surfaceY },
-        uFlatten: { value: 0 },
         uReflGain: { value: WATER.reflGain },
         uDeep: { value: new THREE.Color(...WATER.deep) },
         uTransGain: { value: WATER.transGain },
@@ -122,7 +123,9 @@ export default function Splash({ clips, rainCity }) {
     })
     const scale = SPLASH.fallRadius / meta.dropRadius
     fall.handoffHeight = meta.dropStartAbove * scale
-    return { geometry, material, scale, surfaceY: meta.surfaceY, frames: meta.frames }
+    const vat = { geometry, material, scale, surfaceY: meta.surfaceY, meta }
+    showFrame(vat, 0)
+    return vat
   }, [data])
 
   useEffect(
@@ -160,7 +163,7 @@ export default function Splash({ clips, rainCity }) {
   // Otherwise both compile on the frames they first appear: the fall's start and the impact.
   useEffect(() => prewarm(gl, drop.current, camera, scene, [poster]), [gl, camera, scene, poster, urls, sky])
   // The splash data arrives mid-drift, so its preparation is spread out: one texture upload per
-  // frame (each is 2048×648), then the shader compile.
+  // frame (the largest, the index texture, is 2048×1499), then the shader compile.
   const warmQueue = useRef([])
   useEffect(() => {
     if (!vat) return
@@ -168,6 +171,7 @@ export default function Splash({ clips, rainCity }) {
       () => gl.initTexture(data.hi),
       () => gl.initTexture(data.lo),
       () => gl.initTexture(data.nrm),
+      () => gl.initTexture(data.idx),
       () => prewarm(gl, vatMesh.current, camera, scene),
     ]
   }, [gl, camera, scene, vat, data])
@@ -184,11 +188,7 @@ export default function Splash({ clips, rainCity }) {
     m.visible = handedOff
     // The sim's resting surface sits at surfaceY; put it on the ground under the impact point.
     m.position.set(fall.impact.x, fall.impact.y - vat.surfaceY * vat.scale, fall.impact.z)
-    // After the last baked frame the water settles: the jet plays back down while what is left flattens.
-    const { jetBack, jetBackShare, flatten } = SPLASH.settle
-    const back = Math.min(rig.settle / jetBackShare, 1) * jetBack
-    vat.material.uniforms.uFrame.value = Math.round(rig.splash * (vat.frames - 1) - back)
-    vat.material.uniforms.uFlatten.value = smoothstep(flatten[0], flatten[1], rig.settle)
+    showFrame(vat, Math.round(rig.splash * (vat.meta.frames - 1)))
   })
 
   return (
@@ -210,9 +210,12 @@ export default function Splash({ clips, rainCity }) {
 }
 
 const FALL_ORIGIN = [0, 0, 0]
-const smoothstep = (a, b, x) => {
-  const t = Math.min(Math.max((x - a) / (b - a), 0), 1)
-  return t * t * (3 - 2 * t)
+// Frames are stored at their own length: point the shader at the frame's first rows and draw only
+// its triangles.
+function showFrame({ material, geometry, meta }, frame) {
+  material.uniforms.uVertRow.value = meta.vertexRows[frame]
+  material.uniforms.uIdxRow.value = meta.indexRows[frame]
+  geometry.setDrawRange(0, meta.trisPerFrame[frame] * 3)
 }
 const FALL_SLOT = 'fall'
 

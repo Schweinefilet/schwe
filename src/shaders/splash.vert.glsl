@@ -1,18 +1,19 @@
-// Vertex animation texture playback. The mesh is a fixed list of MAX_TRIS × 3 vertices that only
-// carry an index; every frame, each vertex looks up its position and normal for the current sim
-// frame. Unused vertices all sit at one point, so their triangles collapse and are skipped.
+// Vertex animation texture playback. Each baked frame is its own indexed mesh: its vertices in the
+// vertex textures from row uVertRow, and three indices per triangle in the index texture from row
+// uIdxRow. The mesh is a fixed list of MAX_TRIS × 3 corners that only carry their number; every
+// frame, each corner reads its vertex index, then that vertex's position and normal. The draw range
+// covers only the current frame's triangles.
 
 uniform sampler2D uHi;      // high bytes of 16-bit x, y, z
 uniform sampler2D uLo;      // low bytes
 uniform sampler2D uNrm;     // octahedral normal in RG
-uniform float uFrame;
+uniform sampler2D uIdx;     // vertex index: high byte in R, low byte in G
+uniform int uVertRow;       // the current frame's first row in the vertex textures
+uniform int uIdxRow;        // and in the index texture
 uniform int uWidth;
-uniform int uRowsPerFrame;
 uniform vec3 uBoundsMin;
 uniform vec3 uBoundsMax;
 uniform float uQuantMax;   // largest stored 16-bit value (depends on the bake's precision)
-uniform float uSurface;    // resting water height
-uniform float uFlatten;    // settling: 0 as baked, 1 flat on the resting surface
 
 attribute float aIndex;
 
@@ -30,18 +31,18 @@ vec3 octDecode(vec2 e) {
   return normalize(n);
 }
 
+ivec2 texelOf(int i, int firstRow) {
+  return ivec2(i - (i / uWidth) * uWidth, firstRow + i / uWidth);
+}
+
 void main() {
-  int idx = int(aIndex);
-  int row = int(uFrame) * uRowsPerFrame + idx / uWidth;
-  ivec2 texel = ivec2(idx - (idx / uWidth) * uWidth, row);
+  vec2 ix = floor(texelFetch(uIdx, texelOf(int(aIndex), uIdxRow), 0).rg * 255.0 + 0.5);
+  ivec2 texel = texelOf(int(ix.r * 256.0 + ix.g), uVertRow);
 
   vec3 hi = floor(texelFetch(uHi, texel, 0).rgb * 255.0 + 0.5);
   vec3 lo = floor(texelFetch(uLo, texel, 0).rgb * 255.0 + 0.5);
   vec3 p = mix(uBoundsMin, uBoundsMax, (hi * 256.0 + lo) / uQuantMax);
   vec3 n = octDecode(texelFetch(uNrm, texel, 0).rg);
-  // The bake ends mid-jet: whatever is left sinks onto the resting surface, where it is not drawn.
-  p.y = mix(p.y, uSurface, uFlatten);
-  n = normalize(mix(n, vec3(0.0, 1.0, 0.0), uFlatten));
 
   vec4 w = modelMatrix * vec4(p, 1.0);
   vWorld = w.xyz;

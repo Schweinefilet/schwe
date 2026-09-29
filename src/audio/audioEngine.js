@@ -245,6 +245,9 @@ const CUES = [
   { at: SPLASH.ringStart + 0.35, dir: 1, play: () => bloop(180, 0.07) },
   { at: SPLASH.ringStart + 0.75, dir: 1, play: () => bloop(150, 0.05) },
   { at: SPLASH.answerAt, dir: 1, play: () => chime([392, 587.33], 0.04, 2.5) },
+  // The jets fall back into the pool: two small plops, the second softer.
+  { at: SPLASH.jetFallAt, dir: 1, play: () => bloop(320, 0.06) },
+  { at: SPLASH.jet2FallAt, dir: 1, play: () => bloop(380, 0.035) },
 ]
 
 // ---- Per frame -----------------------------------------------------------------------------------
@@ -268,7 +271,8 @@ function update() {
 
   // Ending: the rain city's rain rises with the fall and gives way to the splash.
   const raining = state.rainCity?.kind === 'now' ? 1 : 0
-  setSmooth(layers.fallGain.gain, raining * fadeOut * rig.fall * (1 - 0.6 * rig.splash) * AUDIO.cityLevel)
+  const duck = Math.min(Math.max((t - SPLASH.impactAt) / 1.5, 0), 1) // over the crown
+  setSmooth(layers.fallGain.gain, raining * fadeOut * rig.fall * (1 - 0.6 * duck) * AUDIO.cityLevel)
 
   // Cues: fire those whose moment lies between the last frame's time and this one.
   if (t !== lastTime) {

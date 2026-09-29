@@ -33,7 +33,7 @@ export const BEATS = [
 ]
 const SPLASH_AT = 13.3 // beat 7 timings below are offsets from this
 export const TIMELINE_START = BEATS[0].at // the top of the page
-export const TIMELINE_END = SPLASH_AT + 6.0 // the water has settled; the last frame holds
+export const TIMELINE_END = SPLASH_AT + 6.0 // the jets have fallen back; the last frame holds
 
 // ---- Scene layout (world units, camera travels toward -z) ----------------
 // The world behind the rain: a 360° night photograph, Poly Haven "rathaus" (Hamburg's town hall square,
@@ -169,13 +169,14 @@ export const SPLASH = {
   fallRadius: 0.03, // world radius of the falling drop; the sim is scaled to match its drop
   fallAt: SPLASH_AT + 0.1, // time resumes for this one drop
   impactAt: SPLASH_AT + 2.5, // it reaches the water; the VAT takes over
-  splashEnd: SPLASH_AT + 4.0, // last VAT frame: the jet is still rising
-  // The bake ends mid-jet, so the water settles in the shader: the jet plays back down (the last
-  // `jetBack` baked frames in reverse, over the first `jetBackShare` of the settle) while the mesh
-  // flattens onto the water (`flatten`: from and to, as shares of the settle), where the puddle takes
-  // over; after that only the rings move, spreading out and dying away.
-  settleEnd: TIMELINE_END,
-  settle: { jetBack: 16, jetBackShare: 0.3, flatten: [0.08, 0.55] },
+  // Last VAT frame. 168 stored frames play evenly from impactAt to here (48 per unit). The bake's
+  // own speed ramp (vat_from_cache.py --ramp) keeps the crown in full slow motion and speeds up as
+  // the water calms: the main jet rises and falls back, a second, smaller one follows, and the last
+  // frame holds on what swell is left.
+  splashEnd: TIMELINE_END,
+  // The jets fall back into the pool (cache frames 163 and 221, stored frames 127 and 148).
+  jetFallAt: SPLASH_AT + 5.16,
+  jet2FallAt: SPLASH_AT + 5.6,
   ringStart: SPLASH_AT + 2.8,
   ringEnd: TIMELINE_END,
   ringSeconds: 7.5, // the ripples' own clock over ringStart → ringEnd (the pace of the original 4 s over 1.7 units)

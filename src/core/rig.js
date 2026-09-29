@@ -6,7 +6,6 @@ const INITIAL = {
   fall: 0, // falling drop: 0 frozen in the word, 1 at the water (hand-off to the baked splash)
   splash: 0, // baked splash progress 0..1 (first to last frame)
   ring: 0, // ripple progress 0..1
-  settle: 0, // after the last baked frame: the jet falls back and the water calms, 0..1
   endType: 0, // opacity of the ending's answer (where it is raining hardest now)
 }
 
