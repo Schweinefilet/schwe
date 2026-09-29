@@ -38,13 +38,13 @@ export function buildMasterTimeline() {
   // the word exists only where the camera passes the eye.
 
   // Beat 7: time resumes for one drop. The camera turns to it and follows it down; at the water the
-  // baked splash takes over, rings spread, and everything fades to black.
+  // baked splash takes over, rings spread, the water settles, and the last frame holds with the answer.
   tl.to(rig, { follow: 1, duration: 0.7, ease: 'sine.inOut' }, SPLASH.fallAt - 0.1)
   tl.to(rig, { fall: 1, duration: SPLASH.impactAt - SPLASH.fallAt, ease: 'sine.in' }, SPLASH.fallAt)
   tl.to(rig, { splash: 1, duration: SPLASH.splashEnd - SPLASH.impactAt }, SPLASH.impactAt)
+  tl.to(rig, { settle: 1, duration: SPLASH.settleEnd - SPLASH.splashEnd }, SPLASH.splashEnd)
   tl.to(rig, { ring: 1, duration: SPLASH.ringEnd - SPLASH.ringStart }, SPLASH.ringStart)
   tl.to(rig, { endType: 1, duration: 0.3 }, SPLASH.answerAt)
-  tl.to('#fade', { opacity: 1, duration: TIMELINE_END - SPLASH.fadeStart }, SPLASH.fadeStart)
 
   // Pin total duration so scroll maps 1:1 to units even if the last tween ends early.
   tl.set({}, {}, TIMELINE_END)

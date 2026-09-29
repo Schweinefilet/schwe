@@ -256,7 +256,7 @@ function update() {
 
   // Rain → hum. Level also dips while inside the city (it gives way to the ambience) and fades out
   // with the ending.
-  const fadeOut = 1 - Math.min(1, Math.max(0, (t - SPLASH.fadeStart) / 0.8))
+  const fadeOut = 1 - Math.min(1, Math.max(0, (t - SPLASH.quietAt) / 0.8))
   const started = state.unlocked ? 1 : 0
   const inCity = rig.dive
   setSmooth(layers.rainGain.gain, started * fadeOut * (1 - 0.85 * inCity) * (0.18 + 0.22 * ts))

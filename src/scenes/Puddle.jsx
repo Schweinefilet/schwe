@@ -53,8 +53,6 @@ void main() {
   gl_FragColor = vec4(col * fog, extent * uOpacity);
 }`
 
-const RING_SECONDS = 4 // ring time covered by the ripple beat
-
 // The wet ground under the fall. The rest of the frame is dark water fading into the night.
 export default function Puddle() {
   const material = useMemo(
@@ -85,7 +83,7 @@ export default function Puddle() {
 
   useFrame(() => {
     material.uniforms.uCenter.value.set(fall.impact.x, fall.impact.z)
-    material.uniforms.uTime.value = rig.ring * RING_SECONDS
+    material.uniforms.uTime.value = rig.ring * SPLASH.ringSeconds
     // Only part of beat 7: it appears as the camera turns down toward it.
     material.uniforms.uOpacity.value = rig.follow
     mesh.current.visible = rig.follow > 0

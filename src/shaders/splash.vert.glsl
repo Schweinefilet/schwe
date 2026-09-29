@@ -11,6 +11,8 @@ uniform int uRowsPerFrame;
 uniform vec3 uBoundsMin;
 uniform vec3 uBoundsMax;
 uniform float uQuantMax;   // largest stored 16-bit value (depends on the bake's precision)
+uniform float uSurface;    // resting water height
+uniform float uFlatten;    // settling: 0 as baked, 1 flat on the resting surface
 
 attribute float aIndex;
 
@@ -37,6 +39,9 @@ void main() {
   vec3 lo = floor(texelFetch(uLo, texel, 0).rgb * 255.0 + 0.5);
   vec3 p = mix(uBoundsMin, uBoundsMax, (hi * 256.0 + lo) / uQuantMax);
   vec3 n = octDecode(texelFetch(uNrm, texel, 0).rg);
+  // The bake ends mid-jet: whatever is left sinks onto the resting surface, where it is not drawn.
+  p.y = mix(p.y, uSurface, uFlatten);
+  n = normalize(mix(n, vec3(0.0, 1.0, 0.0), uFlatten));
 
   vec4 w = modelMatrix * vec4(p, 1.0);
   vWorld = w.xyz;

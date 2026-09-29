@@ -144,8 +144,7 @@ body {
   filter: drop-shadow(0 0 4px rgba(230, 227, 255, 0.55));
 }
 
-/* Beat 7's answer: same type as the city, centred under the rings. Below #fade, so the fade to black
-   takes the type with it. */
+/* Beat 7's answer: same type as the city, centred under the rings. It stays on the last frame. */
 .end-type {
   position: fixed;
   left: 16px;

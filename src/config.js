@@ -33,7 +33,7 @@ export const BEATS = [
 ]
 const SPLASH_AT = 13.3 // beat 7 timings below are offsets from this
 export const TIMELINE_START = BEATS[0].at // the top of the page
-export const TIMELINE_END = SPLASH_AT + 4.5
+export const TIMELINE_END = SPLASH_AT + 6.0 // the water has settled; the last frame holds
 
 // ---- Scene layout (world units, camera travels toward -z) ----------------
 // The world behind the rain: a 360° night photograph, Poly Haven "rathaus" (Hamburg's town hall square,
@@ -169,11 +169,22 @@ export const SPLASH = {
   fallRadius: 0.03, // world radius of the falling drop; the sim is scaled to match its drop
   fallAt: SPLASH_AT + 0.1, // time resumes for this one drop
   impactAt: SPLASH_AT + 2.5, // it reaches the water; the VAT takes over
-  splashEnd: SPLASH_AT + 4.0, // last VAT frame
+  splashEnd: SPLASH_AT + 4.0, // last VAT frame: the jet is still rising
+  // The bake ends mid-jet, so the water settles in the shader: the jet plays back down (the last
+  // `jetBack` baked frames in reverse, over the first `jetBackShare` of the settle) while the mesh
+  // flattens onto the water (`flatten`: from and to, as shares of the settle), where the puddle takes
+  // over; after that only the rings move, spreading out and dying away.
+  settleEnd: TIMELINE_END,
+  settle: { jetBack: 16, jetBackShare: 0.3, flatten: [0.08, 0.55] },
   ringStart: SPLASH_AT + 2.8,
-  ringEnd: SPLASH_AT + 4.5,
-  fadeStart: SPLASH_AT + 3.7,
-  answerAt: SPLASH_AT + 3.0, // the ending's type fades in as the rings spread; it leaves with the fade
+  ringEnd: TIMELINE_END,
+  ringSeconds: 7.5, // the ripples' own clock over ringStart → ringEnd (the pace of the original 4 s over 1.7 units)
+  quietAt: SPLASH_AT + 5.0, // the sound fades out over 0.8 units from here, as the water calms
+  answerAt: SPLASH_AT + 3.0, // the ending's type fades in as the rings spread, and stays
+  // Once the scroll passes autoFrom going down, the ending plays itself (the scroll moves with it,
+  // locked) to the end at about autoRate units per second, then holds on the last frame.
+  autoFrom: SPLASH_AT + 0.1, // the drop leaves the word (fallAt)
+  autoRate: 0.8,
   fallPinFrom: 12.4, // the falling drop's clip starts decoding after the dive drop's pin ends (12)
   groundY: 0,
   puddleSize: 80, // the wet ground, fading into darkness with distance

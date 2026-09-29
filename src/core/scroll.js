@@ -1,7 +1,7 @@
 import gsap from 'gsap'
 import { ScrollTrigger } from 'gsap/ScrollTrigger'
 import Lenis from 'lenis'
-import { CAMERA_KEYS, DEFAULT_DIVE_CITY, HERO, PACE, TIMELINE_END, TIMELINE_START, heroDropsFor, visibleDrops } from '../config.js'
+import { CAMERA_KEYS, DEFAULT_DIVE_CITY, HERO, PACE, SPLASH, TIMELINE_END, TIMELINE_START, heroDropsFor, visibleDrops } from '../config.js'
 import { setLenis, setStep } from './loop.js'
 import { buildMasterTimeline } from './timeline.js'
 import { createCameraPath } from './cameraPath.js'
@@ -13,6 +13,11 @@ import { onTierChange, quality } from './quality.js'
 import { liveCount } from '../content/videoManager.js'
 
 gsap.registerPlugin(ScrollTrigger)
+
+// The ending's own scroll: linear, easing out over the last 15% (value and slope match where they meet).
+const EASE_FROM = 0.85
+const EASE_K = 1 / (1 - EASE_FROM * EASE_FROM)
+const endingEase = (x) => (x <= EASE_FROM ? 2 * EASE_K * (1 - EASE_FROM) * x : 1 - EASE_K * (1 - x) ** 2)
 
 // The speed limit along the timeline (PACE in config.js): slower where the camera passes the drops
 // this tier shows. Positions do not depend on which city is in which drop.
@@ -49,11 +54,26 @@ export function initScroll() {
   // the scroll position stands for. Scroll stays the one source of truth; only the rate is time-based.
   let table = paceTable()
   const offTier = onTierChange(() => (table = paceTable()))
-  const pace = { time: TIMELINE_START, velocity: 0, arrived: null }
+  const pace = { time: TIMELINE_START, velocity: 0, arrived: null, lastTarget: TIMELINE_START, ending: false }
   const snap = (t) => {
-    pace.time = t
+    pace.time = pace.lastTarget = t
     pace.velocity = 0
+    pace.ending = false // a jump interrupts the ending's own scroll (and Lenis drops its lock)
     tl.time(t)
+  }
+
+  // Past SPLASH.autoFrom the ending plays itself: the page scrolls to the end at SPLASH.autoRate,
+  // locked, and holds there. Only for a visitor's own scroll: not while the scroll is stopped (the
+  // loader, the bench) or already locked by another programmatic scroll.
+  const playEnding = (from) => {
+    pace.ending = true
+    lenis.scrollTo(timeToScroll(TIMELINE_END), {
+      duration: Math.max((TIMELINE_END - from) / SPLASH.autoRate, 0.5),
+      easing: endingEase,
+      lock: true,
+      force: true,
+      onComplete: () => (pace.ending = false),
+    })
   }
 
   // A hard wheel or trackpad flick runs at most PACE.bank ahead of the picture; the rest is dropped, so
@@ -81,6 +101,9 @@ export function initScroll() {
 
   setStep((dt) => {
     const target = scrollToTime(lenis.scroll)
+    const crossed = pace.lastTarget < SPLASH.autoFrom && target >= SPLASH.autoFrom
+    pace.lastTarget = target
+    if (crossed && !pace.ending && !lenis.isStopped && !lenis.isLocked) playEnding(target)
     if (target !== pace.time || pace.velocity !== 0) {
       ;[pace.time, pace.velocity] = smoothDamp(pace.time, pace.velocity, target, PACE.smooth, rateAt(table, pace.time), dt)
       tl.time(pace.time)

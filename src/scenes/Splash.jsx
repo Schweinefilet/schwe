@@ -64,8 +64,9 @@ function loadData(base) {
   ]).then(([meta, hi, lo, nrm]) => ({ meta, hi, lo, nrm }))
 }
 
-// Beat 7: one drop falls, then the baked crown splash plays. The VAT frame follows scroll, so
-// scrolling back up plays the splash in reverse and lifts the drop back into the word.
+// Beat 7: one drop falls, then the baked crown splash plays and the water settles. The VAT frame
+// follows the timeline, so scrolling back up plays the splash in reverse and lifts the drop back into
+// the word.
 export default function Splash({ clips, rainCity }) {
   const [data, setData] = useState(null)
   const vatMesh = useRef()
@@ -111,6 +112,7 @@ export default function Splash({ clips, rainCity }) {
         uQuantMax: { value: meta.quantMax ?? 65535 },
         uCrop: { value: Math.min(-meta.boundsMin[0], meta.boundsMax[0]) },
         uSurface: { value: meta.surfaceY },
+        uFlatten: { value: 0 },
         uReflGain: { value: WATER.reflGain },
         uDeep: { value: new THREE.Color(...WATER.deep) },
         uTransGain: { value: WATER.transGain },
@@ -182,7 +184,11 @@ export default function Splash({ clips, rainCity }) {
     m.visible = handedOff
     // The sim's resting surface sits at surfaceY; put it on the ground under the impact point.
     m.position.set(fall.impact.x, fall.impact.y - vat.surfaceY * vat.scale, fall.impact.z)
-    vat.material.uniforms.uFrame.value = Math.round(rig.splash * (vat.frames - 1))
+    // After the last baked frame the water settles: the jet plays back down while what is left flattens.
+    const { jetBack, jetBackShare, flatten } = SPLASH.settle
+    const back = Math.min(rig.settle / jetBackShare, 1) * jetBack
+    vat.material.uniforms.uFrame.value = Math.round(rig.splash * (vat.frames - 1) - back)
+    vat.material.uniforms.uFlatten.value = smoothstep(flatten[0], flatten[1], rig.settle)
   })
 
   return (
@@ -204,6 +210,10 @@ export default function Splash({ clips, rainCity }) {
 }
 
 const FALL_ORIGIN = [0, 0, 0]
+const smoothstep = (a, b, x) => {
+  const t = Math.min(Math.max((x - a) / (b - a), 0), 1)
+  return t * t * (3 - 2 * t)
+}
 const FALL_SLOT = 'fall'
 
 // The city's poster, shown until its video is live (a slow network never leaves the drop black).
