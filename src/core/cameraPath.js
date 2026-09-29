@@ -106,14 +106,17 @@ export function smoothKeys(keys, { sigma, pins = [], step = 0.02, fine = 0.005 }
       return s
     })
   const result = { pos: smooth(raw.pos), look: smooth(raw.look) }
-  for (const at of pins) {
-    const i = Math.round((at - from) / fine)
-    for (const field of ['pos', 'look']) {
-      const delta = raw[field][i].map((v, j) => v - result[field][i][j])
-      result[field].forEach((p, m) => {
-        const g = Math.exp(-0.5 * (((m - i) * fine) / (3 * sigma)) ** 2)
-        for (let j = 0; j < 3; j++) p[j] += delta[j] * g
-      })
+  // One smooth bump per pin, their sizes solved together so every pin lands exactly even where the
+  // bumps overlap.
+  const at = pins.map((t) => Math.round((t - from) / fine))
+  const bump = (m, i) => Math.exp(-0.5 * (((m - i) * fine) / (3 * sigma)) ** 2)
+  for (const field of ['pos', 'look']) {
+    for (let j = 0; j < 3; j++) {
+      const c = solve(
+        at.map((i) => at.map((k) => bump(i, k))),
+        at.map((i) => raw[field][i][j] - result[field][i][j])
+      )
+      result[field].forEach((p, m) => at.forEach((i, q) => (p[j] += c[q] * bump(m, i))))
     }
   }
   const every = Math.round(step / fine)
@@ -121,4 +124,26 @@ export function smoothKeys(keys, { sigma, pins = [], step = 0.02, fine = 0.005 }
   for (let i = every; i <= n; i += every) dense.push({ at: from + i * fine, pos: result.pos[i], look: result.look[i], sampled: true })
   if (dense.at(-1).at < to - 1e-9) dense.push({ at: to, pos: result.pos[n], look: result.look[n], sampled: true })
   return dense
+}
+
+// Solves A x = b by Gaussian elimination with partial pivoting (a few pins: tiny).
+function solve(A, b) {
+  const n = b.length
+  const M = A.map((row, i) => [...row, b[i]])
+  for (let c = 0; c < n; c++) {
+    let pivot = c
+    for (let r = c + 1; r < n; r++) if (Math.abs(M[r][c]) > Math.abs(M[pivot][c])) pivot = r
+    ;[M[c], M[pivot]] = [M[pivot], M[c]]
+    for (let r = c + 1; r < n; r++) {
+      const f = M[r][c] / M[c][c]
+      for (let k = c; k <= n; k++) M[r][k] -= f * M[c][k]
+    }
+  }
+  const x = new Array(n).fill(0)
+  for (let r = n - 1; r >= 0; r--) {
+    let sum = M[r][n]
+    for (let k = r + 1; k < n; k++) sum -= M[r][k] * x[k]
+    x[r] = sum / M[r][r]
+  }
+  return x
 }
