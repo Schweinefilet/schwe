@@ -47,8 +47,32 @@ export function createSkyGlobals(renderer, { model = createHillaire, coefficient
   return globals
 }
 
+const NO_SKYLINE = new THREE.DataTexture(new Uint8Array([0, 255, 0, 0]), 1, 1)
+NO_SKYLINE.needsUpdate = true
+
+// A city's skyline (scripts/build-skyline.mjs): its panorama as a texture with its own mip levels
+// (every channel is a share of the pixel, so averaging is right), and where it sits in the sky. null
+// when the city has none.
+async function loadSkyline(cityId) {
+  const base = `${import.meta.env.BASE_URL}${SKY.skyline.url}${cityId}`
+  const res = await fetch(`${base}.json`)
+  if (!res.ok || !(res.headers.get('content-type') ?? '').includes('json')) return null
+  const meta = await res.json()
+  const blob = await (await fetch(`${base}.png`)).blob()
+  // Rows bottom-up (v runs up with elevation); values exactly as stored: they are data, not colour.
+  const bitmap = await createImageBitmap(blob, { imageOrientation: 'flipY', premultiplyAlpha: 'none', colorSpaceConversion: 'none' })
+  const texture = new THREE.Texture(bitmap)
+  texture.flipY = false
+  texture.premultiplyAlpha = false
+  texture.colorSpace = THREE.NoColorSpace
+  texture.minFilter = THREE.LinearMipmapLinearFilter
+  texture.generateMipmaps = true
+  texture.needsUpdate = true
+  return { meta, texture }
+}
+
 export class CitySky {
-  constructor(globals, [width, height]) {
+  constructor(globals, [width, height], cityId = null) {
     this.globals = globals
     this.target = lutTarget(width, height, { wrapS: THREE.RepeatWrapping }) // azimuth wraps
     this.lutKey = null
@@ -76,7 +100,28 @@ export class CitySky {
       uSkyHaze: { value: 0 },
       uSkyPreExposure: { value: 1 },
       uSkyMeter: { value: new THREE.Vector3(SKY.exposure.key, SKY.exposure.ref, SKY.exposure.range) },
+      uSkyline: { value: NO_SKYLINE },
+      uSkylineOn: { value: 0 },
+      uSkylineRect: { value: new THREE.Vector4() },
+      uSkylineDist: { value: new THREE.Vector2() },
+      uSkylineLit: { value: new THREE.Vector3() },
+      uSkylineWindow: { value: new THREE.Vector3() },
+      uSkylineLook: { value: new THREE.Vector3(SKY.skyline.facade[0], SKY.skyline.facade[1], SKY.skyline.hazePerKm) },
     }
+    if (cityId)
+      loadSkyline(cityId).then(
+        (s) => {
+          if (!s) return
+          const RAD = Math.PI / 180
+          const u = this.uniforms
+          this.skyline = s
+          u.uSkyline.value = s.texture
+          u.uSkylineRect.value.set(s.meta.azimuth[0] * RAD, s.meta.azimuth[1] * RAD, s.meta.elevation[0] * RAD, (s.meta.elevation[1] - s.meta.elevation[0]) * RAD)
+          u.uSkylineDist.value.set(Math.log(s.meta.distance[0]), Math.log(s.meta.distance[1] / s.meta.distance[0]))
+          u.uSkylineOn.value = 1
+        },
+        (err) => console.warn(`[sky] no skyline for ${cityId}:`, err.message)
+      )
     // What HeroDrop needs to draw this sky: the shader code and the uniforms, shared by reference.
     this.content = { glsl: `${globals.atmosphere.glsl}\n${skyChunk}`, uniforms: this.uniforms }
   }
@@ -103,6 +148,8 @@ export class CitySky {
     u.uSkyCloudOffset.value.fromArray(inputs.clouds.offset)
     u.uSkyCityGlow.value.fromArray(inputs.cityGlow)
     u.uSkyPreExposure.value = inputs.exposure
+    u.uSkylineLit.value.set(1 - inputs.windows.late, inputs.windows.late, inputs.windows.dark)
+    u.uSkylineWindow.value.fromArray(inputs.windowE)
     this.setWeather(inputs.clouds, inputs.haze)
   }
 
@@ -122,5 +169,6 @@ export class CitySky {
 
   dispose() {
     this.target.dispose()
+    this.skyline?.texture.dispose()
   }
 }

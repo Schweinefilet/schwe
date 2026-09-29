@@ -148,7 +148,7 @@ function SkyContent() {
     globals.ready.then(() => {
       if (!alive) return
       stats.stars = globals.stars
-      city = new CitySky(globals, SKY.skyView[quality.name])
+      city = new CitySky(globals, SKY.skyView[quality.name], CITY.id)
       stats.sky = city
       if (labInputs) city.set(labInputs)
       applyInputs = (inputs) => city.set(inputs)

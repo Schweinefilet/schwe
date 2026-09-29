@@ -19,7 +19,8 @@
     "sky:glow": "node scripts/build-city-glow.mjs",
     "sky:stills": "node scripts/sky-stills.mjs",
     "backdrop": "node scripts/build-backdrop.mjs",
-    "deploy": "npm run build && npx wrangler pages deploy dist --project-name schwe"
+    "deploy": "npm run build && npx wrangler pages deploy dist --project-name schwe",
+    "skyline": "node scripts/build-skyline.mjs"
   },
   "dependencies": {
     "@fontsource/inter-tight": "^5.3.0",

@@ -42,7 +42,7 @@ export function skyInputs({ city, date, weather = null, override = {}, sky }) {
   const view = sky.facing.views?.[city.id]
   const yaw = view ? viewBearing(view) : useMoon ? moonPos.azimuth : sunPos.azimuth
   const toward = view ? 'view' : useMoon ? 'moon' : 'sun'
-  const pitch = moonTiltPitch({ night, moon: moonPos, yaw, facing: sky.facing })
+  const pitch = moonTiltPitch({ night, moon: moonPos, yaw, facing: view ? { ...sky.facing, pitch: sky.facing.viewPitch ?? sky.facing.pitch } : sky.facing })
 
   const moonRadius = Math.asin(MOON_RADIUS_KM / moonPos.distance)
   const moonColour = tint(sky.moonColour)
@@ -75,6 +75,10 @@ export function skyInputs({ city, date, weather = null, override = {}, sky }) {
     moonDisk: ((sky.moonLux * exposure) / (Math.PI * moonRadius ** 2)) * (moonLaw / Math.max(lommelSeeligerPhase(psi), 1e-3)),
     earthshine: sky.earthshine * (1 - illum.fraction),
     starScale: sunPos.altitude < -4 ? sky.stars.lux0 * exposure * 2 ** (sky.stars.exposureStops ?? 0) : 0,
+    // The skyline's lit windows (decorative): the share of the evening's lit windows still on at this
+    // local hour, and how dark it is (none by day).
+    windows: { late: lateness(localHour(date, city.tz)), dark: smoothstep(3, -6, sunPos.altitude) },
+    windowE: tint(sky.skyline?.windowColour ?? [1, 1, 1]).map((c) => c * (sky.skyline?.window ?? 0)),
     cityGlow: tint(glow.colour).map((c) => c * glowZenith * exposure),
     clouds: {
       cover: cloud,
@@ -116,6 +120,32 @@ export const exposureFor = (L, { key, ref, range }) => (key * (L / ref) ** range
 
 // Columns: the city-frame directions the drop's axis, right and up map to. A rotation, so the lens
 // still inverts the image exactly as the optics say.
+// Hours of a local day → how late in the night it is for lit windows: 0 through the evening, rising
+// to 1 by 2 am, easing back through the early morning. Decorative, not data.
+const LATE = [[0, 0.6], [2, 1], [5, 1], [6.5, 0.4], [8, 0.2], [18, 0], [21, 0], [24, 0.6]]
+export function lateness(hour) {
+  const h = ((hour % 24) + 24) % 24
+  for (let i = 1; i < LATE.length; i++) {
+    const [h0, v0] = LATE[i - 1]
+    const [h1, v1] = LATE[i]
+    if (h <= h1) return v0 + ((v1 - v0) * (h - h0)) / (h1 - h0)
+  }
+  return LATE[0][1]
+}
+
+export function localHour(date, tz) {
+  if (!tz) return 12
+  const parts = Object.fromEntries(
+    new Intl.DateTimeFormat('en-GB', { timeZone: tz, hour: 'numeric', minute: 'numeric', hourCycle: 'h23' }).formatToParts(date).map((p) => [p.type, p.value])
+  )
+  return Number(parts.hour) + Number(parts.minute) / 60
+}
+
+const smoothstep = (a, b, x) => {
+  const t = Math.min(Math.max((x - a) / (b - a), 0), 1)
+  return t * t * (3 - 2 * t)
+}
+
 // A vantage's facing: the bearing from it to its landmark, or to the middle of its landmarks.
 export const viewBearing = (view) => meanBearing(view.toward.map((t) => bearing(view.from.at, t.at)))
 

@@ -43,7 +43,7 @@ export function startSky(renderer) {
 export function skyContent(cityId) {
   let entry = skies.get(cityId)
   if (!entry) {
-    entry = { sky: new CitySky(globals, SKY.skyView[quality.name] ?? SKY.skyView.high), users: 0, target: null, shown: null }
+    entry = { sky: new CitySky(globals, SKY.skyView[quality.name] ?? SKY.skyView.high, cityId), users: 0, target: null, shown: null }
     skies.set(cityId, entry)
     lastInputs = -Infinity
   }

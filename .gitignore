@@ -24,3 +24,4 @@ data/atlas/
 
 # Poly Haven HDR sources for `npm run backdrop` (CC0; the built JPEGs in public/backdrop are what ship)
 data/backdrop/
+data/osm/

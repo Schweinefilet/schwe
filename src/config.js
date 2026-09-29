@@ -319,10 +319,12 @@ export const SKY = {
   // Which way the city view faces. The drop's axis (camera → drop) maps to this direction, so the
   // lens inverts it exactly as it inverted footage. Moon's azimuth once the sun is below moonBelow.
   // Each drop looks from its city's vantage toward its landmarks (`views`, content/vantages.json; the
-  // user's choice of each city's best side), `pitch` degrees up. At night, a moon that is up and within
+  // user's choice of each city's best side), `viewPitch` degrees up, low enough that its skyline sits near
+  // the middle of the drop, where the lens squeezes it least (`pitch`: a city without a vantage, facing the
+  // sun or moon). At night, a moon that is up and within
   // `halfWidth` degrees of that direction is tilted into frame: the view looks up to `below` degrees
   // under it (at most `max`), never lower than `pitch`. The sun and moon show only when on that side.
-  facing: { pitch: 15, moonBelow: -12, moonTilt: { halfWidth: 40, below: 10, max: 60 }, views: vantages },
+  facing: { pitch: 15, viewPitch: 6, moonBelow: -12, moonTilt: { halfWidth: 40, below: 10, max: 60 }, views: vantages },
   // Camera exposure: a metered sky luminance L (cd/m²) comes out at key × (L / ref)^range, so the
   // 18 stops between a clear noon and a city night compress to about 3.6.
   exposure: { key: 0.2, ref: 3000, range: 0.2 },
@@ -345,6 +347,14 @@ export const SKY = {
   // `exposureStops`: stars as a long exposure over a city would record them (user's choice): this many
   // stops above what the metered sky alone would show. Positions and magnitudes stay the catalogue's.
   stars: { url: 'sky/stars.bin', maxMag: 4.5, cells: 64, seeingDeg: 0.02, lux0: 2.5e-6, exposureStops: 4 },
+  // Each city's skyline from its vantage (npm run skyline; public/skyline/<city>.png and .json), in
+  // front of its sky: OpenStreetMap buildings and drawn landmarks as dark shapes, their windows lit
+  // after dark. Only cities with a built skyline show one. `window`: a lit window's brightness on screen
+  // (display-referred, after the sky's exposure: a real window, a hundred times brighter than a city's
+  // night sky, would blow the skyline out; this reads as points of light up close and a soft glitter at
+  // drift size); `windowColour` warm; `facade`: a wall's share of the sky's light by day, and of the
+  // city glow at night; `hazePerKm`: how fast distant buildings fade into the sky (plus rain or fog).
+  skyline: { url: 'skyline/', window: 1.6, windowColour: [1.0, 0.8, 0.55], facade: [0.35, 2.5], hazePerKm: 0.12 },
 }
 
 // Sound. Every sound is synthesized until a licensed file fills its slot (paths under public/).

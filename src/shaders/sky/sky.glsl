@@ -27,6 +27,13 @@ uniform vec2 uSkyCloudOffset;
 uniform vec3 uSkyCityGlow;    // the city's own light: zenith luminance of its clear night sky
 uniform vec3 uSkyCityShape;   // glow at the horizon, on cloud, and on the ground, relative to zenith
 uniform float uSkyCityMottle; // how much the city-lit cloud base follows the deck's density (0: even)
+uniform sampler2D uSkyline;   // the city's skyline from its vantage: coverage, log distance, evening and late windows
+uniform float uSkylineOn;
+uniform vec4 uSkylineRect;    // azimuth where it starts and its width, elevation of its bottom and its height (radians)
+uniform vec2 uSkylineDist;    // log of the nearest encoded distance (m), and the log range
+uniform vec3 uSkylineLit;     // weights of the evening and late windows (local time), how dark it is (0 day, 1 night)
+uniform vec3 uSkylineWindow;  // a lit window's colour on screen (display-referred: added after the exposure)
+uniform vec3 uSkylineLook;    // facade's share of the sky's light by day and of the city glow at night; haze per km
 uniform float uSkyHaze;       // rain or fog extinction near the ground, per km
 uniform float uSkyPreExposure; // the exposure every light uniform and the sky-view texture carry
 uniform vec3 uSkyMeter;       // key, ref (cd/m²), range: a metered L comes out at key × (L / ref)^range
@@ -205,6 +212,32 @@ vec4 skyClouds(vec3 d, float foot, vec3 zenith, vec3 far) {
   return vec4(mix(far, C, edge), alpha);
 }
 
+// The city's skyline in front of its sky (SKY.skyline, scripts/build-skyline.mjs): rgb its walls' colour,
+// a how much of the pixel it covers; `glass`: the pixel's share of lit window (drawn after the exposure).
+// `behind`: the sky behind it, which distant buildings fade into. Every channel is a share of the
+// pixel, so the drift's tiny drops read its averaged mip levels correctly.
+vec4 skyline(vec3 d, float foot, vec3 behind, out float glass) {
+  glass = 0.0;
+  float rel = mod(atan(d.x, -d.z) - uSkylineRect.x, 2.0 * PI);
+  vec2 uv = vec2(rel / uSkylineRect.y, (asin(clamp(d.y, -1.0, 1.0)) - uSkylineRect.z) / uSkylineRect.w);
+  if (uv.x > 1.0 || uv.y < 0.0 || uv.y > 1.0) return vec4(0.0);
+  float sides = smoothstep(0.0, 0.04, uv.x) * smoothstep(0.0, 0.04, 1.0 - uv.x); // the panorama's own edges
+  float texelsPerRadian = float(textureSize(uSkyline, 0).x) / uSkylineRect.y;
+  vec4 s = textureLod(uSkyline, uv, log2(max(foot * texelsPerRadian, 1.0)));
+  float cover = s.r * sides;
+  if (cover <= 1e-3) return vec4(0.0);
+  float km = exp(uSkylineDist.x + s.g * uSkylineDist.y) / 1000.0;
+  float dark = uSkylineLit.z;
+  // Walls: lit by the sky by day, by the streets and the city's glow at night.
+  vec3 wall = mix(behind * uSkylineLook.x, uSkyCityGlow * uSkylineLook.y, dark);
+  // Aerial perspective: farther buildings fade into the sky behind them, faster in rain or fog.
+  float clear = exp(-km * (uSkylineLook.z + uSkyHaze));
+  vec3 c = mix(behind, wall, clear);
+  // Windows: this pixel's share of lit glass, evening's pattern giving way to the late one's.
+  glass = (s.b * uSkylineLit.x + s.a * uSkylineLit.y) * sides * dark * clear;
+  return vec4(c, cover);
+}
+
 // Center-weighted metering of what the view faces, read from the sky itself (the same few texels
 // for every pixel). Returns the factor that takes the pre-exposed sky to its final exposure.
 float skyMeter(vec3 deck) {
@@ -258,5 +291,10 @@ vec3 citySky(vec3 d, float foot) {
     float path = ground ? tGround : (cloudy ? raySphere(ro, d, PLANET_R + uSkyCloud.z) : 10.0);
     col = mix(col, deck, 1.0 - exp(-uSkyHaze * min(path, 60.0)));
   }
-  return skyShoulder(col * exposure);
+  float glass = 0.0;
+  if (uSkylineOn > 0.5) {
+    vec4 s = skyline(d, foot, col, glass);
+    col = mix(col, s.rgb, s.a);
+  }
+  return skyShoulder(col * exposure + uSkylineWindow * glass);
 }

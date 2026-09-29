@@ -36,6 +36,10 @@ export default function StillPage({ clips }) {
           {atlas.source?.startsWith('lightpollutionmap') ? ', read via Jurij Stare, www.lightpollutionmap.info' : ''}.
         </p>
       )}
+      <p className="still__credit">
+        Skylines: building data © <a href="https://www.openstreetmap.org/copyright">OpenStreetMap contributors</a>,{' '}
+        <a href="https://opendatacommons.org/licenses/odbl/">ODbL</a>.
+      </p>
     </main>
   )
 }

@@ -1,0 +1,30 @@
+{
+  "city": "london",
+  "from": "Waterloo Bridge",
+  "bearing": 207.281,
+  "azimuth": [
+    147.281,
+    120
+  ],
+  "elevation": [
+    -4,
+    26
+  ],
+  "eye": 12,
+  "distance": [
+    20,
+    8000
+  ],
+  "size": [
+    1920,
+    480
+  ],
+  "buildings": 96718,
+  "defaultedHeights": 11879,
+  "defaultHeight": 10,
+  "landmarks": [
+    "London Eye",
+    "Elizabeth Tower clock faces"
+  ],
+  "source": "© OpenStreetMap contributors (ODbL); heights from height, else building:levels × 3.2 m, else the default; window pattern decorative"
+}
