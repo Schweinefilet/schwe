@@ -6,6 +6,7 @@ import CityType from './ui/CityType.jsx'
 import DropLabels from './ui/DropLabels.jsx'
 import WordSketch from './ui/WordSketch.jsx'
 import EndType from './ui/EndType.jsx'
+import BackToTop from './ui/BackToTop.jsx'
 import StillPage from './ui/StillPage.jsx'
 import { initScroll } from './core/scroll.js'
 import { startFocusPull } from './core/focus.js'
@@ -153,6 +154,9 @@ function Site({ clips, device, diveCity, rainCity }) {
     startFocusPull()
   }, [])
 
+  // Back at the top the first shot plays again.
+  const handleTop = useCallback(() => scroll.current.toTop(startFocusPull), [])
+
   return (
     <>
       {device?.webgl && (
@@ -172,6 +176,7 @@ function Site({ clips, device, diveCity, rainCity }) {
       <CityType clips={clips} cityId={diveCity ?? DEFAULT_DIVE_CITY} />
       <EndType clips={clips} rainCity={rainCity} />
       <div id="fade" />
+      <BackToTop onTop={handleTop} />
       <Loader onEnter={handleEnter} ready={diveCity !== null && scenePrepared} />
       {DevOverlay && (
         <Suspense fallback={null}>

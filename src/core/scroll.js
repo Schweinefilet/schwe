@@ -152,6 +152,22 @@ export function initScroll() {
     enter() {
       lenis.start()
     },
+    // The final screen's "back to top": a cut through black (the film scrolled back at the pace limit
+    // would take half a minute). `onTop` runs at the top, under the black.
+    toTop(onTop) {
+      gsap.to('#fade', {
+        opacity: 1,
+        duration: 0.6,
+        ease: 'power1.in',
+        overwrite: true,
+        onComplete: () => {
+          lenis.scrollTo(0, { immediate: true, force: true })
+          snap(TIMELINE_START)
+          onTop?.()
+          gsap.to('#fade', { opacity: 0, duration: 1, delay: 0.15, ease: 'power1.out' })
+        },
+      })
+    },
     destroy() {
       offScroll()
       offTier()
