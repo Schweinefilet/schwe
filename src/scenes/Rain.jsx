@@ -4,6 +4,7 @@ import * as THREE from 'three'
 import { RAIN } from '../config.js'
 import { quality } from '../core/quality.js'
 import { globalUniforms } from '../core/uniforms.js'
+import { envUniforms } from '../content/backdrop.js'
 import envChunk from '../shaders/env.glsl?raw'
 import vertexShader from '../shaders/rain.vert.glsl?raw'
 import rainFrag from '../shaders/rain.frag.glsl?raw'
@@ -45,6 +46,7 @@ export default function Rain() {
   // which would cut the link to the shared globalUniforms and leave uTimeScale stuck at 1.
   const material = useMemo(() => {
     const uniforms = {
+      ...envUniforms,
       uSimTime: globalUniforms.uSimTime,
       uTimeScale: globalUniforms.uTimeScale,
       uShutter: { value: RAIN.shutter },
@@ -64,7 +66,7 @@ export default function Rain() {
       uniforms,
       transparent: true,
       depthWrite: false,
-      blending: THREE.AdditiveBlending,
+      premultipliedAlpha: true, // rain.frag.glsl: a bead covers the backdrop, a streak partly
     })
   }, [])
   const { uniforms } = material

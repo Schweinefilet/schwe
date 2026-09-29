@@ -14,3 +14,7 @@
 # Star catalogue for the city skies (14 KB, preloaded by index.html): changes only if rebuilt.
 /sky/*
   Cache-Control: public, max-age=604800
+
+# Backdrop photograph (≈400 KB, preloaded by index.html): changes only if rebuilt.
+/backdrop/*
+  Cache-Control: public, max-age=604800

@@ -10,6 +10,7 @@ import { usesFootage } from '../content/contentSource.js'
 import { pinDrop, registerDrop, unregisterDrop } from '../content/videoManager.js'
 import { acquireSky, releaseSky, skyContent, startSky } from '../sky/skyManager.js'
 import envChunk from '../shaders/env.glsl?raw'
+import { envUniforms } from '../content/backdrop.js'
 import waterChunk from '../shaders/water.glsl?raw'
 import vertexShader from '../shaders/splash.vert.glsl?raw'
 import HeroDrop from './HeroDrop.jsx'
@@ -98,6 +99,7 @@ export default function Splash({ clips, rainCity }) {
       vertexShader,
       fragmentShader,
       uniforms: {
+        ...envUniforms,
         uHi: { value: data.hi },
         uLo: { value: data.lo },
         uNrm: { value: data.nrm },

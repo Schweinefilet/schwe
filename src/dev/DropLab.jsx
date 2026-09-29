@@ -14,6 +14,7 @@ import { skyInputs } from '../sky/inputs.js'
 import { CitySky, createSkyGlobals } from '../sky/citySky.js'
 import { HILLAIRE_RGB } from '../sky/spectrum.js'
 import { createGpuTimer } from './gpuTimer.js'
+import { isBackdropReady } from '../content/backdrop.js'
 import Sky from '../scenes/Sky.jsx'
 import Rain from '../scenes/Rain.jsx'
 import HeroDrop from '../scenes/HeroDrop.jsx'
@@ -211,7 +212,7 @@ function SkyPanel({ view, setView, dive, setDive }) {
         if (d != null) setDive(d)
         if (Object.keys(o).length) setOverride((prev) => ({ ...prev, ...o }))
       },
-      ready: () => weather !== undefined && !!stats.sky && stats.sky.renders > 0 && !stats.sky.dirty,
+      ready: () => isBackdropReady() && weather !== undefined && !!stats.sky && stats.sky.renders > 0 && !stats.sky.dirty,
       inputs: () => inputs,
       sky: () => stats.sky, // dev: the CitySky, to read its texture back
     }

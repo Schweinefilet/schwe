@@ -12,12 +12,14 @@ uniform vec2 uResolution; // drawing buffer size in pixels
 uniform float uFogDensity;
 
 attribute vec3 aOffset;   // start position inside one box
-attribute vec4 aParams;   // x: fall speed, y: radius (world), z: brightness, w: unused
+attribute vec4 aParams;   // x: fall speed, y: radius (world), z: streak brightness, w: unused
 
 varying vec2 vLocal;      // pixel coords in the streak frame: x across (right), y along (0 = head)
 varying float vLen;       // streak length in pixels
 varying float vRadius;    // capsule radius in pixels
-varying float vAlpha;
+varying float vAlpha;     // coverage: box-face fade, fog, near fade, sub-pixel size
+varying float vBright;
+varying vec3 vView;       // camera → drop, view space
 
 void main() {
   float speed = aParams.x;
@@ -39,6 +41,8 @@ void main() {
   float depth = -v0.z;
 
   vAlpha = 0.0;
+  vBright = aParams.z;
+  vView = v0.xyz;
   vLocal = vec2(0.0);
   vLen = 0.0;
   vRadius = 1.0;
@@ -79,5 +83,5 @@ void main() {
 
   float fog = exp(-depth * uFogDensity);
   float nearFade = smoothstep(0.6, 3.0, depth); // drops this close would be out of focus
-  vAlpha = edge * fog * nearFade * coverage * aParams.z;
+  vAlpha = edge * fog * nearFade * coverage;
 }

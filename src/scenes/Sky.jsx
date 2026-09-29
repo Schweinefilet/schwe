@@ -1,7 +1,8 @@
-import { useRef } from 'react'
-import { useFrame } from '@react-three/fiber'
+import { useEffect, useMemo, useRef } from 'react'
+import { useFrame, useThree } from '@react-three/fiber'
 import * as THREE from 'three'
 import envChunk from '../shaders/env.glsl?raw'
+import { envUniforms, loadBackdrop } from '../content/backdrop.js'
 
 const vertexShader = /* glsl */ `
 varying vec3 vDir;
@@ -15,18 +16,26 @@ const fragmentShader = /* glsl */ `
 ${envChunk}
 varying vec3 vDir;
 void main() {
-  gl_FragColor = vec4(envColor(normalize(vDir)), 1.0);
+  gl_FragColor = vec4(envSoft(normalize(vDir)), 1.0);
 }`
 
-// The environment at infinity: dark sky, warm street glow far below. Follows the camera.
+// The world at infinity: the backdrop photograph (BACKDROP in config.js), out of focus. Follows the
+// camera. Starts the backdrop's download and upload; the loader's "enter" waits for it.
 export default function Sky() {
   const ref = useRef()
+  const gl = useThree((s) => s.gl)
+  useEffect(() => void loadBackdrop(gl), [gl])
   useFrame(({ camera }) => ref.current.position.copy(camera.position))
 
+  // Built by hand so the uniforms stay the shared envUniforms (see Rain.jsx).
+  const material = useMemo(
+    () => new THREE.ShaderMaterial({ vertexShader, fragmentShader, uniforms: { ...envUniforms }, side: THREE.BackSide, depthWrite: false }),
+    []
+  )
+
   return (
-    <mesh ref={ref} renderOrder={-1} frustumCulled={false}>
+    <mesh ref={ref} renderOrder={-1} frustumCulled={false} material={material}>
       <sphereGeometry args={[100, 48, 24]} />
-      <shaderMaterial vertexShader={vertexShader} fragmentShader={fragmentShader} side={THREE.BackSide} depthWrite={false} />
     </mesh>
   )
 }

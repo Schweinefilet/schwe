@@ -5,6 +5,7 @@ import { HERO } from '../config.js'
 import { getSlot } from '../content/videoManager.js'
 import { rig } from '../core/rig.js'
 import envChunk from '../shaders/env.glsl?raw'
+import { envUniforms } from '../content/backdrop.js'
 import dropFrag from '../shaders/drop.frag.glsl?raw'
 
 const vertexShader = /* glsl */ `
@@ -38,6 +39,7 @@ export function createDropMaterial({ radius = HERO.radius, dispersion = true, sk
     fragmentShader: sky ? `${envChunk}\n${sky.glsl}\n${dropFrag}` : fragmentShader,
     defines,
     uniforms: {
+      ...envUniforms,
       ...sky?.uniforms,
       uCenter: { value: new THREE.Vector3() },
       uRadius: { value: radius },

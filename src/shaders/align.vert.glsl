@@ -9,12 +9,14 @@ uniform vec3 uBoxSize;
 uniform vec2 uVisible;    // fade out between these distances from the camera (see ALIGN.visibleWithin)
 
 attribute vec3 aOffset;   // world position
-attribute vec4 aParams;   // x: radius (world), y: brightness
+attribute vec4 aParams;   // x: radius (world; 0 hides the drop), y: streak brightness (unused: never moves)
 
 varying vec2 vLocal;
 varying float vLen;
 varying float vRadius;
 varying float vAlpha;
+varying float vBright;
+varying vec3 vView;
 
 void main() {
   vec4 v = viewMatrix * vec4(aOffset, 1.0);
@@ -22,6 +24,8 @@ void main() {
   vec3 e = abs(aOffset - uBoxCenter) / (0.5 * uBoxSize);
   float edge = 1.0 - smoothstep(0.75, 1.0, max(max(e.x, e.y), e.z));
   vAlpha = 0.0;
+  vBright = aParams.y;
+  vView = v.xyz;
   vLocal = vec2(0.0);
   vLen = 0.0;
   vRadius = 1.0;
@@ -42,5 +46,5 @@ void main() {
   vLocal = local;
   vRadius = r;
   float far = 1.0 - smoothstep(uVisible.x, uVisible.y, depth);
-  vAlpha = edge * far * exp(-depth * uFogDensity) * smoothstep(0.6, 3.0, depth) * (rTrue / r) * aParams.y;
+  vAlpha = edge * far * exp(-depth * uFogDensity) * smoothstep(0.6, 3.0, depth) * (rTrue / r);
 }

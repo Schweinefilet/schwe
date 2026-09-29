@@ -6,6 +6,7 @@ import { quality } from '../core/quality.js'
 import { rig } from '../core/rig.js'
 import { setFallStart } from '../core/fall.js'
 import { globalUniforms } from '../core/uniforms.js'
+import { envUniforms } from '../content/backdrop.js'
 import { sampleWord } from '../content/wordPoints.js'
 import envChunk from '../shaders/env.glsl?raw'
 import vertexShader from '../shaders/align.vert.glsl?raw'
@@ -79,7 +80,7 @@ export default function AlignmentWord() {
       }
       offsets.set([eye.x + dir.x * t, eye.y + dir.y * t, eye.z + dir.z * t], i * 3)
       params[i * 4 + 0] = radius
-      params[i * 4 + 1] = 0.55 + rand() * 0.45 // the rain's brightness range
+      params[i * 4 + 1] = 0.55 + rand() * 0.45 // the rain's streak brightness range (unused: frozen)
     }
     const g = new THREE.InstancedBufferGeometry()
     const quad = new THREE.PlaneGeometry(1, 1)
@@ -90,7 +91,7 @@ export default function AlignmentWord() {
     g.instanceCount = n
     setFallStart(new THREE.Vector3(offsets[fallIndex * 3], offsets[fallIndex * 3 + 1], offsets[fallIndex * 3 + 2]))
     g.userData.fallIndex = fallIndex
-    g.userData.fallBrightness = params[fallIndex * 4 + 1]
+    g.userData.fallRadius = params[fallIndex * 4]
     return g
   }, [word, aspect])
 
@@ -103,6 +104,7 @@ export default function AlignmentWord() {
         vertexShader,
         fragmentShader: `${envChunk}\n${rainFrag}`,
         uniforms: {
+          ...envUniforms,
           uResolution: { value: new THREE.Vector2(1, 1) },
           uFogDensity: { value: RAIN.fogDensity },
           uBoxCenter: globalUniforms.uBoxCenter,
@@ -115,7 +117,7 @@ export default function AlignmentWord() {
         },
         transparent: true,
         depthWrite: false,
-        blending: THREE.AdditiveBlending,
+        premultipliedAlpha: true,
       }),
     []
   )
@@ -127,9 +129,9 @@ export default function AlignmentWord() {
     if (geometry) {
       const attr = geometry.getAttribute('aParams')
       const i = geometry.userData.fallIndex
-      const b = rig.fall > 0 ? 0 : geometry.userData.fallBrightness
-      if (attr.getY(i) !== b) {
-        attr.setY(i, b)
+      const r = rig.fall > 0 ? 0 : geometry.userData.fallRadius
+      if (attr.getX(i) !== r) {
+        attr.setX(i, r)
         attr.needsUpdate = true
       }
     }

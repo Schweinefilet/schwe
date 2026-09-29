@@ -6,6 +6,7 @@ import { rig } from '../core/rig.js'
 import { fall } from '../core/fall.js'
 import { prewarm } from '../core/prewarm.js'
 import envChunk from '../shaders/env.glsl?raw'
+import { envUniforms } from '../content/backdrop.js'
 import waterChunk from '../shaders/water.glsl?raw'
 
 const vertexShader = /* glsl */ `
@@ -62,6 +63,7 @@ export default function Puddle() {
         vertexShader,
         fragmentShader,
         uniforms: {
+          ...envUniforms,
           uCenter: { value: new THREE.Vector2() },
           uTime: { value: 0 },
           uFogDensity: { value: 0.08 },

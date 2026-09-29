@@ -1,4 +1,4 @@
-// Hero drop: a water sphere, ray traced per pixel. envColor() is prepended from env.glsl.
+// Hero drop: a water sphere, ray traced per pixel. env.glsl (envColor) is prepended.
 //
 // For each pixel: intersect the view ray with the sphere, refract into the water, cross to the far
 // side, refract out again, and look up where that exit ray lands in the city clip. No flip is coded
@@ -32,6 +32,8 @@ vec3 srgbToLinear(vec3 c) {
 
 vec2 clipTan;   // framing in use: uClipTan blended toward uCoverTan by uDive
 float edgeSoft;
+float envFoot;  // angle one pixel takes in along the ray leaving the drop, and along the reflected ray;
+float reflFoot; // measured in main() before any pixel is discarded
 
 #ifdef SKY
 // Sky content (lab): the city's sky replaces the clip. It covers every direction, so there is no frame
@@ -53,7 +55,7 @@ vec3 behind(vec3 dir, vec3 axis, vec3 right, vec3 up) {
   vec3 clip = texture2D(uPoster, uPosterRect.xy + uv * uPosterRect.zw).rgb;
   // three uploads video frames without sRGB decoding (it decodes in its own materials), so decode here.
   if (uLive > 0.0) clip = mix(clip, srgbToLinear(texture2D(uVideo, uv).rgb), uLive);
-  return mix(envColor(dir) * uEnvGain, clip * uExposure, inside);
+  return mix(envColor(dir, envFoot) * uEnvGain, clip * uExposure, inside);
 }
 #endif
 
@@ -75,7 +77,6 @@ void main() {
 
   // Anti-aliased silhouette: coverage from how far inside the rim this pixel's ray passes.
   float alpha = clamp((uRadius - miss) / max(fwidth(miss), 1e-6), 0.0, 1.0);
-#ifdef SKY
   // Measured before any pixel is discarded, so its neighbours' derivatives stay defined.
   {
     float tIn = -b - sqrt(max(b * b - (dot(oc, oc) - uRadius * uRadius), 0.0));
@@ -83,9 +84,12 @@ void main() {
     vec3 t1 = refract(rd, n, 1.0 / mix(uIor, 1.0, uDive));
     vec3 n2 = normalize(ro + rd * tIn + t1 * (-2.0 * dot(t1, n) * uRadius) - uCenter);
     vec3 exitDir = refract(t1, -n2, mix(uIor, 1.0, uDive));
-    skyFoot = clamp(length(fwidth(exitDir)), 1e-5, 0.05);
-  }
+    envFoot = length(fwidth(exitDir));
+    reflFoot = length(fwidth(reflect(rd, n)));
+#ifdef SKY
+    skyFoot = clamp(envFoot, 1e-5, 0.05);
 #endif
+  }
   if (alpha <= 0.0 || !gl_FrontFacing) discard;
 
   float t = -b - sqrt(max(b * b - (dot(oc, oc) - uRadius * uRadius), 0.0));
@@ -117,7 +121,7 @@ void main() {
   vec3 trans = throughDrop(rd, p1, n1, ior, axis, right, up);
 #endif
 
-  vec3 refl = envColor(reflect(rd, n1)) * uReflGain;
+  vec3 refl = envColor(reflect(rd, n1), reflFoot) * uReflGain;
   vec3 nView = (viewMatrix * vec4(n1, 0.0)).xyz;
   float spec = pow(max(dot(nView, normalize(normalize(KEY) + vec3(0.0, 0.0, 1.0))), 0.0), 2500.0);
 

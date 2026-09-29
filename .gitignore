@@ -21,3 +21,6 @@ review/
 World_Atlas_2015.zip
 NewWorldAtlas_ArtificialSkyBrightness.kmz
 data/atlas/
+
+# Poly Haven HDR sources for `npm run backdrop` (CC0; the built JPEGs in public/backdrop are what ship)
+data/backdrop/

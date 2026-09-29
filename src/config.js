@@ -30,6 +30,13 @@ const SPLASH_AT = 13.3 // beat 7 timings below are offsets from this
 export const TIMELINE_END = SPLASH_AT + 4.5
 
 // ---- Scene layout (world units, camera travels toward -z) ----------------
+// The world behind the rain: a 360° night photograph, Poly Haven "rathaus" (Hamburg's town hall square,
+// Greg Zaal, 2016, CC0), built by `npm run backdrop`. Every material reads it through env.glsl: the
+// backdrop draws the soft (out-of-focus) copy, drops the sharp one. `exposure`: final brightness of the
+// panorama's median luminance (linear); `yaw`: degrees the panorama is turned, here so the word's line
+// of sight (40° left of -z) faces the square's darkest stretch, where its drops read (0: town hall at -z).
+export const BACKDROP = { sharp: 'backdrop/rathaus.jpg', soft: 'backdrop/rathaus-soft.jpg', exposure: 0.006, yaw: -56 }
+
 // Drop count comes from the quality tier (core/quality.js).
 export const RAIN = {
   boxSize: [24, 18, 30], // the field repeats every box; it is centered ahead of the camera
@@ -39,8 +46,8 @@ export const RAIN = {
   shutter: 1 / 50, // motion-blur length in seconds; streak length = speed × shutter × uTimeScale
   wind: [0.12, 0.04], // horizontal drift per unit of fall
   fogDensity: 0.045,
-  lensGain: 30, // brightness of the street glow seen through a frozen bead
-  reflGain: 8,
+  lensGain: 3, // light a bead passes on from the backdrop: 1 is physical; 3 reads like rain lit by a flash
+  reflGain: 1,
   spec: 3,
   streakColor: [0.55, 0.6, 0.66],
 }
@@ -51,9 +58,9 @@ export const HERO = {
   dispersion: 0.0035, // water's real red-to-blue IOR spread; high tier only
   clipFov: 60, // horizontal field of view the clip is assumed to cover, in degrees
   exposure: 1.0,
-  reflGain: 4,
+  reflGain: 1,
   glint: 2,
-  envOnlyGain: 14, // the falling drop has no clip: it shows the street glow, as bright as a rain bead's
+  envOnlyGain: RAIN.lensGain, // the falling drop has no clip: it shows the backdrop, like any rain bead
   envOnlyGlint: 6,
 }
 // Beat 4, a macro dolly. Hero drops are ordinary-sized, so a city only shows up close: the camera
@@ -147,7 +154,7 @@ export const SPLASH = {
   puddleSize: 80, // the wet ground, fading into darkness with distance
 }
 // Water look shared by the splash and the puddle (water.glsl).
-export const WATER = { reflGain: 4, deep: [0.004, 0.006, 0.009], transGain: 2 }
+export const WATER = { reflGain: 1, deep: [0.004, 0.006, 0.009], transGain: 1 }
 
 // Where the falling drop starts until the word is laid out (AlignmentWord replaces it with the exact
 // word sample it picks, fallDepth along the axis, just below its middle). The impact point is below.

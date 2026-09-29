@@ -16,6 +16,7 @@ import { chooseDiveCity } from './content/diveChoice.js'
 import { chooseRainCity } from './content/rainChoice.js'
 import { usesFootage } from './content/contentSource.js'
 import { onSkyReady } from './sky/skyManager.js'
+import { onBackdropReady } from './content/backdrop.js'
 import { now } from './core/clock.js'
 import { CAMERA_FOV, CITIES, CONTENT, DEFAULT_DIVE_CITY, TIMELINE_END, VH_PER_UNIT } from './config.js'
 
@@ -112,19 +113,21 @@ export default function App() {
   return <Site clips={clips} device={device} diveCity={diveCity} rainCity={rainCity} />
 }
 
-// With the sky as the source, "enter" also waits for every drawn city's sky to be prepared (tables,
-// catalogue, noise, each city's texture, shaders compiled), at most SKY_WAIT_MS so it never hangs;
-// anything left after that keeps preparing one piece per frame.
+// "enter" waits for the backdrop to be on the GPU and, with the sky as the source, for every drawn
+// city's sky to be prepared (tables, catalogue, noise, each city's texture, shaders compiled), at most
+// SKY_WAIT_MS so it never hangs; anything left after that keeps preparing one piece per frame.
 const SKY_WAIT_MS = 6000
 
-function useSkyPrepared() {
-  const [prepared, setPrepared] = useState(usesFootage(CONTENT.source))
+function useScenePrepared() {
+  const [prepared, setPrepared] = useState(false)
   useEffect(() => {
     if (prepared) return
-    const stop = onSkyReady(() => setPrepared(true))
+    const waits = usesFootage(CONTENT.source) ? [onBackdropReady] : [onBackdropReady, onSkyReady]
+    let left = waits.length
+    const stops = waits.map((on) => on(() => --left === 0 && setPrepared(true)))
     const cap = setTimeout(() => setPrepared(true), SKY_WAIT_MS)
     return () => {
-      stop()
+      stops.forEach((stop) => stop())
       clearTimeout(cap)
     }
   }, [prepared])
@@ -133,7 +136,7 @@ function useSkyPrepared() {
 
 function Site({ clips, device, diveCity, rainCity }) {
   const scroll = useRef(null)
-  const skyPrepared = useSkyPrepared()
+  const scenePrepared = useScenePrepared()
 
   useEffect(() => {
     scroll.current = initScroll()
@@ -163,7 +166,7 @@ function Site({ clips, device, diveCity, rainCity }) {
       <CityType clips={clips} cityId={diveCity ?? DEFAULT_DIVE_CITY} />
       <EndType clips={clips} rainCity={rainCity} />
       <div id="fade" />
-      <Loader onEnter={handleEnter} ready={diveCity !== null && skyPrepared} />
+      <Loader onEnter={handleEnter} ready={diveCity !== null && scenePrepared} />
       {DevOverlay && (
         <Suspense fallback={null}>
           <DevOverlay />
