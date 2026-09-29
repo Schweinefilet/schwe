@@ -137,6 +137,10 @@ export const ALIGN = {
   fallDepth: 9.4, // distance from the eye of the one drop that falls in beat 7 (puddle is below it)
   arrive: 13, // camera passes the eye
   passSpeed: 0.45, // camera speed at the eye relative to its average: a slow pass, not a stop
+  // A loop drawn around the word once the visitor stays on it (ui/WordOutline.jsx): within `window`
+  // timeline units of `arrive`, after `dwell` seconds without scrolling, drawn over `drawSeconds`.
+  // Stroke and glow widths in CSS px.
+  outline: { window: 0.15, dwell: 0.35, drawSeconds: 3.2, stroke: 1.3, glow: 9 },
 }
 // Beat 7. One drop of the word falls into a puddle on the ground (y = 0) directly below it.
 // The splash is a Mantaflow sim baked to a vertex animation texture (blender/splash/bake_splash.py).
