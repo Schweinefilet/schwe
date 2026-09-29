@@ -317,7 +317,9 @@ export const SKY = {
   refreshDegrees: 0.25, // re-render a city's sky once its sun or moon has moved this far
   // Which way the city view faces. The drop's axis (camera → drop) maps to this direction, so the
   // lens inverts it exactly as it inverted footage. Moon's azimuth once the sun is below moonBelow.
-  facing: { pitch: 15, moonBelow: -12 },
+  // At night, a moon that is up and within `halfWidth` degrees of the view's direction is tilted into
+  // frame: the view looks up to `below` degrees under it (at most `max`), never lower than `pitch`.
+  facing: { pitch: 15, moonBelow: -12, moonTilt: { halfWidth: 40, below: 10, max: 60 } },
   // Camera exposure: a metered sky luminance L (cd/m²) comes out at key × (L / ref)^range, so the
   // 18 stops between a clear noon and a city night compress to about 3.6.
   exposure: { key: 0.2, ref: 3000, range: 0.2 },
@@ -329,11 +331,17 @@ export const SKY = {
   // Night Sky Brightness (Falchi et al. 2016, CC BY-NC 4.0) once src/content/cityGlow.json has values;
   // until then `zenith` (cd/m², ≈ 17.8 mag/arcsec²) for all ten. The atlas has no colour, so the
   // colour and the horizon, cloud-base and ground ratios are one set for every city.
-  cityGlow: { atlas: cityGlowAtlas, colour: [1.0, 0.72, 0.48], zenith: 0.012, horizon: 4, cloud: 5, ground: 3 },
+  // `colour`: a warm LED white (user's choice, 2026-09-29; the old sodium orange [1, 0.72, 0.48] read as
+  // brown when dim). The atlas has no colour, so it is one choice for all ten cities.
+  // `mottle`: the city-lit cloud base follows the deck's own density, thin patches darker (0: even; 0.8:
+  // ±40%), so an overcast night has structure instead of one even colour.
+  cityGlow: { atlas: cityGlowAtlas, colour: [1.0, 0.85, 0.7], zenith: 0.012, horizon: 4, cloud: 5, ground: 3, mottle: 0.8 },
   clouds: { baseKm: 2.0, rainBaseKm: 1.0, tileKm: 40, tauMin: 3, tauMax: 25, tauPerMm: 4 },
   // Extinction from rain, per km: 0.25 × R^0.63 (R in mm/h). Fog (WMO 45, 48): visibility 0.5 km.
   rainHaze: { coef: 0.25, exp: 0.63, fogPerKm: 7.8 },
-  stars: { url: 'sky/stars.bin', maxMag: 4.5, cells: 64, seeingDeg: 0.02, lux0: 2.5e-6 },
+  // `exposureStops`: stars as a long exposure over a city would record them (user's choice): this many
+  // stops above what the metered sky alone would show. Positions and magnitudes stay the catalogue's.
+  stars: { url: 'sky/stars.bin', maxMag: 4.5, cells: 64, seeingDeg: 0.02, lux0: 2.5e-6, exposureStops: 4 },
 }
 
 // Sound. Every sound is synthesized until a licensed file fills its slot (paths under public/).

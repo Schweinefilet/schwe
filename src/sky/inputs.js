@@ -36,9 +36,10 @@ export function skyInputs({ city, date, weather = null, override = {}, sky }) {
   const exposure = exposureFor(metered, sky.exposure)
 
   // The view faces the sun, or the moon once the sun is well down and the moon is up.
-  const useMoon = sunPos.altitude < sky.facing.moonBelow && moonPos.altitude > 0
+  const night = sunPos.altitude < sky.facing.moonBelow
+  const useMoon = night && moonPos.altitude > 0
   const yaw = useMoon ? moonPos.azimuth : sunPos.azimuth
-  const pitch = sky.facing.pitch
+  const pitch = moonTiltPitch({ night, moon: moonPos, yaw, facing: sky.facing })
 
   const moonRadius = Math.asin(MOON_RADIUS_KM / moonPos.distance)
   const moonColour = tint(sky.moonColour)
@@ -70,7 +71,7 @@ export function skyInputs({ city, date, weather = null, override = {}, sky }) {
     // brightness at the current phase. Radiance of the full disk, before that correction:
     moonDisk: ((sky.moonLux * exposure) / (Math.PI * moonRadius ** 2)) * (moonLaw / Math.max(lommelSeeligerPhase(psi), 1e-3)),
     earthshine: sky.earthshine * (1 - illum.fraction),
-    starScale: sunPos.altitude < -4 ? sky.stars.lux0 * exposure : 0,
+    starScale: sunPos.altitude < -4 ? sky.stars.lux0 * exposure * 2 ** (sky.stars.exposureStops ?? 0) : 0,
     cityGlow: tint(glow.colour).map((c) => c * glowZenith * exposure),
     clouds: {
       cover: cloud,
@@ -112,6 +113,15 @@ export const exposureFor = (L, { key, ref, range }) => (key * (L / ref) ** range
 
 // Columns: the city-frame directions the drop's axis, right and up map to. A rotation, so the lens
 // still inverts the image exactly as the optics say.
+// How far up the view looks: `facing.pitch`, or at night, when the moon is up and within
+// moonTilt.halfWidth of the view's direction, high enough to hold it `moonTilt.below` above the centre.
+export function moonTiltPitch({ night, moon, yaw, facing }) {
+  const tilt = facing.moonTilt
+  const off = Math.abs((((moon.azimuth - yaw) % 360) + 540) % 360 - 180)
+  if (!tilt || !night || moon.altitude <= 0 || off > tilt.halfWidth) return facing.pitch
+  return Math.min(Math.max(moon.altitude - tilt.below, facing.pitch), tilt.max)
+}
+
 export function cityBasis(yawDeg, pitchDeg) {
   const view = dirFromAltAz(pitchDeg, yawDeg)
   const up = dirFromAltAz(pitchDeg + 90, yawDeg)

@@ -166,3 +166,16 @@ test('star cells: every star is found where it is, and merged pairs keep their l
   const empty = data.filter((_, i) => i % 4 === 2 && data[i] === EMPTY_MAG).length
   assert.equal(empty, width * cells - 3)
 })
+
+test('moon tilt: at night a risen moon within the view is tilted into frame', async () => {
+  const { moonTiltPitch } = await import('../src/sky/inputs.js')
+  const facing = { pitch: 15, moonBelow: -12, moonTilt: { halfWidth: 40, below: 10, max: 60 } }
+  const at = (alt, az, yaw = 100, night = true) => moonTiltPitch({ night, moon: { altitude: alt, azimuth: az }, yaw, facing })
+  assert.equal(at(50, 110), 40) // 10° under the moon
+  assert.equal(at(80, 100), 60) // no higher than max
+  assert.equal(at(20, 100), 15) // never lower than the usual pitch
+  assert.equal(at(50, 160), 15) // outside the view's width: no tilt
+  assert.equal(at(50, 350, 20), 40) // across north: 30° off
+  assert.equal(at(-5, 100), 15) // below the horizon
+  assert.equal(at(50, 100, 100, false), 15) // daytime
+})

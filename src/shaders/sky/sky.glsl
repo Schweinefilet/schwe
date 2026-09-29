@@ -26,6 +26,7 @@ uniform vec4 uSkyCloud;       // cover 0..1, optical depth, base height km, nois
 uniform vec2 uSkyCloudOffset;
 uniform vec3 uSkyCityGlow;    // the city's own light: zenith luminance of its clear night sky
 uniform vec3 uSkyCityShape;   // glow at the horizon, on cloud, and on the ground, relative to zenith
+uniform float uSkyCityMottle; // how much the city-lit cloud base follows the deck's density (0: even)
 uniform float uSkyHaze;       // rain or fog extinction near the ground, per km
 uniform float uSkyPreExposure; // the exposure every light uniform and the sky-view texture carry
 uniform vec3 uSkyMeter;       // key, ref (cd/m²), range: a metered L comes out at key × (L / ref)^range
@@ -159,20 +160,21 @@ float ambientThrough(float tau) {
   return mix(1.0, 1.0 / (1.0 + 0.1125 * tau), smoothstep(2.0, 10.0, tau));
 }
 
-vec3 cloudRadiance(vec3 p, vec3 d, float tau, vec3 zenith) {
+// `lit`: how strongly the city lights this part of the base, relative to the deck's average.
+vec3 cloudRadiance(vec3 p, vec3 d, float tau, vec3 zenith, float lit) {
   float h = length(p);
   vec3 up = p / h;
   vec3 C = uSkySunE * cloudLight(up, h, d, uSkySunDir, tau);
   if (uSkyMoonOn > 0.5) C += uSkyMoonE * cloudLight(up, h, d, uSkyMoonDir, tau);
   float reflectance = 1.0 - 1.0 / (1.0 + 0.1125 * tau); // how much of the city's light the base sends back
-  return C + zenith * 0.6 * ambientThrough(tau) + uSkyCityGlow * uSkyCityShape.y * reflectance;
+  return C + zenith * 0.6 * ambientThrough(tau) + uSkyCityGlow * uSkyCityShape.y * reflectance * lit;
 }
 
 // A full deck's underside straight overhead: the colour of the light under it, which is also the
 // colour of rain haze and of distant cloud.
 vec3 deckRadiance(vec3 zenith) {
   vec3 up = vec3(0.0, 1.0, 0.0);
-  return cloudRadiance(up * (PLANET_R + uSkyCloud.z), up, uSkyCloud.y, zenith);
+  return cloudRadiance(up * (PLANET_R + uSkyCloud.z), up, uSkyCloud.y, zenith, 1.0);
 }
 
 // Cloud where the ray meets the deck: radiance in rgb, opacity in a.
@@ -196,7 +198,9 @@ vec4 skyClouds(vec3 d, float foot, vec3 zenith, vec3 far) {
   float edge = smoothstep(0.0, 0.26, d.y);
   alpha = mix(uSkyCloud.x, alpha, edge);
   if (alpha < 1e-3) return vec4(0.0);
-  vec3 C = cloudRadiance(p, d, tau, zenith);
+  // Lit from below by the city, the base shows the deck's own texture: denser parts brighter, thin
+  // patches darker (SKY.cityGlow.mottle). Sunlight and moonlight keep their own shading.
+  vec3 C = cloudRadiance(p, d, tau, zenith, 1.0 + uSkyCityMottle * (n.g - 0.5));
   C = mix(C, far, 1.0 - exp(-t / 25.0)); // far cloud fades into the light under the sky
   return vec4(mix(far, C, edge), alpha);
 }

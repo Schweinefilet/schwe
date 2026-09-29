@@ -23,6 +23,7 @@ export function createSkyGlobals(renderer, { model = createHillaire, coefficient
     uSkySeeing: { value: THREE.MathUtils.degToRad(SKY.stars.seeingDeg) },
     uSkyCloudNoise: { value: null },
     uSkyCityShape: { value: new THREE.Vector3(glow.horizon, glow.cloud, glow.ground) },
+    uSkyCityMottle: { value: glow.mottle ?? 0 },
   }
   const globals = {
     atmosphere: atmosphereModel,
