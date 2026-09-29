@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef } from 'react'
 import { useFrame, useThree } from '@react-three/fiber'
-import { CONTENT, DIVE, HERO, heroDropsFor } from '../config.js'
+import { CONTENT, DIVE, HERO, heroDropsFor, visibleDrops } from '../config.js'
 import { quality } from '../core/quality.js'
 import { prewarm } from '../core/prewarm.js'
 import { createPosterAtlas } from '../content/posterAtlas.js'
@@ -13,10 +13,7 @@ import HeroDrop from './HeroDrop.jsx'
 import DropLabelAnchors from './DropLabelAnchors.jsx'
 
 // The dive drop is always kept; lower tiers show fewer of the others.
-const pickVisible = (drops) => [
-  ...drops.filter((d) => d.dive),
-  ...drops.filter((d) => !d.dive).slice(0, quality.heroDrops - 1),
-]
+const pickVisible = (drops) => visibleDrops(drops, quality.heroDrops)
 
 // Beats 4–5: the hero drops. Each holds its city: its computed sky, or with footage its clip.
 export default function HeroDrops({ clips, diveCity }) {

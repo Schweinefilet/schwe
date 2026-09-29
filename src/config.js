@@ -14,6 +14,12 @@ export const CONTENT = { source: 'sky' }
 // Timeline time is measured in "units". One unit = VH_PER_UNIT of scroll distance.
 export const VH_PER_UNIT = 100
 export const FREEZE_SECONDS = 1.5 // real time for uTimeScale to ease 1 → 0 (and back on rewind)
+// How fast the picture follows the scroll (core/pace.js). It eases toward the scroll position over about
+// `smooth` seconds, never faster than `max` units (100vh each) per second, and at `nearDrop` while a
+// city drop is near (the camera within HERO.near of it, where its city shows), braking ahead of it at
+// most `brake` units/s². Wheel and trackpad input runs at most `bank` units ahead of the picture: the
+// rest of a hard flick is dropped instead of playing out for seconds after the hand has stopped.
+export const PACE = { max: 1.5, nearDrop: 0.45, brake: 2.5, smooth: 0.1, bank: 0.5 }
 
 // The beats, in order. `at` is the label position in timeline units. The loader is a screen over the
 // first one, not a beat: "enter" only fades it, and the top of the page is the rain.
@@ -106,6 +112,8 @@ export function heroDropsFor(diveCity) {
   if (from >= 0) [order[from], order[DIVE_DROP_INDEX]] = [order[DIVE_DROP_INDEX], order[from]]
   return HERO_POSITIONS.map((pos, i) => ({ pos, city: order[i % order.length], dive: i === DIVE_DROP_INDEX }))
 }
+// The drops a tier shows (quality.heroDrops of them): the dive drop always, then the first of the rest.
+export const visibleDrops = (drops, count) => [...drops.filter((d) => d.dive), ...drops.filter((d) => !d.dive).slice(0, count - 1)]
 const D = HERO_POSITIONS[DIVE_DROP_INDEX]
 
 export const CAMERA_FOV = 50 // vertical, degrees

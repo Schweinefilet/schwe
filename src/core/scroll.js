@@ -1,16 +1,34 @@
 import gsap from 'gsap'
 import { ScrollTrigger } from 'gsap/ScrollTrigger'
 import Lenis from 'lenis'
-import { TIMELINE_END, TIMELINE_START } from '../config.js'
-import { setLenis } from './loop.js'
+import { CAMERA_KEYS, DEFAULT_DIVE_CITY, HERO, PACE, TIMELINE_END, TIMELINE_START, heroDropsFor, visibleDrops } from '../config.js'
+import { setLenis, setStep } from './loop.js'
 import { buildMasterTimeline } from './timeline.js'
+import { createCameraPath } from './cameraPath.js'
+import { buildPaceTable, rateAt, smoothDamp } from './pace.js'
 import { resetRig } from './rig.js'
 import { globalUniforms, resetUniforms } from './uniforms.js'
 import { state } from './state.js'
-import { quality } from './quality.js'
+import { onTierChange, quality } from './quality.js'
 import { liveCount } from '../content/videoManager.js'
 
 gsap.registerPlugin(ScrollTrigger)
+
+// The speed limit along the timeline (PACE in config.js): slower where the camera passes the drops
+// this tier shows. Positions do not depend on which city is in which drop.
+function paceTable() {
+  const path = createCameraPath(CAMERA_KEYS)
+  const out = { pos: null, look: null }
+  const drops = visibleDrops(heroDropsFor(DEFAULT_DIVE_CITY), quality.heroDrops).map((d) => d.pos)
+  return buildPaceTable((t) => path.sample(t, out).pos, drops, {
+    from: TIMELINE_START,
+    to: TIMELINE_END,
+    near: HERO.near,
+    max: PACE.max,
+    nearDrop: PACE.nearDrop,
+    brake: PACE.brake,
+  })
+}
 
 export function initScroll() {
   if ('scrollRestoration' in history) history.scrollRestoration = 'manual'
@@ -19,26 +37,62 @@ export function initScroll() {
   // Mobile address bar show/hide should not re-measure every trigger.
   ScrollTrigger.config({ ignoreMobileResize: true })
 
-  const lenis = new Lenis({ autoRaf: false })
+  const tl = buildMasterTimeline()
+  tl.time(TIMELINE_START) // the top of the page is the rain beat, not the timeline's zero
+  // The scroll covers TIMELINE_START → TIMELINE_END; the trigger only measures where that is on the page.
+  const st = ScrollTrigger.create({ trigger: '#scroll-track', start: 'top top', end: 'bottom bottom' })
+  const span = TIMELINE_END - TIMELINE_START
+  const timeToScroll = (t) => st.start + ((t - TIMELINE_START) / span) * (st.end - st.start)
+  const scrollToTime = (y) => TIMELINE_START + Math.min(Math.max((y - st.start) / (st.end - st.start || 1), 0), 1) * span
+
+  // The picture follows the scroll at a limited pace (core/pace.js): the timeline's time chases the time
+  // the scroll position stands for. Scroll stays the one source of truth; only the rate is time-based.
+  let table = paceTable()
+  const offTier = onTierChange(() => (table = paceTable()))
+  const pace = { time: TIMELINE_START, velocity: 0, arrived: null }
+  const snap = (t) => {
+    pace.time = t
+    pace.velocity = 0
+    tl.time(t)
+  }
+
+  // A hard wheel or trackpad flick runs at most PACE.bank ahead of the picture; the rest is dropped, so
+  // the camera stops soon after the hand does. (Touch scrolling is native, momentum included; it only
+  // meets the speed limit.)
+  const lenis = new Lenis({
+    autoRaf: false,
+    virtualScroll(data) {
+      if (!data.event.type.includes('wheel') || !data.deltaY) return true
+      const ahead = scrollToTime(lenis.targetScroll + data.deltaY) - pace.time
+      if (Math.abs(ahead) <= PACE.bank) return true
+      const edge = timeToScroll(pace.time + Math.sign(ahead) * PACE.bank) - lenis.targetScroll
+      if (Math.sign(edge) === Math.sign(data.deltaY)) {
+        data.deltaY = edge
+        return true
+      }
+      // Nothing of this one is allowed; cancel it here, or the browser would scroll natively.
+      if (data.event.cancelable) data.event.preventDefault()
+      return false
+    },
+  })
   lenis.stop() // locked until "enter"
   const offScroll = lenis.on('scroll', ScrollTrigger.update)
   setLenis(lenis)
 
-  const tl = buildMasterTimeline()
-  tl.time(TIMELINE_START) // the top of the page is the rain beat, not the timeline's zero
-  // The scroll covers TIMELINE_START → TIMELINE_END. scrub: true (no extra lag) because Lenis already
-  // smooths the scroll.
-  const st = ScrollTrigger.create({
-    trigger: '#scroll-track',
-    start: 'top top',
-    end: 'bottom bottom',
-    scrub: true,
-    animation: tl.tweenFromTo(TIMELINE_START, TIMELINE_END, { paused: true, ease: 'none' }),
+  setStep((dt) => {
+    const target = scrollToTime(lenis.scroll)
+    if (target !== pace.time || pace.velocity !== 0) {
+      ;[pace.time, pace.velocity] = smoothDamp(pace.time, pace.velocity, target, PACE.smooth, rateAt(table, pace.time), dt)
+      tl.time(pace.time)
+    }
+    if (pace.arrived && Math.abs(pace.time - pace.arrived.t) < 0.002) {
+      pace.arrived.resolve()
+      pace.arrived = null
+    }
   })
-  const timeToScroll = (t) => st.start + ((t - TIMELINE_START) / (TIMELINE_END - TIMELINE_START)) * (st.end - st.start)
 
-  // Dev hook for scripted checks (scripts/smoke.mjs): __schwe.goto(units) jumps the scroll to a
-  // timeline time; state, uniforms and the live video count are readable.
+  // Dev hook for scripted checks (scripts/smoke.mjs): __schwe.goto(units) jumps the scroll and the
+  // picture to a timeline time; state, uniforms and the live video count are readable.
   if (import.meta.env.DEV) {
     window.__schwe = Object.assign(window.__schwe ?? {}, {
       lenis,
@@ -47,17 +101,28 @@ export function initScroll() {
       quality,
       uniforms: globalUniforms,
       liveCount,
-      goto: (t) => lenis.scrollTo(timeToScroll(t), { immediate: true, force: true }),
+      pace,
+      goto: (t) => {
+        lenis.scrollTo(timeToScroll(t), { immediate: true, force: true })
+        snap(scrollToTime(lenis.scroll))
+      },
     })
   }
 
   return {
     labels: tl.labels,
     duration: () => tl.duration(),
-    // Benchmark mode: scroll to timeline time `t` at a constant speed; resolves when it arrives.
+    // Benchmark mode: scroll to timeline time `t` at a constant speed; resolves when the picture (which
+    // may lag behind the scroll at the pace limit) arrives there.
     scrollToTime: (t, seconds) =>
       new Promise((resolve) =>
-        lenis.scrollTo(timeToScroll(t), { duration: seconds, easing: (x) => x, lock: true, force: true, onComplete: resolve })
+        lenis.scrollTo(timeToScroll(t), {
+          duration: seconds,
+          easing: (x) => x,
+          lock: true,
+          force: true,
+          onComplete: () => (pace.arrived = { t, resolve }),
+        })
       ),
     setLocked: (on) => (on ? lenis.stop() : lenis.start()),
     // "enter" only unlocks the scroll; the page is already at the top, the rain.
@@ -66,6 +131,8 @@ export function initScroll() {
     },
     destroy() {
       offScroll()
+      offTier()
+      setStep(null)
       st.kill()
       tl.kill()
       setLenis(null)
