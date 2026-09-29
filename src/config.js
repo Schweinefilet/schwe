@@ -42,7 +42,21 @@ export const TIMELINE_END = SPLASH_AT + 6.0 // the jets have fallen back; the la
 // panorama's median luminance (linear); `yaw`: degrees the panorama is turned, here so the word's line
 // of sight (40° left of -z) faces the square's darkest stretch, where its drops read (0: town hall at -z).
 // `bokeh`: the soft copy's blur radius in degrees, as built (the build script's --bokeh).
-export const BACKDROP = { sharp: 'backdrop/rathaus.jpg', soft: 'backdrop/rathaus-soft.jpg', exposure: 0.006, yaw: -56, bokeh: 1.2 }
+// `view`: the start view, what the first shot sees in focus (FOCUS below). The two maps above come from
+// the 2k copy, far too coarse to fill a screen in focus, so this is a window of the 8k copy, pixel for
+// pixel (22.8 per degree; half size on the lower tiers, quality.backdropView). `lon`, `lat`: its edges
+// in the panorama's own degrees, as printed by
+//   npm run backdrop -- --in data/backdrop/rathaus_8k.hdr --out public/backdrop/rathaus \
+//     --view -56,-4,110,70 --median-from data/backdrop/rathaus_2k.hdr --quality 5
+// (centred where the first shot looks: longitude `yaw`, 4° down; wide enough for ultra-wide screens).
+export const BACKDROP = {
+  sharp: 'backdrop/rathaus.jpg',
+  soft: 'backdrop/rathaus-soft.jpg',
+  exposure: 0.006,
+  yaw: -56,
+  bokeh: 1.2,
+  view: { full: 'backdrop/rathaus-view.jpg', half: 'backdrop/rathaus-view-half.jpg', lon: [-111.0059, -0.9668], lat: [-38.9795, 30.9814] },
+}
 
 // The first shot. After "enter" the lens is focused on the square behind the rain; `delay` s later it
 // pulls focus forward onto the drops over `seconds` (the focus every later beat keeps). Scrolling on

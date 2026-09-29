@@ -23,7 +23,7 @@ export default function Experience({ clips, diveCity, rainCity }) {
       {!usesFootage(CONTENT.source) && <SkyFrame />}
       <TierDpr />
       <CameraRig />
-      <Sky />
+      <Sky view />
       <Rain />
       <HeroDrops clips={clips} diveCity={diveCity} />
       <AlignmentWord />

@@ -7,10 +7,21 @@
 // Both are log-encoded (src/content/backdropCodec.js), values relative to the panorama's median
 // luminance (solid-angle weighted), so BACKDROP.exposure sets the median's final brightness.
 //
-//   npm run backdrop -- --in data/backdrop/rathaus_2k.hdr --out public/backdrop/rathaus [--bokeh 1.2]
+//   npm run backdrop -- --in data/backdrop/rathaus_2k.hdr --out public/backdrop/rathaus [--bokeh 1.2] [--quality 3]
+//
+// With --view lon,lat,width,height (degrees, the panorama's own longitude and latitude) it writes only
+// the start view (BACKDROP.view): the backdrop the first shot sees in focus, a window of a
+// high-resolution copy, pixel for pixel, at full and half size:
+//   <out>-view.jpg, <out>-view-half.jpg   in the soft map's range (the screen never shows more)
+// --median-from takes the median from another copy (the one the other maps were built from), so all
+// of them agree on brightness. It prints the window's exact edges for config.js.
+//
+//   npm run backdrop -- --in data/backdrop/rathaus_8k.hdr --out public/backdrop/rathaus \
+//     --view -56,-4,110,70 --median-from data/backdrop/rathaus_2k.hdr --quality 5
 //
 // Source: Poly Haven (CC0), https://polyhaven.com/a/rathaus
 //   curl -o data/backdrop/rathaus_2k.hdr https://dl.polyhaven.org/file/ph-assets/HDRIs/hdr/2k/rathaus_2k.hdr
+//   curl -o data/backdrop/rathaus_8k.hdr https://dl.polyhaven.org/file/ph-assets/HDRIs/hdr/8k/rathaus_8k.hdr
 
 import { mkdir, readFile, rm, stat, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -25,6 +36,9 @@ const arg = (name, fallback = null) => {
 const IN = arg('in')
 const OUT = arg('out')
 const BOKEH_DEG = Number(arg('bokeh', 1.2))
+const VIEW = arg('view')?.split(',').map(Number) ?? null
+const MEDIAN_FROM = arg('median-from')
+const QUALITY = arg('quality', '3') // ffmpeg -q:v, 2 (best) … 31
 const TAPS = 256
 if (!IN || !OUT) fail('usage: npm run backdrop -- --in <panorama.hdr> --out <public/backdrop/name> [--bokeh 1.2]')
 requireFfmpeg()
@@ -155,6 +169,27 @@ function half({ width, height, data }) {
   return { width: w, height: h, data: out }
 }
 
+// A window of the panorama, pixel for pixel (longitude wraps), and its exact edges in degrees.
+function crop({ width, height, data }, [lon, lat, spanLon, spanLat]) {
+  const w = 2 * Math.round(((spanLon / 360) * width) / 2) // even, for the half-size copy
+  const h = 2 * Math.round(((spanLat / 180) * height) / 2)
+  const x0 = Math.round(((lon - spanLon / 2) / 360 + 0.5) * width)
+  const y0 = Math.round((0.5 - (lat + spanLat / 2) / 180) * height)
+  if (y0 < 0 || y0 + h > height) fail('--view reaches past a pole')
+  const out = new Float32Array(w * h * 3)
+  for (let y = 0; y < h; y++)
+    for (let x = 0; x < w; x++) {
+      const i = ((y0 + y) * width + ((((x0 + x) % width) + width) % width)) * 3
+      out.set(data.subarray(i, i + 3), (y * w + x) * 3)
+    }
+  const deg = (v) => +v.toFixed(4)
+  const edges = {
+    lon: [deg((x0 / width - 0.5) * 360), deg(((x0 + w) / width - 0.5) * 360)],
+    lat: [deg((0.5 - (y0 + h) / height) * 180), deg((0.5 - y0 / height) * 180)],
+  }
+  return { width: w, height: h, data: out, edges }
+}
+
 // Log-encode (values already relative to the median) and write a 4:4:4 JPEG: chroma subsampling would
 // smear coloured lamps.
 async function writeJpeg({ width, height, data }, scale, max, file) {
@@ -163,7 +198,7 @@ async function writeJpeg({ width, height, data }, scale, max, file) {
   const tmp = join(tmpdir(), `backdrop-${process.pid}.rgb`)
   await writeFile(tmp, raw)
   try {
-    await run(['-f', 'rawvideo', '-pix_fmt', 'rgb24', '-s', `${width}x${height}`, '-i', tmp, '-pix_fmt', 'yuvj444p', '-q:v', '3', file])
+    await run(['-f', 'rawvideo', '-pix_fmt', 'rgb24', '-s', `${width}x${height}`, '-i', tmp, '-pix_fmt', 'yuvj444p', '-q:v', QUALITY, file])
   } finally {
     await rm(tmp, { force: true })
   }
@@ -171,9 +206,19 @@ async function writeJpeg({ width, height, data }, scale, max, file) {
 }
 
 const hdr = readHdr(await readFile(IN))
-const median = medianLuminance(hdr)
-console.log(`${IN}: ${hdr.width}×${hdr.height}, median luminance ${median.toPrecision(4)}`)
+const ownMedian = medianLuminance(hdr)
+console.log(`${IN}: ${hdr.width}×${hdr.height}, median luminance ${ownMedian.toPrecision(4)}`)
+const median = MEDIAN_FROM ? medianLuminance(readHdr(await readFile(MEDIAN_FROM))) : ownMedian
+if (MEDIAN_FROM) console.log(`${MEDIAN_FROM}: median luminance ${median.toPrecision(4)} (used)`)
 await mkdir(dirname(OUT), { recursive: true })
+if (VIEW) {
+  if (VIEW.length !== 4 || VIEW.some(Number.isNaN)) fail('--view lon,lat,width,height (degrees)')
+  const view = crop(hdr, VIEW)
+  await writeJpeg(view, 1 / median, BACKDROP_CODEC.max.soft, `${OUT}-view.jpg`)
+  await writeJpeg(half(view), 1 / median, BACKDROP_CODEC.max.soft, `${OUT}-view-half.jpg`)
+  console.log(`view edges (config.js BACKDROP.view): lon: [${view.edges.lon.join(', ')}], lat: [${view.edges.lat.join(', ')}]`)
+  process.exit(0)
+}
 await writeJpeg(half(hdr), 1 / median, BACKDROP_CODEC.max.sharp, `${OUT}.jpg`)
 const t0 = Date.now()
 const soft = discBlur(hdr, (BOKEH_DEG * Math.PI) / 180)

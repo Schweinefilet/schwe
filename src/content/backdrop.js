@@ -21,6 +21,17 @@ export const envUniforms = {
   uEnvYaw: { value: THREE.MathUtils.degToRad(BACKDROP.yaw) },
 }
 
+// The start view (BACKDROP.view), for the backdrop only (Sky.jsx): the window of the square the first
+// shot sees in focus, from a high-resolution copy. Off until loaded; outside it, the sharp map stands in.
+const rad = THREE.MathUtils.degToRad
+export const viewUniforms = {
+  uEnvView: { value: black() },
+  uEnvViewOn: { value: 0 },
+  uEnvViewEdges: { value: new THREE.Vector4(rad(BACKDROP.view.lon[0]), rad(BACKDROP.view.lon[1]), rad(BACKDROP.view.lat[0]), rad(BACKDROP.view.lat[1])) },
+  uEnvViewLevels: { value: 0 }, // its highest mip level
+  uEnvCodecView: { value: codec(BACKDROP_CODEC.max.soft) },
+}
+
 let loading = null
 let ready = false
 const listeners = new Set()
@@ -34,10 +45,11 @@ function load(url) {
   })
 }
 
-// The sharp map with a mip chain built here, in linear light. A small bead takes in a wide angle
-// through each pixel, so it reads the coarse levels; the GPU would average the log-encoded values,
-// which turns a lamp in a dark street into a dim smudge instead of the light it adds to the average.
-async function loadSharp(url) {
+// A log-encoded map with its mip chain built here, in linear light. A small bead takes in a wide angle
+// through each pixel, so it reads the coarse levels, and the start view blurs through them as focus
+// moves; the GPU would average the log codes, which turns a lamp in a dark street into a dim smudge
+// instead of the light it adds to the average.
+async function loadWithMips(url, max) {
   const blob = await (await fetch(`${import.meta.env.BASE_URL}${url}`)).blob()
   // Rows bottom-up, as the texture's v runs; values exactly as stored (they are not colours).
   const bitmap = await createImageBitmap(blob, { imageOrientation: 'flipY', colorSpaceConversion: 'none' })
@@ -45,7 +57,6 @@ async function loadSharp(url) {
   const g = canvas.getContext('2d', { willReadFrequently: true })
   g.drawImage(bitmap, 0, 0)
   const top = g.getImageData(0, 0, bitmap.width, bitmap.height)
-  const max = BACKDROP_CODEC.max.sharp
   const linear = Float32Array.from({ length: 256 }, (_, i) => decodeBackdrop(i / 255, max))
   const levels = [{ data: new Uint8Array(top.data.buffer), width: top.width, height: top.height }]
   for (let { data, width, height } = levels[0]; width > 1 || height > 1; ) {
@@ -76,21 +87,33 @@ async function loadSharp(url) {
   return t
 }
 
-// Idempotent. Loads both JPEGs and uploads them, then reports ready, which holds the loader's "enter"
-// (App.jsx). A failed load leaves the backdrop black and still reports ready, so "enter" never hangs.
-export function loadBackdrop(renderer) {
-  loading ??= Promise.all([loadSharp(BACKDROP.sharp), load(BACKDROP.soft)])
-    .then(([sharp, soft]) => {
-      renderer.initTexture(sharp)
-      renderer.initTexture(soft)
-      envUniforms.uEnvSharp.value = sharp
-      envUniforms.uEnvSoft.value = soft
-    })
-    .catch((err) => console.warn('[backdrop] not loaded, drawing black:', err?.message ?? err))
-    .finally(() => {
-      ready = true
-      listeners.forEach((fn) => fn())
-    })
+// Idempotent. Loads the maps and uploads them, then reports ready, which holds the loader's "enter"
+// (App.jsx). `view`: 'full' or 'half' also loads the start view at that size (the tier's
+// quality.backdropView); the drop lab, which has no first shot, passes nothing. A failed load leaves
+// that map black (the start view off) and still reports ready, so "enter" never hangs.
+export function loadBackdrop(renderer, view = null) {
+  loading ??= Promise.all([
+    Promise.all([loadWithMips(BACKDROP.sharp, BACKDROP_CODEC.max.sharp), load(BACKDROP.soft)])
+      .then(([sharp, soft]) => {
+        renderer.initTexture(sharp)
+        renderer.initTexture(soft)
+        envUniforms.uEnvSharp.value = sharp
+        envUniforms.uEnvSoft.value = soft
+      })
+      .catch((err) => console.warn('[backdrop] not loaded, drawing black:', err?.message ?? err)),
+    view &&
+      loadWithMips(BACKDROP.view[view], BACKDROP_CODEC.max.soft)
+        .then((t) => {
+          renderer.initTexture(t)
+          viewUniforms.uEnvView.value = t
+          viewUniforms.uEnvViewLevels.value = t.mipmaps.length - 1
+          viewUniforms.uEnvViewOn.value = 1
+        })
+        .catch((err) => console.warn('[backdrop] start view not loaded, using the sharp map:', err?.message ?? err)),
+  ]).finally(() => {
+    ready = true
+    listeners.forEach((fn) => fn())
+  })
   return loading
 }
 
