@@ -260,8 +260,8 @@ function fill(col, s) {
       // How busy this building is tonight, then this window: evening's lit ones, and the fewer still on late.
       const busy = 0.15 + 0.85 * hash(b.id, 7919, 104729)
       const r = hash(b.id, floor, bay)
-      if (floor === 0) return r < 0.12 ? 1 : r < 0.25 ? 2 : 0 // shopfronts and lobbies
-      return r < busy * 0.2 ? 1 : r < busy * 0.55 ? 2 : 0
+      if (floor === 0) return r < 0.06 ? 1 : r < 0.15 ? 2 : 0 // shopfronts and lobbies
+      return r < busy * 0.1 ? 1 : r < busy * 0.32 ? 2 : 0 // about 18% lit in the evening, 6% late
     })
   } else {
     paint(col, s.bottom, s.top, d, s.light)

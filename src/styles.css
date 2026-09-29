@@ -167,16 +167,47 @@ body {
   letter-spacing: 0.16em;
 }
 
-/* The final screen's way back to the top: white and pastel, like the drop labels. Shown once the
-   picture holds on the last frame (BackToTop.jsx); above #fade, which it fades through. */
-.back-to-top {
+/* The final screen: the way back to the top and the skylines' data credit, white and pastel like the
+   drop labels. Shown once the picture holds on the last frame (BackToTop.jsx); above #fade, which it
+   fades through. */
+.final-screen {
   position: fixed;
   left: 50%;
-  bottom: max(5vh, calc(env(safe-area-inset-bottom) + 12px));
+  bottom: max(3.5vh, calc(env(safe-area-inset-bottom) + 10px));
   z-index: 3;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.85rem;
+  transform: translateX(-50%);
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.6s ease, visibility 0s 0.6s;
+}
+
+.final-screen.is-shown {
+  opacity: 1;
+  visibility: visible;
+  transition: opacity 1.2s ease 0.3s;
+}
+
+.final-screen__credit {
+  margin: 0;
+  color: #e6e3ff; /* pastel lavender */
+  font-size: 0.56rem;
+  letter-spacing: 0.12em;
+  white-space: nowrap;
+  opacity: 0.55;
+}
+
+.final-screen__credit a {
+  color: inherit;
+  text-underline-offset: 2px;
+}
+
+.back-to-top {
   min-height: 44px;
   padding: 0.8rem 1.9rem;
-  transform: translateX(-50%);
   border: 1px solid rgba(255, 255, 255, 0.45);
   border-radius: 999px;
   background: rgba(230, 227, 255, 0.06);
@@ -187,15 +218,7 @@ body {
   letter-spacing: 0.3em;
   text-shadow: 0 0 10px rgba(255, 255, 255, 0.35);
   cursor: pointer;
-  opacity: 0;
-  visibility: hidden;
-  transition: opacity 0.6s ease, visibility 0s 0.6s, border-color 0.4s ease, box-shadow 0.4s ease;
-}
-
-.back-to-top.is-shown {
-  opacity: 1;
-  visibility: visible;
-  transition: opacity 1.2s ease 0.3s, border-color 0.4s ease, box-shadow 0.4s ease;
+  transition: border-color 0.4s ease, box-shadow 0.4s ease;
 }
 
 .back-to-top:hover,

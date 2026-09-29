@@ -354,7 +354,7 @@ export const SKY = {
   // night sky, would blow the skyline out; this reads as points of light up close and a soft glitter at
   // drift size); `windowColour` warm; `facade`: a wall's share of the sky's light by day, and of the
   // city glow at night; `hazePerKm`: how fast distant buildings fade into the sky (plus rain or fog).
-  skyline: { url: 'skyline/', window: 1.6, windowColour: [1.0, 0.8, 0.55], facade: [0.35, 2.5], hazePerKm: 0.12 },
+  skyline: { url: 'skyline/', window: 1.1, windowColour: [1.0, 0.8, 0.55], facade: [0.35, 2.5], hazePerKm: 0.12 },
 }
 
 // Sound. Every sound is synthesized until a licensed file fills its slot (paths under public/).

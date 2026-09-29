@@ -321,3 +321,7 @@ Still provisional:
 - Credit: © OpenStreetMap contributors, ODbL, on the still page and in index.html. The main experience shows no visible credit yet; ODbL asks for attribution reasonably visible to anyone seeing the result (to decide).
 - Checked in the lab tonight (overcast), at dusk and at midday, and in the site at London's drift pass (review/skyline-london-drop.jpg, -dive.jpg, -windows.jpg, -data.png). In headless runs without ?tier= the live tier guard steps down (software rendering is slow) and London's drop leaves the low tier's set; that is how the stale label bug (previous commit) showed. GPU memory: 3.7 MB per city with a skyline (4.9 MB with mips); not yet split by tier.
 - npm test 76/76, smoke 5/5; bundle 1,516.6 kB.
+
+## 2026-09-29 — Fewer lit windows; a visible OSM credit
+- User: fewer lit windows before the rollout. The pattern now lights about 18% of windows in the evening and 6% late (was 30% and 11%), ground floors 15% and 6% (was 25% and 12%), and a lit window shows at 1.1 on screen (was 1.6). review/skyline-london-windows.jpg.
+- User's choice for the ODbL credit: a quiet line on the final screen under "back to top", "Skylines: © OpenStreetMap contributors", linking to openstreetmap.org/copyright, fading in and out with the button (BackToTop.jsx now holds both, .final-screen). Checked at 1280 × 720 and 390 × 844. smoke 5/5.
