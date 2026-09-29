@@ -1,4 +1,5 @@
 import { getGPUTier } from 'detect-gpu'
+import { effectiveTier } from './gpuScore.js'
 
 // Quality tiers from the project bible, chosen once at load by detect-gpu before the Canvas mounts.
 // Override for testing with ?tier=high|medium|low.
@@ -39,6 +40,7 @@ if (forced) setTier(forced)
 
 const DETECT_TIMEOUT_MS = 3000
 
+
 // Resolves to { tier, webgl }. webgl is false when detect-gpu finds no usable WebGL (or it is
 // blocklisted), which sends the visitor to the still page instead of a broken one.
 // Benchmark data is self-hosted (copied to /benchmarks at build) so there is no runtime CDN call.
@@ -56,10 +58,11 @@ export async function detectTier() {
   const webgl = !result || (result.type !== 'WEBGL_UNSUPPORTED' && result.type !== 'BLOCKLISTED')
 
   if (!forced) {
+    const score = result && effectiveTier(result)
     if (!result) setTier('medium')
     // Recent phones score tier 3 but still get the lighter version; desktops need tier 3 for high.
-    else if (result.tier >= 3 && !result.isMobile) setTier('high')
-    else if (result.tier >= 2) setTier('medium')
+    else if (score >= 3 && !result.isMobile) setTier('high')
+    else if (score >= 2) setTier('medium')
     else setTier('low')
   }
   if (import.meta.env.DEV) console.info('[quality]', quality.name, result)

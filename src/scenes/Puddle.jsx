@@ -1,9 +1,10 @@
-import { useMemo, useRef } from 'react'
-import { useFrame } from '@react-three/fiber'
+import { useEffect, useMemo, useRef } from 'react'
+import { useFrame, useThree } from '@react-three/fiber'
 import * as THREE from 'three'
 import { SPLASH, WATER } from '../config.js'
 import { rig } from '../core/rig.js'
 import { fall } from '../core/fall.js'
+import { prewarm } from '../core/prewarm.js'
 import envChunk from '../shaders/env.glsl?raw'
 import waterChunk from '../shaders/water.glsl?raw'
 
@@ -75,6 +76,10 @@ export default function Puddle() {
     []
   )
   const mesh = useRef()
+
+  // Compiled while the loader is up, not on the frame the camera first turns down to the water.
+  const { gl, camera, scene } = useThree()
+  useEffect(() => prewarm(gl, mesh.current, camera, scene), [gl, camera, scene])
 
   useFrame(() => {
     material.uniforms.uCenter.value.set(fall.impact.x, fall.impact.z)

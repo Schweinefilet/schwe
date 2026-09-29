@@ -83,3 +83,10 @@
 - Display rate reported only when idle frames sit within 6% of a common refresh rate; otherwise unknown.
 - Build id (short commit, +dirty) is compiled in via __BUILD__ so every report names the build it measured.
 - Combine ?bench with ?tier=high|medium|low to measure one tier; the live tier guard is off when a tier is forced.
+
+## 2026-09-29 — First device bench (Apple M5, Chrome): tier fix and beat-7 prewarm
+- detect-gpu's data stops at Apple M4 (library last updated Feb 2025); the M5 came back FALLBACK tier 1 and got the low tier. The live guard only steps down, so a low start is permanent.
+- core/gpuScore.js effectiveTier: FALLBACK + Apple Silicon ("apple m<n>") → 3; any other FALLBACK → 2; known GPUs keep their tier. Bench reports now show detect-gpu's type and the score used.
+- The one 58.9 ms frame was beat 7's first use: puddle + falling-drop shaders at the fall, splash shader + VAT textures at impact.
+- core/prewarm.js compiles hidden objects (made visible only for the synchronous compile call) and uploads their textures ahead: puddle and falling drop at mount (loader), VAT right after its download (drift). Compiles into a 1×1 offscreen target, because the effect composer renders the scene offscreen and three keys shader variants on the output target (sRGB screen vs linear offscreen).
+- Verified with renderer.info: all 7 programs exist by drift; none compile in beat 7.

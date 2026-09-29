@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { setFrameHook } from '../core/loop.js'
 import { state } from '../core/state.js'
 import { detected, onTierChange, quality } from '../core/quality.js'
+import { effectiveTier } from '../core/gpuScore.js'
 import { liveCount } from '../content/videoManager.js'
 import { BUDGET_MS, report, toText } from './stats.js'
 
@@ -92,6 +93,8 @@ export default function Bench({ scroll }) {
         },
         gpu: r?.gpu ?? null,
         gpuTier: r?.tier ?? null,
+        gpuType: r?.type ?? null, // BENCHMARK = known GPU; FALLBACK = not in detect-gpu's data
+        gpuScore: r ? effectiveTier(r) : null, // the score the site actually used
         isMobile: r?.isMobile ?? null,
         forcedTier: new URLSearchParams(location.search).has('tier'),
         tierStart,

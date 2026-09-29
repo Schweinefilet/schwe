@@ -37,7 +37,7 @@ export function initScroll() {
   // Dev hook for scripted checks (scripts/smoke.mjs): __schwe.goto(units) jumps the scroll to a
   // timeline time; state, uniforms and the live video count are readable.
   if (import.meta.env.DEV) {
-    window.__schwe = {
+    window.__schwe = Object.assign(window.__schwe ?? {}, {
       lenis,
       tl,
       state,
@@ -45,7 +45,7 @@ export function initScroll() {
       uniforms: globalUniforms,
       liveCount,
       goto: (t) => lenis.scrollTo(st.start + (t / tl.duration()) * (st.end - st.start), { immediate: true, force: true }),
-    }
+    })
   }
 
   const timeToScroll = (t) => st.start + (t / tl.duration()) * (st.end - st.start)

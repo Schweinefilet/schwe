@@ -73,7 +73,7 @@ export function toText(meta, rep) {
   return [
     `schwe bench · build ${meta.build} · ${meta.date}`,
     `device: ${meta.device.ua}`,
-    `gpu: ${meta.gpu ?? 'unknown'} · detect-gpu tier ${meta.gpuTier ?? '?'}${meta.isMobile ? ' (mobile)' : ''} · display ${rep.displayHz ?? '?'} Hz · dpr ${meta.device.dpr} · viewport ${meta.device.viewport}`,
+    `gpu: ${meta.gpu ?? 'unknown'} · detect-gpu tier ${meta.gpuTier ?? '?'} (${meta.gpuType ?? '?'}, used ${meta.gpuScore ?? '?'})${meta.isMobile ? ' (mobile)' : ''} · display ${rep.displayHz ?? '?'} Hz · dpr ${meta.device.dpr} · viewport ${meta.device.viewport}`,
     `tier: start ${meta.tierStart}${meta.forcedTier ? ' (forced)' : ''} → end ${meta.tierEnd}${meta.tierEvents.length ? ` · changes: ${meta.tierEvents.map((e) => `${e.from}→${e.to} at ${e.beat}`).join(', ')}` : ''}`,
     '',
     head.join(' | '),
