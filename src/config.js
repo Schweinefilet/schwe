@@ -116,7 +116,7 @@ export const ALIGN = {
   widthFrac: 0.42, // word width as a share of the screen width…
   maxHeightFrac: 0.28, // …unless that would make it taller than this share of the screen height
   beadAngle: 0.0032, // target bead radius as seen from the eye (≈2.5 px at 720p); radii stay within RAIN.radius
-  count: { high: 900, medium: 650, low: 450 }, // sparse: found, not announced
+  count: { high: 450, medium: 325, low: 225 }, // sparse: found, not announced
   fallDepth: 9.4, // distance from the eye of the one drop that falls in beat 7 (puddle is below it)
   arrive: 13, // camera passes the eye
   passSpeed: 0.45, // camera speed at the eye relative to its average: a slow pass, not a stop

@@ -117,3 +117,6 @@
 - Verified with a time-encoded source (luma = 16 × t): loop's last frame = source 10.94 s, frame 0 = 11.00 s (one frame on), frame 30 = 2.00 s.
 - `npm run clips:sheet -- [--city] [--real] [--dir] [--out review/contact-sheet.jpg]`: one row per clip: start | end (loop seam) | middle | in a drop (inverted both ways, 150 px tall = a drift drop's city on a 1080p screen, at actual size). review/ is gitignored.
 - scripts/lib/ffmpeg.mjs: shared run/probe/font helpers (probe parses `ffmpeg -i`, no ffprobe needed).
+
+## 2026-09-29 — Word density halved
+- ALIGN.count 900/650/450 → 450/325/225 (high/medium/low): more natural, closer to the surrounding rain. Still legible from the eye on every tier and in portrait; the approach patch (≈12.6) is lighter.
