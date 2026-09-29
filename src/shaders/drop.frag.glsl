@@ -33,6 +33,16 @@ vec3 srgbToLinear(vec3 c) {
 vec2 clipTan;   // framing in use: uClipTan blended toward uCoverTan by uDive
 float edgeSoft;
 
+#ifdef SKY
+// Sky content (lab): the city's sky replaces the clip. It covers every direction, so there is no frame
+// edge. The drop's axis, right and up map to the city view by a rotation (uSkyCityBasis), so the lens
+// inverts the sky exactly as it inverted footage. citySky() comes from sky.glsl, prepended.
+float skyFoot; // angular size of one pixel along the ray leaving the drop, measured in main()
+
+vec3 behind(vec3 dir, vec3 axis, vec3 right, vec3 up) {
+  return citySky(normalize(uSkyCityBasis * vec3(dot(dir, axis), dot(dir, right), dot(dir, up))), skyFoot);
+}
+#else
 // The clip stands in for the world behind the drop, framed on the line from the camera to the drop.
 vec3 behind(vec3 dir, vec3 axis, vec3 right, vec3 up) {
   float z = dot(dir, axis);
@@ -45,6 +55,7 @@ vec3 behind(vec3 dir, vec3 axis, vec3 right, vec3 up) {
   if (uLive > 0.0) clip = mix(clip, srgbToLinear(texture2D(uVideo, uv).rgb), uLive);
   return mix(envColor(dir) * uEnvGain, clip * uExposure, inside);
 }
+#endif
 
 vec3 throughDrop(vec3 rd, vec3 p1, vec3 n1, float ior, vec3 axis, vec3 right, vec3 up) {
   vec3 t1 = refract(rd, n1, 1.0 / ior);                 // into the water
@@ -64,6 +75,17 @@ void main() {
 
   // Anti-aliased silhouette: coverage from how far inside the rim this pixel's ray passes.
   float alpha = clamp((uRadius - miss) / max(fwidth(miss), 1e-6), 0.0, 1.0);
+#ifdef SKY
+  // Measured before any pixel is discarded, so its neighbours' derivatives stay defined.
+  {
+    float tIn = -b - sqrt(max(b * b - (dot(oc, oc) - uRadius * uRadius), 0.0));
+    vec3 n = normalize(ro + rd * tIn - uCenter);
+    vec3 t1 = refract(rd, n, 1.0 / mix(uIor, 1.0, uDive));
+    vec3 n2 = normalize(ro + rd * tIn + t1 * (-2.0 * dot(t1, n) * uRadius) - uCenter);
+    vec3 exitDir = refract(t1, -n2, mix(uIor, 1.0, uDive));
+    skyFoot = clamp(length(fwidth(exitDir)), 1e-5, 0.05);
+  }
+#endif
   if (alpha <= 0.0 || !gl_FrontFacing) discard;
 
   float t = -b - sqrt(max(b * b - (dot(oc, oc) - uRadius * uRadius), 0.0));

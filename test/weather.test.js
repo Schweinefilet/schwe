@@ -10,8 +10,8 @@ const realFetch = globalThis.fetch
 afterEach(() => (globalThis.fetch = realFetch))
 
 // Open-Meteo's shape for several locations: an array, one entry per location, times in UTC.
-const location = ({ code = 0, rain = 0, showers = 0, slots = [] } = {}) => ({
-  current: { time: '2026-09-28T21:15', interval: 900, weather_code: code, temperature_2m: 12, rain, showers },
+const location = ({ code = 0, rain = 0, showers = 0, slots = [], cloud = 0 } = {}) => ({
+  current: { time: '2026-09-28T21:15', interval: 900, weather_code: code, temperature_2m: 12, rain, showers, cloud_cover: cloud },
   minutely_15: {
     time: slots.map((_, i) => `2026-09-28T${String(21 + Math.floor((15 + i * 15) / 60)).padStart(2, '0')}:${String((15 + i * 15) % 60).padStart(2, '0')}`),
     rain: slots,
@@ -49,7 +49,17 @@ test('request failure: everything clear, no rain data invented', async () => {
     assert.equal(wx[id].variant, 'clear')
     assert.equal(wx[id].mmPerHour, null)
     assert.equal(wx[id].rainInMinutes, null)
+    assert.equal(wx[id].cloudCover, null)
   }
+})
+
+test('cloud cover: percent becomes 0..1, missing stays null', async () => {
+  const noCloud = location()
+  delete noCloud.current.cloud_cover
+  mockOnce([location({ cloud: 87 }), noCloud])
+  const wx = await fetchWeather(cities)
+  assert.equal(wx.a.cloudCover, 0.87)
+  assert.equal(wx.b.cloudCover, null)
 })
 
 test('snow is its own variant, never rain', () => {

@@ -24,15 +24,15 @@ export function describeWeather(code) {
   return { variant: 'clear', label: 'clear' }
 }
 
-// Returns { [cityId]: { variant, label, tempC, mmPerHour, rainInMinutes } }. Cities missing from the
-// response get clear. Rain amounts count rain and showers only, never snow.
+// Returns { [cityId]: { code, variant, label, tempC, mmPerHour, rainInMinutes, cloudCover } }.
+// Cities missing from the response get clear. Rain amounts count rain and showers only, never snow.
 // mmPerHour: current rain rate. rainInMinutes: minutes until the first 15-minute slot in the next 6 h
-// with rain (0 = the current slot), or null.
+// with rain (0 = the current slot), or null. cloudCover: total cloud cover 0..1, or null.
 export async function fetchWeather(cities) {
   const params = new URLSearchParams({
     latitude: cities.map((c) => c.lat).join(','),
     longitude: cities.map((c) => c.lon).join(','),
-    current: 'weather_code,temperature_2m,rain,showers',
+    current: 'weather_code,temperature_2m,rain,showers,cloud_cover',
     minutely_15: 'rain,showers',
     forecast_minutely_15: '24',
     timezone: 'UTC',
@@ -51,16 +51,20 @@ export async function fetchWeather(cities) {
           c.id,
           {
             ...describeWeather(cur?.weather_code),
+            code: cur?.weather_code ?? null,
             tempC: cur?.temperature_2m ?? null,
             mmPerHour: rainRate(cur),
             rainInMinutes: minutesUntilRain(list[i]?.minutely_15, cur?.time),
+            cloudCover: cur?.cloud_cover == null ? null : cur.cloud_cover / 100,
           },
         ]
       })
     )
   } catch (err) {
     console.warn('[weather] unavailable, assuming clear:', err.message)
-    return Object.fromEntries(cities.map((c) => [c.id, { ...describeWeather(null), tempC: null, mmPerHour: null, rainInMinutes: null }]))
+    return Object.fromEntries(
+      cities.map((c) => [c.id, { ...describeWeather(null), code: null, tempC: null, mmPerHour: null, rainInMinutes: null, cloudCover: null }])
+    )
   } finally {
     clearTimeout(timer)
   }

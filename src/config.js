@@ -208,6 +208,34 @@ export const DIVE = {
   outEnd: 11.3,
 }
 
+// Sky in a drop (provisional, lab only: /?lab=drop). Each city's real sky, computed from the sun,
+// moon, stars and weather there, as a second content source beside footage. Atmosphere after
+// Hillaire 2020 (src/sky/hillaire.js); the per-city sky-view texture is the only thing a drop reads
+// from the atmosphere model, so another model (Bruneton's precomputed one) can fill the same texture.
+export const SKY = {
+  viewHeightKm: 0.2, // the viewer stands on a rooftop
+  groundAlbedo: 0.08, // a city seen from above: dark
+  skyView: { high: [192, 108], medium: [192, 108], low: [128, 64] }, // per-city texture size by tier
+  refreshDegrees: 0.25, // re-render a city's sky once its sun or moon has moved this far
+  // Which way the city view faces. The drop's axis (camera → drop) maps to this direction, so the
+  // lens inverts it exactly as it inverted footage. Moon's azimuth once the sun is below moonBelow.
+  facing: { pitch: 15, moonBelow: -12 },
+  // Camera exposure: a metered sky luminance L (cd/m²) comes out at key × (L / ref)^range, so the
+  // 18 stops between a clear noon and a city night compress to about 3.6.
+  exposure: { key: 0.2, ref: 3000, range: 0.2 },
+  sunLux: 1.28e5, // illuminance above the atmosphere
+  moonLux: 0.3, // full moon above the atmosphere; other phases follow Allen's phase law
+  moonColour: [1.0, 0.93, 0.84], // moonlight is a little redder than sunlight
+  earthshine: 1.2e-4, // dark limb radiance as a share of the full-moon disk's, at new moon
+  // The city's own light: one constant for all ten (all are megacities; per-city values would be
+  // invented). Zenith luminance of a clear city night sky ≈ 17.8 mag/arcsec².
+  cityGlow: { colour: [1.0, 0.72, 0.48], zenith: 0.012, horizon: 4, cloud: 5, ground: 3 },
+  clouds: { baseKm: 2.0, rainBaseKm: 1.0, tileKm: 40, tauMin: 3, tauMax: 25, tauPerMm: 4 },
+  // Extinction from rain, per km: 0.25 × R^0.63 (R in mm/h). Fog (WMO 45, 48): visibility 0.5 km.
+  rainHaze: { coef: 0.25, exp: 0.63, fogPerKm: 7.8 },
+  stars: { url: 'sky/stars.bin', maxMag: 4.5, cells: 64, seeingDeg: 0.02, lux0: 2.5e-6 },
+}
+
 // Sound. Every sound is synthesized until a licensed file fills its slot (paths under public/).
 // Log each file's license before it goes in (bible: license log).
 export const AUDIO = {

@@ -15,6 +15,8 @@
     "clips:manifest": "node scripts/build-manifest.mjs",
     "clips:ingest": "node scripts/ingest-clip.mjs",
     "clips:sheet": "node scripts/contact-sheet.mjs",
+    "sky:stars": "node scripts/build-stars.mjs",
+    "sky:stills": "node scripts/sky-stills.mjs",
     "deploy": "npm run build && npx wrangler pages deploy dist --project-name schwe"
   },
   "dependencies": {

@@ -26,13 +26,19 @@ const FULL_RECT = new THREE.Vector4(0, 0, 1, 1)
 // A little larger than the radius so the low-poly outline never clips the true edge.
 const proxy = new THREE.SphereGeometry(1.06, 32, 24)
 
-export function createDropMaterial({ radius = HERO.radius, dispersion = true } = {}) {
+// `sky` (lab): { glsl, uniforms } from a CitySky (src/sky/citySky.js). The drop then refracts that
+// city's computed sky instead of a clip. Its uniforms are spread in by reference, so the CitySky
+// updates them without touching the material.
+export function createDropMaterial({ radius = HERO.radius, dispersion = true, sky = null } = {}) {
   const halfFov = THREE.MathUtils.degToRad(HERO.clipFov / 2)
+  const defines = dispersion ? { DISPERSION: '' } : {}
+  if (sky) defines.SKY = ''
   return new THREE.ShaderMaterial({
     vertexShader,
-    fragmentShader,
-    defines: dispersion ? { DISPERSION: '' } : {},
+    fragmentShader: sky ? `${envChunk}\n${sky.glsl}\n${dropFrag}` : fragmentShader,
+    defines,
     uniforms: {
+      ...sky?.uniforms,
       uCenter: { value: new THREE.Vector3() },
       uRadius: { value: radius },
       uIor: { value: HERO.ior },
@@ -72,6 +78,7 @@ function coverTan(camera, out) {
 // enters, so it follows rig.dive. `positionRef`: a Vector3, or a function returning one, to follow
 // every frame (the falling drop).
 // `envOnly`: no clip at all, the drop refracts only the environment.
+// `sky`: a computed city sky instead of a clip (see createDropMaterial).
 export default function HeroDrop({
   position,
   radius = HERO.radius,
@@ -83,8 +90,9 @@ export default function HeroDrop({
   dive = false,
   positionRef = null,
   envOnly = false,
+  sky = null,
 }) {
-  const material = useMemo(() => createDropMaterial({ radius, dispersion }), [radius, dispersion])
+  const material = useMemo(() => createDropMaterial({ radius, dispersion, sky }), [radius, dispersion, sky])
   const u = material.uniforms
   const mesh = useRef()
 
