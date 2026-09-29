@@ -187,3 +187,7 @@ Still provisional:
 - Loader: "enter" also waits for the backdrop (the same 6 s cap; a failed load draws black and never blocks). index.html preloads both images; /backdrop/* cached 7 days. Download +140 KB. GPU memory about 8 MB (soft) + 2.8 MB (sharp with mips). Bundle 1,475.55 → 1,479.59 kB. npm test 57/57, smoke 5/5.
 - Performance: the bead shader trades eight noise lookups for two asin and two texture reads, so it should not be slower; not measured on a device.
 - Still open: public/still.jpg shows the old look; the shader look pass still waits for real footage.
+
+## 2026-09-29 — City drops only up close; drop labels; the word's outline
+- City drops no longer stand out from afar. Beyond HERO.near[1] (1.8 units) from the camera a city drop is an ordinary bead refracting the backdrop at the rain's lens gain; its city fades in toward HERO.near[0] (0.9). At a drift pass the camera is 0.42 away, so each city shows in full as it goes by; the next drop, 4.9 ahead, looks like rain. Same for the dive drop (a bead on the approach, its city as the camera closes in) and the falling drop (its city shows only in the last part of the fall). A distant drop skips its city shader entirely (the branch is uniform per drop).
+- The backdrop through any city drop uses RAIN.lensGain (was 1 for city drops, HERO.envOnlyGain for the falling drop without a city); HERO.envOnlyGain removed.

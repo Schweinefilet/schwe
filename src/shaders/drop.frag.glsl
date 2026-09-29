@@ -18,7 +18,8 @@ uniform vec2 uClipTan;      // tan(half field of view) of the clip, horizontal a
 uniform float uExposure;
 uniform float uReflGain;
 uniform float uGlint;
-uniform float uEnvGain;     // brightness of the environment seen through the drop (like the rain beads' lens gain)
+uniform float uEnvGain;     // brightness of the environment seen through the drop (the rain beads' lens gain)
+uniform vec2 uNear;         // camera distance: the city in full within x; beyond y an ordinary bead
 uniform float uDive;        // 0: ball lens; 1: plain window showing the clip upright, filling the screen
 uniform vec2 uCoverTan;     // clip framing that exactly covers the screen, used at uDive = 1
 
@@ -34,6 +35,7 @@ vec2 clipTan;   // framing in use: uClipTan blended toward uCoverTan by uDive
 float edgeSoft;
 float envFoot;  // angle one pixel takes in along the ray leaving the drop, and along the reflected ray;
 float reflFoot; // measured in main() before any pixel is discarded
+float nearMix;  // how much of the city shows: 0 far off, 1 close (uNear)
 
 #ifdef SKY
 // Sky content (lab): the city's sky replaces the clip. It covers every direction, so there is no frame
@@ -59,13 +61,22 @@ vec3 behind(vec3 dir, vec3 axis, vec3 right, vec3 up) {
 }
 #endif
 
+// Far off, a city drop is an ordinary bead: it refracts the backdrop like the rain around it, and its
+// city fades in only as the camera comes near. The branch is the same for every pixel of a drop, so a
+// distant drop skips its city entirely.
+vec3 seen(vec3 dir, vec3 axis, vec3 right, vec3 up) {
+  vec3 bead = envColor(dir, envFoot) * uEnvGain;
+  if (nearMix <= 0.0) return bead;
+  return mix(bead, behind(dir, axis, right, up), nearMix);
+}
+
 vec3 throughDrop(vec3 rd, vec3 p1, vec3 n1, float ior, vec3 axis, vec3 right, vec3 up) {
   vec3 t1 = refract(rd, n1, 1.0 / ior);                 // into the water
   vec3 p2 = p1 + t1 * (-2.0 * dot(t1, n1) * uRadius);   // chord across the sphere
   vec3 n2 = (p2 - uCenter) / uRadius;
   vec3 t2 = refract(t1, -n2, ior);                      // back out into air
   if (dot(t2, t2) < 1e-6) return vec3(0.0);             // total internal reflection: reads dark
-  return behind(t2, axis, right, up);
+  return seen(t2, axis, right, up);
 }
 
 void main() {
@@ -103,6 +114,7 @@ void main() {
   // Diving in: the index of refraction eases from water's to air's. On the way the focal point sweeps
   // past the camera, so the image swells and turns upright on its own; at 1.0 rays pass straight
   // through and the drop is a window framed exactly like a fullscreen clip.
+  nearMix = 1.0 - smoothstep(uNear.x, uNear.y, length(ro - uCenter));
   float ior = mix(uIor, 1.0, uDive);
   float disp = uDispersion * (1.0 - uDive);
   clipTan = mix(uClipTan, uCoverTan, uDive);

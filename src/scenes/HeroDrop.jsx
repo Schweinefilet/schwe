@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef } from 'react'
 import { useFrame } from '@react-three/fiber'
 import * as THREE from 'three'
-import { HERO } from '../config.js'
+import { HERO, RAIN } from '../config.js'
 import { getSlot } from '../content/videoManager.js'
 import { rig } from '../core/rig.js'
 import envChunk from '../shaders/env.glsl?raw'
@@ -53,7 +53,8 @@ export function createDropMaterial({ radius = HERO.radius, dispersion = true, sk
       uExposure: { value: HERO.exposure },
       uReflGain: { value: HERO.reflGain },
       uGlint: { value: HERO.glint },
-      uEnvGain: { value: 1 },
+      uEnvGain: { value: RAIN.lensGain }, // the backdrop through the drop, as bright as through a rain bead
+      uNear: { value: new THREE.Vector2(...HERO.near) },
       uDive: { value: 0 },
       uCoverTan: { value: new THREE.Vector2(1, 1) },
     },
@@ -100,9 +101,8 @@ export default function HeroDrop({
 
   u.uCenter.value.set(...position)
   if (envOnly) {
-    // No clip: every exit ray misses it and sees the environment, concentrated like a rain bead's.
+    // No clip: every exit ray misses it and sees the backdrop, like a rain bead.
     u.uClipTan.value.set(1e-4, 1e-4)
-    u.uEnvGain.value = HERO.envOnlyGain
     u.uGlint.value = HERO.envOnlyGlint
   }
   u.uPoster.value = poster ?? BLACK

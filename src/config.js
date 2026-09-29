@@ -60,8 +60,10 @@ export const HERO = {
   exposure: 1.0,
   reflGain: 1,
   glint: 2,
-  envOnlyGain: RAIN.lensGain, // the falling drop has no clip: it shows the backdrop, like any rain bead
-  envOnlyGlint: 6,
+  envOnlyGlint: 6, // the falling drop with no city (ending 'none')
+  // Camera distance at which a city shows: in full within the first, not at all beyond the second,
+  // where the drop is an ordinary bead refracting the backdrop like the rain around it.
+  near: [0.9, 1.8],
 }
 // Beat 4, a macro dolly. Hero drops are ordinary-sized, so a city only shows up close: the camera
 // passes each drop DRIFT.pass from its centre, easing as it goes by, head turned slightly toward it.
