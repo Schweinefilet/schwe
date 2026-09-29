@@ -8,6 +8,7 @@ import WordSketch from './ui/WordSketch.jsx'
 import EndType from './ui/EndType.jsx'
 import StillPage from './ui/StillPage.jsx'
 import { initScroll } from './core/scroll.js'
+import { startFocusPull } from './core/focus.js'
 import { state } from './core/state.js'
 import { unlockAudio } from './audio/audioEngine.js'
 import { detectTier, quality } from './core/quality.js'
@@ -149,6 +150,7 @@ function Site({ clips, device, diveCity, rainCity }) {
     unlockAudio()
     state.unlocked = true
     scroll.current.enter()
+    startFocusPull()
   }, [])
 
   return (

@@ -17,6 +17,8 @@ varying float vRadius;
 varying float vAlpha;
 varying float vBright;
 varying vec3 vView;
+varying float vSoft;  // always sharp: the word is only near the camera long after the focus pull
+varying float vRound; // always a bead
 
 void main() {
   vec4 v = viewMatrix * vec4(aOffset, 1.0);
@@ -29,6 +31,8 @@ void main() {
   vLocal = vec2(0.0);
   vLen = 0.0;
   vRadius = 1.0;
+  vSoft = 0.0;
+  vRound = 1.0;
   if (depth < 0.05 || edge <= 0.0 || depth > uVisible.y) {
     gl_Position = vec4(2.0, 2.0, 2.0, 1.0);
     return;

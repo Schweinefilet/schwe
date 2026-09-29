@@ -35,7 +35,15 @@ export const TIMELINE_END = SPLASH_AT + 4.5
 // backdrop draws the soft (out-of-focus) copy, drops the sharp one. `exposure`: final brightness of the
 // panorama's median luminance (linear); `yaw`: degrees the panorama is turned, here so the word's line
 // of sight (40° left of -z) faces the square's darkest stretch, where its drops read (0: town hall at -z).
-export const BACKDROP = { sharp: 'backdrop/rathaus.jpg', soft: 'backdrop/rathaus-soft.jpg', exposure: 0.006, yaw: -56 }
+// `bokeh`: the soft copy's blur radius in degrees, as built (the build script's --bokeh).
+export const BACKDROP = { sharp: 'backdrop/rathaus.jpg', soft: 'backdrop/rathaus-soft.jpg', exposure: 0.006, yaw: -56, bokeh: 1.2 }
+
+// The first shot. After "enter" the lens is focused on the square behind the rain; `delay` s later it
+// pulls focus forward onto the drops over `seconds` (the focus every later beat keeps). Scrolling on
+// toward the drift completes the pull, so the drops are always sharp by the first pass.
+// `aperture`: a drop `d` units away is blurred by aperture / d radians while the lens is focused far;
+// `maxBlur`: CSS px cap on that blur (a drop that close has faded out anyway).
+export const FOCUS = { delay: 0.8, seconds: 5, aperture: 0.05, maxBlur: 20 }
 
 // Drop count comes from the quality tier (core/quality.js).
 export const RAIN = {

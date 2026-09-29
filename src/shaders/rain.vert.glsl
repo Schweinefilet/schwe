@@ -10,6 +10,9 @@ uniform vec3 uBoxCenter;  // the field repeats every uBoxSize, centered here (tr
 uniform vec3 uBoxSize;
 uniform vec2 uResolution; // drawing buffer size in pixels
 uniform float uFogDensity;
+uniform float uFocus;     // 1: the lens is focused on the rain; 0: on the backdrop (the first shot)
+uniform float uAperture;  // defocus: a drop d units away blurs by uAperture / d radians when focused far
+uniform float uMaxBlur;   // cap on that blur, in drawing-buffer px
 
 attribute vec3 aOffset;   // start position inside one box
 attribute vec4 aParams;   // x: fall speed, y: radius (world), z: streak brightness, w: unused
@@ -17,7 +20,9 @@ attribute vec4 aParams;   // x: fall speed, y: radius (world), z: streak brightn
 varying vec2 vLocal;      // pixel coords in the streak frame: x across (right), y along (0 = head)
 varying float vLen;       // streak length in pixels
 varying float vRadius;    // capsule radius in pixels
-varying float vAlpha;     // coverage: box-face fade, fog, near fade, sub-pixel size
+varying float vAlpha;     // coverage: box-face fade, fog, near fade, sub-pixel size, defocus
+varying float vSoft;      // share of the drawn radius that is defocus blur: 0 sharp
+varying float vRound;     // 1 a bead, 0 a streak
 varying float vBright;
 varying vec3 vView;       // camera → drop, view space
 
@@ -46,6 +51,8 @@ void main() {
   vLocal = vec2(0.0);
   vLen = 0.0;
   vRadius = 1.0;
+  vSoft = 0.0;
+  vRound = 0.0;
   if (depth < 0.05 || -v1.z < 0.05 || edge <= 0.0) {
     gl_Position = vec4(2.0, 2.0, 2.0, 1.0); // outside the clip volume: culled
     return;
@@ -66,6 +73,14 @@ void main() {
 
   vec2 axis = s1 - s0;
   float L = length(axis);
+  vRound = 1.0 - smoothstep(0.0, 1.5, L / r);
+
+  // Out of focus, a drop spreads the same light over a wider disc (blur and drop add in quadrature).
+  float blur = min((1.0 - uFocus) * uAperture / depth * focal, uMaxBlur);
+  float rBlur = sqrt(r * r + blur * blur);
+  coverage *= (r / rBlur) * (r / rBlur);
+  vSoft = blur / rBlur;
+  r = rBlur;
   // Fall back to screen-up as the streak vanishes, so frozen beads keep a stable orientation.
   vec2 along = normalize(axis + vec2(0.0, 1.0) * max(0.0, 1.0 - L));
   vec2 across = vec2(along.y, -along.x); // screen-right of `along`; keeps the quad's winding front-facing

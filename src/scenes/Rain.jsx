@@ -1,7 +1,7 @@
 import { useMemo } from 'react'
 import { useFrame } from '@react-three/fiber'
 import * as THREE from 'three'
-import { RAIN } from '../config.js'
+import { FOCUS, RAIN } from '../config.js'
 import { quality } from '../core/quality.js'
 import { globalUniforms } from '../core/uniforms.js'
 import { envUniforms } from '../content/backdrop.js'
@@ -55,6 +55,9 @@ export default function Rain() {
       uBoxSize: { value: new THREE.Vector3(...RAIN.boxSize) },
       uResolution: { value: new THREE.Vector2(1, 1) },
       uFogDensity: { value: RAIN.fogDensity },
+      uFocus: globalUniforms.uFocus,
+      uAperture: { value: FOCUS.aperture },
+      uMaxBlur: { value: FOCUS.maxBlur },
       uLensGain: { value: RAIN.lensGain },
       uReflGain: { value: RAIN.reflGain },
       uSpec: { value: RAIN.spec },
@@ -77,6 +80,7 @@ export default function Rain() {
     uniforms.uBoxCenter.value.copy(camera.position).addScaledVector(_forward, RAIN.boxSize[2] * RAIN.boxLead)
     gl.getDrawingBufferSize(_size)
     uniforms.uResolution.value.copy(_size)
+    uniforms.uMaxBlur.value = FOCUS.maxBlur * gl.getPixelRatio()
     geometry.instanceCount = Math.min(geometry.userData.maxCount, quality.rainCount) // follows a live tier drop
   })
 

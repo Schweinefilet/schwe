@@ -60,6 +60,7 @@ export function createDropMaterial({ radius = HERO.radius, dispersion = true, sk
       uCoverTan: { value: new THREE.Vector2(1, 1) },
       // Shared by reference, so the drop hides and fades exactly as the rain does (drop.frag.glsl).
       uTimeScale: globalUniforms.uTimeScale,
+      uFocus: globalUniforms.uFocus,
       uBoxCenter: globalUniforms.uBoxCenter,
       uBoxSize: { value: new THREE.Vector3(...RAIN.boxSize) },
       uFogDensity: { value: RAIN.fogDensity },

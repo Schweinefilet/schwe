@@ -15,6 +15,8 @@ varying float vRadius;
 varying float vAlpha;
 varying float vBright;
 varying vec3 vView;
+varying float vSoft;  // share of the radius that is defocus blur (rain.vert.glsl): 0 sharp
+varying float vRound; // 1 a bead, 0 a streak
 
 const vec3 KEY = vec3(-0.35, 0.8, 0.5); // view space, upper left
 const float IOR = 1.333;
@@ -41,7 +43,8 @@ void main() {
   vec3 axis = normalize(vView);
   vec3 right = normalize(cross(axis, vec3(0.0, 1.0, 0.0)));
   vec3 up = cross(right, axis);
-  float b = min(d, 0.999);
+  // Out of focus, the bead's image spreads evenly over its blur disc: shade it from nearer its centre.
+  float b = min(d * (1.0 - vSoft), 0.999);
   vec3 outward = (q.x * right + q.y * up) / max(d, 1e-4);
   float ti = asin(b);
   float dev = 2.0 * (ti - asin(b / IOR));
@@ -49,18 +52,20 @@ void main() {
   vec3 n = b * outward - cos(ti) * axis; // the surface normal, facing the camera
   float fresnel = 0.02 + 0.98 * pow(1.0 - cos(ti), 5.0);
   // The angle one pixel takes in: the deviation's rate across the disk over the radius in pixels, and
-  // for the reflection the normal's turn, doubled.
-  float footRefr = 2.0 * (1.0 / cos(ti) - 1.0 / sqrt(IOR * IOR - b * b)) / vRadius;
-  float footRefl = 2.0 / (cos(ti) * vRadius);
+  // for the reflection the normal's turn, doubled. Out of focus a pixel takes in much of the image.
+  float footRefr = mix(2.0 * (1.0 / cos(ti) - 1.0 / sqrt(IOR * IOR - b * b)) / vRadius, 1.0, vSoft);
+  float footRefl = mix(2.0 / (cos(ti) * vRadius), 1.0, vSoft);
   float spec = pow(max(dot(n, normalize(normalize(KEY) - axis)), 0.0), 90.0);
   // Fresnel losses going in and coming out (the same angle both times).
   vec3 bead = envColor(normalize(toWorld(refrDir)), footRefr) * uLensGain * (1.0 - fresnel) * (1.0 - fresnel)
             + envColor(normalize(toWorld(reflect(axis, n))), footRefl) * uReflGain * fresnel
             + vec3(spec * uSpec);
 
-  // Coverage: a bead is opaque with an anti-aliased rim; a streak keeps its soft core.
-  float round = 1.0 - smoothstep(0.0, 1.5, vLen / vRadius);
-  float a = mix((1.0 - d * d) * spread, clamp((1.0 - d) * vRadius + 0.5, 0.0, 1.0), round) * vAlpha;
+  // Coverage: a bead is opaque with an anti-aliased rim, out of focus an even disc with a soft rim; a
+  // streak keeps its soft core.
+  float round = vRound;
+  float rim = mix(1.0, 0.3 * vRadius, vSoft); // px
+  float a = mix((1.0 - d * d) * spread, clamp((1.0 - d) * vRadius / rim + 0.5, 0.0, 1.0), round) * vAlpha;
   vec3 col = mix(uStreakColor * vBright, bead, round);
 
   gl_FragColor = vec4(col * a, a);

@@ -11,6 +11,8 @@ export const globalUniforms = {
   // Centre of the rain field's box (it tracks the camera). Rain wraps and fades at its faces; the
   // word's drops fade at the same faces, so they appear and vanish exactly like rain.
   uBoxCenter: { value: new THREE.Vector3() },
+  // Where the lens is focused (core/focus.js): 0 on the backdrop, 1 on the rain (the usual look).
+  uFocus: { value: 1 },
 }
 
 let frozen = false

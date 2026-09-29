@@ -26,6 +26,7 @@ uniform float uTimeScale;   // the rain's: 1 falling, 0 frozen
 uniform vec3 uBoxCenter;    // the rain field's box, whose faces it fades at
 uniform vec3 uBoxSize;
 uniform float uFogDensity;
+uniform float uFocus;       // the lens: 1 focused on the rain, 0 on the backdrop (the first shot)
 
 varying vec3 vWorld;
 
@@ -144,11 +145,12 @@ void main() {
   vec3 col = trans * (1.0 - fresnel) + refl * fresnel + vec3(spec * uGlint * (1.0 - uDive));
 
   // In falling rain a still bead would stand out, so a city drop shows only once the rain has all but
-  // stopped (the last few cm of its fall). Far off it also fades like a rain bead: fog, and the faces of
-  // the rain field's box, beyond which there is no rain.
+  // stopped (the last few cm of its fall), and, since it has no defocus blur, once the lens is (nearly)
+  // focused on the rain. Far off it also fades like a rain bead: fog, and the faces of the rain field's
+  // box, beyond which there is no rain.
   vec3 e = abs(uCenter - uBoxCenter) / (0.5 * uBoxSize);
   float edge = 1.0 - smoothstep(0.75, 1.0, max(max(e.x, e.y), e.z));
   float asRain = mix(edge * exp(-length(ro - uCenter) * uFogDensity), 1.0, nearMix);
-  float still = 1.0 - smoothstep(0.005, 0.1, uTimeScale);
+  float still = (1.0 - smoothstep(0.005, 0.1, uTimeScale)) * smoothstep(0.6, 1.0, uFocus);
   gl_FragColor = vec4(col, alpha * asRain * still);
 }
