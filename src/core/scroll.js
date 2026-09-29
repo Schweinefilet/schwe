@@ -1,11 +1,12 @@
 import gsap from 'gsap'
 import { ScrollTrigger } from 'gsap/ScrollTrigger'
 import Lenis from 'lenis'
-import { CAMERA_KEYS, DEFAULT_DIVE_CITY, HERO, PACE, SPLASH, TIMELINE_END, TIMELINE_START, heroDropsFor, visibleDrops } from '../config.js'
+import { CAMERA_KEYS, DEFAULT_DIVE_CITY, DRIFT_PASSES, HERO, PACE, SNAP, SPLASH, TIMELINE_END, TIMELINE_START, heroDropsFor, visibleDrops } from '../config.js'
 import { setLenis, setStep } from './loop.js'
 import { buildMasterTimeline } from './timeline.js'
 import { createCameraPath } from './cameraPath.js'
 import { buildPaceTable, rateAt, smoothDamp } from './pace.js'
+import { landing } from './snap.js'
 import { resetRig } from './rig.js'
 import { globalUniforms, resetUniforms } from './uniforms.js'
 import { state } from './state.js'
@@ -51,6 +52,13 @@ function paceTable() {
   })
 }
 
+// Where a swift scroll may come to rest (SNAP in config.js): the slow point of each drift drop this tier
+// shows (the dive drop comes first in visibleDrops), and inside the dive drop.
+function landingPoints() {
+  const shown = visibleDrops(heroDropsFor(DEFAULT_DIVE_CITY), quality.heroDrops).length - 1
+  return [...DRIFT_PASSES.slice(0, shown).map((at) => ({ at, capture: SNAP.capture })), SNAP.dive]
+}
+
 export function initScroll() {
   if ('scrollRestoration' in history) history.scrollRestoration = 'manual'
   window.scrollTo(0, 0)
@@ -69,12 +77,20 @@ export function initScroll() {
   // The picture follows the scroll at a limited pace (core/pace.js): the timeline's time chases the time
   // the scroll position stands for. Scroll stays the one source of truth; only the rate is time-based.
   let table = paceTable()
-  const offTier = onTierChange(() => (table = paceTable()))
+  let points = landingPoints()
+  const offTier = onTierChange(() => {
+    table = paceTable()
+    points = landingPoints()
+  })
   const pace = { time: TIMELINE_START, velocity: 0, arrived: null, lastTarget: TIMELINE_START, ending: false }
+  // The visitor's current gesture: when its last input came, how far the scroll ran ahead of the picture
+  // at most, and whether its landing has been decided.
+  const gesture = { at: 0, lead: 0, landed: true, movedAt: 0, lastScroll: 0 }
   const snap = (t) => {
     pace.time = pace.lastTarget = t
     pace.velocity = 0
     pace.ending = false // a jump interrupts the ending's own scroll (and Lenis drops its lock)
+    gesture.landed = true
     tl.time(t)
   }
 
@@ -98,6 +114,9 @@ export function initScroll() {
   const lenis = new Lenis({
     autoRaf: false,
     virtualScroll(data) {
+      // Every input counts toward the gesture, even input refused below.
+      gesture.at = performance.now()
+      gesture.landed = false
       if (!data.event.type.includes('wheel') || !data.deltaY) return true
       const ahead = scrollToTime(lenis.targetScroll + data.deltaY) - pace.time
       if (Math.abs(ahead) <= PACE.bank) return true
@@ -115,7 +134,30 @@ export function initScroll() {
   const offScroll = lenis.on('scroll', ScrollTrigger.update)
   setLenis(lenis)
 
+  // Once a gesture has been quiet SNAP.idle ms (and a native touch fling has stopped), a swift one's
+  // scroll is moved to its landing point at once. Nothing on the page moves with it (the scene is a
+  // fixed canvas); the picture, which lags the scroll and is still gliding, simply comes to rest on the
+  // point, without stopping and starting again or turning back. Any new input takes over at once.
+  const land = (now) => {
+    if (lenis.scroll !== gesture.lastScroll) {
+      gesture.lastScroll = lenis.scroll
+      gesture.movedAt = now
+    }
+    if (gesture.landed) return
+    const target = scrollToTime(lenis.targetScroll) // where the scroll will come to rest
+    gesture.lead = Math.max(gesture.lead, Math.abs(target - pace.time))
+    const quiet = now - gesture.at > SNAP.idle && (lenis.isScrolling !== 'native' || now - gesture.movedAt > SNAP.idle)
+    if (!quiet) return
+    const swift = gesture.lead >= SNAP.swift
+    gesture.landed = true
+    gesture.lead = 0
+    if (!swift || lenis.isStopped || lenis.isLocked || pace.ending) return
+    const at = landing({ picture: pace.time, target, points })
+    if (at !== null && Math.abs(at - target) > 0.002) lenis.scrollTo(timeToScroll(at), { immediate: true })
+  }
+
   setStep((dt) => {
+    land(performance.now())
     const target = scrollToTime(lenis.scroll)
     const crossed = pace.lastTarget < SPLASH.autoFrom && target >= SPLASH.autoFrom
     pace.lastTarget = target

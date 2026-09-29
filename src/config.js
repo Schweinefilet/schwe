@@ -26,6 +26,13 @@ export const FREEZE_SECONDS = 1.5 // real time for uTimeScale to ease 1 → 0 (a
 // limit's corners are rounded off over this many units, so following it never makes the camera's
 // acceleration jump (kept under half the drops' spacing, so the camera still speeds up between them).
 export const PACE = { max: 1.5, nearDrop: 0.45, brake: 2.5, smooth: 0.1, bank: 0.5, maxTurn: 40, turnWindow: 0.5, round: 0.5 }
+// Soft landings (core/snap.js): after a swift scroll (it ran at least `swift` units ahead of the
+// picture) the picture comes to rest where a city drop can be seen, not wherever its speed ran out:
+// at a drift drop's slow point (DRIFT_PASSES, within `capture` of where the scroll would stop), or
+// inside the dive drop while its name shows (`dive`). Never behind the picture, never after slow
+// scrolling, none at the word (found, not announced). Decided once input has been quiet `idle` ms,
+// while the picture still glides: the scroll moves to the point and the picture glides on to rest there.
+export const SNAP = { swift: 0.12, capture: 0.3, dive: { at: 10.1, capture: 0.7 }, idle: 90 }
 
 // The beats, in order. `at` is the label position in timeline units. The loader is a screen over the
 // first one, not a beat: "enter" only fades it, and the top of the page is the rain.
