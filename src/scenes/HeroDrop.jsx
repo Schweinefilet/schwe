@@ -4,6 +4,7 @@ import * as THREE from 'three'
 import { HERO, RAIN } from '../config.js'
 import { getSlot } from '../content/videoManager.js'
 import { rig } from '../core/rig.js'
+import { globalUniforms } from '../core/uniforms.js'
 import envChunk from '../shaders/env.glsl?raw'
 import { envUniforms } from '../content/backdrop.js'
 import dropFrag from '../shaders/drop.frag.glsl?raw'
@@ -57,6 +58,11 @@ export function createDropMaterial({ radius = HERO.radius, dispersion = true, sk
       uNear: { value: new THREE.Vector2(...HERO.near) },
       uDive: { value: 0 },
       uCoverTan: { value: new THREE.Vector2(1, 1) },
+      // Shared by reference, so the drop hides and fades exactly as the rain does (drop.frag.glsl).
+      uTimeScale: globalUniforms.uTimeScale,
+      uBoxCenter: globalUniforms.uBoxCenter,
+      uBoxSize: { value: new THREE.Vector3(...RAIN.boxSize) },
+      uFogDensity: { value: RAIN.fogDensity },
     },
     transparent: true, // for the anti-aliased rim only; the body is opaque
   })

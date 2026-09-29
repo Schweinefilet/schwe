@@ -22,6 +22,10 @@ uniform float uEnvGain;     // brightness of the environment seen through the dr
 uniform vec2 uNear;         // camera distance: the city in full within x; beyond y an ordinary bead
 uniform float uDive;        // 0: ball lens; 1: plain window showing the clip upright, filling the screen
 uniform vec2 uCoverTan;     // clip framing that exactly covers the screen, used at uDive = 1
+uniform float uTimeScale;   // the rain's: 1 falling, 0 frozen
+uniform vec3 uBoxCenter;    // the rain field's box, whose faces it fades at
+uniform vec3 uBoxSize;
+uniform float uFogDensity;
 
 varying vec3 vWorld;
 
@@ -138,5 +142,13 @@ void main() {
   float spec = pow(max(dot(nView, normalize(normalize(KEY) + vec3(0.0, 0.0, 1.0))), 0.0), 2500.0);
 
   vec3 col = trans * (1.0 - fresnel) + refl * fresnel + vec3(spec * uGlint * (1.0 - uDive));
-  gl_FragColor = vec4(col, alpha);
+
+  // In falling rain a still bead would stand out, so a city drop shows only once the rain has all but
+  // stopped (the last few cm of its fall). Far off it also fades like a rain bead: fog, and the faces of
+  // the rain field's box, beyond which there is no rain.
+  vec3 e = abs(uCenter - uBoxCenter) / (0.5 * uBoxSize);
+  float edge = 1.0 - smoothstep(0.75, 1.0, max(max(e.x, e.y), e.z));
+  float asRain = mix(edge * exp(-length(ro - uCenter) * uFogDensity), 1.0, nearMix);
+  float still = 1.0 - smoothstep(0.005, 0.1, uTimeScale);
+  gl_FragColor = vec4(col, alpha * asRain * still);
 }
