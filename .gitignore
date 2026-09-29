@@ -13,3 +13,6 @@ public/benchmarks
 # Python bytecode (blender/splash scripts)
 __pycache__/
 *.pyc
+
+# Contact sheets and other local review output
+review/

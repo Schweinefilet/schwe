@@ -107,3 +107,13 @@
 - Word axis turned 40° left of the drift line (ALIGN_YAW) and the eye moved to [-3, 4.8, -41], so the drift and dive never look down the word's axis and stay ≥ 9.4 from its drops. Swing-in comes from above (+1.8) so the approach sees the drops spread, not as a flat strip.
 - Word frame helper inWordFrame(origin, [x, y, z]): target, swing-in, falling-drop start, puddle and beat-7 camera keys are all expressed in the word's frame, so they turn with it.
 - Checked in screenshots: nothing at 8.4–11.6; a loose patch coheres 12.0–12.75; the word at 13.0 (landscape and portrait); scattered by 13.3.
+
+## 2026-09-29 — Footage ingest, contact sheet; theme scope
+- Low-end/phone performance: verified by the user on device (numbers not recorded here).
+- UI theme (dreamy + smooth, white + pastel) covers the UI layer only: loader, city type, the ending's answer, overlays, still page. The scene, shaders and grade stay a night storm.
+- Shader look pass waits for real footage: tuning the drop shader against flat placeholders would be redone.
+- `npm run clips:ingest -- <file> --city --light --weather [--start --duration 10 --fade 1 --focus 0.5 --out --force]`: 30 fps, 1920×1080 cover crop (focus = horizontal crop position), seamless loop (duration + fade read; the tail, fading out, is laid over the start, so frame 0 continues from the last frame), no audio, tagged Rec.709, neutral (the site LUT grades). Encodes: H.264 high/slow CRF 20 max 8M (1080), CRF 21 max 4M (720); VP9 good/cpu-used 2 CRF 31 cap 6M (1080), CRF 33 cap 3M (720); keyframe every 1 s, faststart. Poster = loop frame 0 at 960×540. Rebuilds the manifest when writing to public/clips.
+- Ingested files carry comment `schwe-ingest:<source>@<start>s`; placeholders (untagged) are replaced freely, ingested footage only with --force. HDR sources (bt2020 / HLG / PQ) are refused: export SDR Rec.709 from Resolve first. Warnings for < 1080p, portrait, and non-30/60 fps sources.
+- Verified with a time-encoded source (luma = 16 × t): loop's last frame = source 10.94 s, frame 0 = 11.00 s (one frame on), frame 30 = 2.00 s.
+- `npm run clips:sheet -- [--city] [--real] [--dir] [--out review/contact-sheet.jpg]`: one row per clip: start | end (loop seam) | middle | in a drop (inverted both ways, 150 px tall = a drift drop's city on a 1080p screen, at actual size). review/ is gitignored.
+- scripts/lib/ffmpeg.mjs: shared run/probe/font helpers (probe parses `ffmpeg -i`, no ffprobe needed).

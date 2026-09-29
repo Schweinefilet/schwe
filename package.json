@@ -13,6 +13,8 @@
     "smoke": "node scripts/smoke.mjs",
     "clips:placeholders": "node scripts/generate-placeholders.mjs",
     "clips:manifest": "node scripts/build-manifest.mjs",
+    "clips:ingest": "node scripts/ingest-clip.mjs",
+    "clips:sheet": "node scripts/contact-sheet.mjs",
     "deploy": "npm run build && npx wrangler pages deploy dist --project-name schwe"
   },
   "dependencies": {
