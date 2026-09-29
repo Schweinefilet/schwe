@@ -100,3 +100,10 @@
 - Camera path (core/cameraPath.js, tested): per-axis cubic Hermite over timeline time with Steffen tangents: continuous velocity, no overshoot, identical keys = exact hold entered/left at rest, key `speed` scales velocity. Replaces index-parameterised Catmull-Rom + per-segment eases (speed jumps at every key and a standing start out of each hold). The camera reads state.time directly; no pathT tween.
 - Measured at 1080p, 0.025-unit steps: worst speed jump per step 200% → 25%; steps over 20%: 10 → 7 (the remaining are smooth accelerations out of holds).
 - UI theme decided: dreamy + smooth, white + pastel colors. Not applied yet; open question whether it covers only the UI layer or also the scene/grade.
+
+## 2026-09-29 — The word is found in the rain, not revealed
+- The word's drops exist from the first frame (rig.wordReveal / uReveal removed) and are drawn exactly like frozen rain: rain brightness range (0.55–1.0, was 0.8–1.2), radii within RAIN.radius (clamped beadAngle × depth: grow with depth up to 0.03, then shrink with distance like any rain), same fog, near fade, and the rain box's face fade (uBoxCenter is now a shared global uniform).
+- Depth along each sight line: 2–9 from the eye, density ∝ depth (depthPower 1). Word drops fade out beyond 7–9 units from the camera (ALIGN.visibleWithin): seen from farther, hundreds of sub-pixel drops bunch into a visible band; far rain is specks anyway, so none missing is noticeable.
+- Word axis turned 40° left of the drift line (ALIGN_YAW) and the eye moved to [-3, 4.8, -41], so the drift and dive never look down the word's axis and stay ≥ 9.4 from its drops. Swing-in comes from above (+1.8) so the approach sees the drops spread, not as a flat strip.
+- Word frame helper inWordFrame(origin, [x, y, z]): target, swing-in, falling-drop start, puddle and beat-7 camera keys are all expressed in the word's frame, so they turn with it.
+- Checked in screenshots: nothing at 8.4–11.6; a loose patch coheres 12.0–12.75; the word at 13.0 (landscape and portrait); scattered by 13.3.

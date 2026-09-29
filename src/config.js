@@ -86,17 +86,36 @@ const D = HERO_POSITIONS[DIVE_DROP_INDEX]
 export const CAMERA_FOV = 50 // vertical, degrees
 
 // Beat 6. From `eye` looking at `target`, the scattered drops spell `text`.
-// The camera passes through the eye (slowing, never stopping): the word exists for a moment, then
-// the parallax scatters it again. A visitor who notices it can scroll back.
+// The word's drops are ordinary frozen rain: present from the start, rain-sized, shaded and faded
+// exactly like the field. Each sits somewhere along the sight line from one eye point through a point
+// of a letter, spread from near to far, so only from that eye do they line up into the word. The
+// camera passes through the eye (slowing, never stopping) and the parallax scatters it again.
+// The word's axis is turned ALIGN.yaw off the drift line, so the drift and dive see its drops from the
+// side, spread across the view like rain, instead of looking down the axis at a clump.
+const ALIGN_YAW = 40 // degrees, to the left of the drift direction (-z)
+const yaw = (ALIGN_YAW * Math.PI) / 180
+const AXIS = { fwd: [-Math.sin(yaw), 0, -Math.cos(yaw)], right: [Math.cos(yaw), 0, -Math.sin(yaw)] }
+// A point given in the word's frame (x right, y up, z back toward the viewer) relative to `origin`.
+const inWordFrame = (origin, [x, y, z]) => [
+  origin[0] + AXIS.right[0] * x - AXIS.fwd[0] * z,
+  origin[1] + y,
+  origin[2] + AXIS.right[2] * x - AXIS.fwd[2] * z,
+]
+// 3 units left of the drift line: the word's nearest drops stay beyond visibleWithin from the dive.
+const EYE = [-3, 4.8, -41]
 export const ALIGN = {
   text: 'schwe',
-  eye: [0, 4.8, -41],
-  target: [0, 4.8, -60],
+  eye: EYE,
+  target: inWordFrame(EYE, [0, 0, -19]),
   fov: CAMERA_FOV,
-  depth: [3.5, 18], // drops sit at a random distance from the eye in this range
+  depth: [2, 9], // drops sit at a distance from the eye in this range
+  // Word drops fade out beyond this distance from the camera (from, to). Far rain is sub-pixel specks,
+  // so a few missing is invisible, but seen from afar the word's drops would bunch into a dense band.
+  visibleWithin: [7, 9], // the dive's closest approach to the word's drops is 9.4
+  depthPower: 1, // density along each sight line ∝ depth^power: 1 keeps more drops near, where they read
   widthFrac: 0.42, // word width as a share of the screen width…
   maxHeightFrac: 0.28, // …unless that would make it taller than this share of the screen height
-  beadAngle: 0.0032, // bead radius as an angle seen from the eye (≈2.5 px at 720p, 16:9; scaled with the word)
+  beadAngle: 0.0032, // target bead radius as seen from the eye (≈2.5 px at 720p); radii stay within RAIN.radius
   count: { high: 900, medium: 650, low: 450 }, // sparse: found, not announced
   fallDepth: 9.4, // distance from the eye of the one drop that falls in beat 7 (puddle is below it)
   arrive: 13, // camera passes the eye
@@ -123,8 +142,10 @@ export const SPLASH = {
 export const WATER = { reflGain: 4, deep: [0.004, 0.006, 0.009], transGain: 2 }
 
 // Where the falling drop starts until the word is laid out (AlignmentWord replaces it with the exact
-// word sample it picks). The impact point is straight below.
-export const FALL_START_DEFAULT = [0, 4.6, -50.4]
+// word sample it picks, fallDepth along the axis, just below its middle). The impact point is below.
+export const FALL_START_DEFAULT = inWordFrame(EYE, [0, -0.2, -ALIGN.fallDepth])
+const FALL = FALL_START_DEFAULT
+const FALL_GROUND = [FALL[0], 0, FALL[2]]
 
 // Camera waypoints. Position and look target are smooth functions of timeline time through these
 // keys (core/cameraPath.js): velocity is continuous everywhere and never overshoots. `speed` below 1
@@ -162,15 +183,16 @@ export const CAMERA_KEYS = [
   { at: 9.4,  pos: DIVE_EYE,                             look: DIVE_AIM },               // drop fills the frame
   { at: 10.6, pos: DIVE_EYE,                             look: DIVE_AIM },               // inside the city
   { at: 11.5, pos: [D[0] - 1.6, D[1] + 0.6, D[2] + 1.8], look: DIVE_AIM },               // pulled back out, off the word's axis
-  // Swing in from the side: parallax keeps the word scrambled until the last stretch of the approach.
-  { at: 12.3, pos: [ALIGN_EYE[0] - 2.4, ALIGN_EYE[1] + 0.9, ALIGN_EYE[2] + 3.2], look: [ALIGN_TARGET[0] - 1.5, ALIGN_TARGET[1], ALIGN_TARGET[2]] },
+  // Swing in from the side and from above: parallax keeps the word scrambled until the last stretch,
+  // and seen from above its drops spread out instead of lining up into a flat strip.
+  { at: 12.3, pos: inWordFrame(ALIGN_EYE, [-2.4, 1.8, 3.2]), look: inWordFrame(ALIGN_TARGET, [-1.5, 0, 0]) },
   { at: ALIGN_AT, pos: ALIGN_EYE,                        look: ALIGN_TARGET, speed: ALIGN.passSpeed }, // the word, for a moment
   // Beat 7: follow the falling drop down to a low, close view of the water. The look target is
   // blended onto the drop itself (rig.follow), so these keys only set where the camera stands.
-  { at: SPLASH_AT + 0.9, pos: [0.5, 3.1, -46.8],         look: ALIGN_TARGET },
-  { at: SPLASH_AT + 1.8, pos: [0.4, 0.9, -49.2],         look: [0, 0.4, -50.4] },
-  { at: SPLASH_AT + 2.5, pos: [0.28, 0.24, -49.6],       look: [0, 0.05, -50.4] },     // impact
-  { at: TIMELINE_END, pos: [0.2, 0.19, -49.8],           look: [0, 0.04, -50.4] },     // end
+  { at: SPLASH_AT + 0.9, pos: inWordFrame(FALL_GROUND, [0.5, 3.1, 3.6]),   look: ALIGN_TARGET },
+  { at: SPLASH_AT + 1.8, pos: inWordFrame(FALL_GROUND, [0.4, 0.9, 1.2]),   look: inWordFrame(FALL_GROUND, [0, 0.4, 0]) },
+  { at: SPLASH_AT + 2.5, pos: inWordFrame(FALL_GROUND, [0.28, 0.24, 0.8]), look: inWordFrame(FALL_GROUND, [0, 0.05, 0]) }, // impact
+  { at: TIMELINE_END, pos: inWordFrame(FALL_GROUND, [0.2, 0.19, 0.6]),     look: inWordFrame(FALL_GROUND, [0, 0.04, 0]) }, // end
 ]
 
 // Beat 5 timing, in timeline units. The drop's optics morph from ball lens to plain window

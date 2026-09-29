@@ -5,6 +5,7 @@ import { ALIGN, RAIN, SPLASH } from '../config.js'
 import { quality } from '../core/quality.js'
 import { rig } from '../core/rig.js'
 import { setFallStart } from '../core/fall.js'
+import { globalUniforms } from '../core/uniforms.js'
 import { sampleWord } from '../content/wordPoints.js'
 import envChunk from '../shaders/env.glsl?raw'
 import vertexShader from '../shaders/align.vert.glsl?raw'
@@ -12,10 +13,11 @@ import rainFrag from '../shaders/rain.frag.glsl?raw'
 
 const _size = new THREE.Vector2()
 
-// Beat 6: anamorphic alignment. Each sampled point of the word becomes a ray from the target eye;
-// a drop sits at a random depth along it. From the eye every drop lands on its letter; from anywhere
-// else the drops look like more frozen rain. Radii grow with depth so all beads project to the same
-// size from the eye, which keeps the strokes even.
+// Beat 6: anamorphic alignment. Each sampled point of the word becomes a ray from the eye; a drop
+// sits at a random depth along it, near to far. From the eye every drop lands on its letter; from
+// anywhere else they are frozen rain. Radii stay within the rain's own range: up to where that allows,
+// they grow with depth so strokes read evenly from the eye; beyond, drops shrink with distance like
+// any other rain.
 export default function AlignmentWord() {
   const aspect = useThree((s) => Math.round((s.size.width / s.size.height) * 20) / 20) // rebuild on real shape changes only
   const [word, setWord] = useState(null)
@@ -66,15 +68,18 @@ export default function AlignmentWord() {
       const x = word.points[i * 2] * halfW
       const y = word.points[i * 2 + 1] * halfW
       dir.copy(forward).addScaledVector(right, x).addScaledVector(up, y).normalize()
-      let t = ALIGN.depth[0] + rand() * (ALIGN.depth[1] - ALIGN.depth[0])
-      let radius = beadAngle * t * (0.8 + rand() * 0.4)
+      // Depth with density along the ray ∝ t^depthPower (inverse-CDF sampling).
+      const k = ALIGN.depthPower + 1
+      const [a, b] = ALIGN.depth
+      let t = (a ** k + rand() * (b ** k - a ** k)) ** (1 / k)
+      let radius = THREE.MathUtils.clamp(beadAngle * t * (0.8 + rand() * 0.4), RAIN.radius[0], RAIN.radius[1])
       if (i === fallIndex) {
         t = ALIGN.fallDepth
         radius = SPLASH.fallRadius
       }
       offsets.set([eye.x + dir.x * t, eye.y + dir.y * t, eye.z + dir.z * t], i * 3)
       params[i * 4 + 0] = radius
-      params[i * 4 + 1] = 0.8 + rand() * 0.4
+      params[i * 4 + 1] = 0.55 + rand() * 0.45 // the rain's brightness range
     }
     const g = new THREE.InstancedBufferGeometry()
     const quad = new THREE.PlaneGeometry(1, 1)
@@ -100,8 +105,9 @@ export default function AlignmentWord() {
         uniforms: {
           uResolution: { value: new THREE.Vector2(1, 1) },
           uFogDensity: { value: RAIN.fogDensity },
-          uGlow: { value: 1 },
-          uReveal: { value: 0 },
+          uBoxCenter: globalUniforms.uBoxCenter,
+          uBoxSize: { value: new THREE.Vector3(...RAIN.boxSize) },
+          uVisible: { value: new THREE.Vector2(...ALIGN.visibleWithin) },
           uLensGain: { value: RAIN.lensGain },
           uReflGain: { value: RAIN.reflGain },
           uSpec: { value: RAIN.spec },
@@ -117,7 +123,6 @@ export default function AlignmentWord() {
   useFrame(({ gl }) => {
     gl.getDrawingBufferSize(_size)
     material.uniforms.uResolution.value.copy(_size)
-    material.uniforms.uReveal.value = rig.wordReveal
     // Once the drop starts to fall, its bead leaves the word (Splash draws the moving drop).
     if (geometry) {
       const attr = geometry.getAttribute('aParams')

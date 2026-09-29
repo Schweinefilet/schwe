@@ -34,9 +34,8 @@ export function buildMasterTimeline() {
   tl.to(rig, { cityType: 0, duration: 0.25 }, DIVE.typeOut)
   tl.to(rig, { dive: 0, duration: DIVE.outEnd - DIVE.outStart, ease: 'power1.inOut' }, DIVE.outStart)
 
-  // Beat 6: the word's drops join the field after the dive. Nothing announces the word: no dimming,
-  // no glint. It is there to be found as the camera passes the eye.
-  tl.to(rig, { wordReveal: 1, duration: 0.6, ease: 'sine.inOut' }, 11.9) // joins while the camera is well off-axis
+  // Beat 6 has nothing to animate: the word's drops are ordinary frozen rain from the first frame, and
+  // the word exists only where the camera passes the eye.
 
   // Beat 7: time resumes for one drop. The camera turns to it and follows it down; at the water the
   // baked splash takes over, rings spread, and everything fades to black.

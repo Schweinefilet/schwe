@@ -49,7 +49,7 @@ export default function Rain() {
       uTimeScale: globalUniforms.uTimeScale,
       uShutter: { value: RAIN.shutter },
       uWind: { value: new THREE.Vector2(...RAIN.wind) },
-      uBoxCenter: { value: new THREE.Vector3() },
+      uBoxCenter: globalUniforms.uBoxCenter,
       uBoxSize: { value: new THREE.Vector3(...RAIN.boxSize) },
       uResolution: { value: new THREE.Vector2(1, 1) },
       uFogDensity: { value: RAIN.fogDensity },

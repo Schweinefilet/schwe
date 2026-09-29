@@ -1,11 +1,12 @@
-// The alignment drops: frozen beads at fixed world positions, drawn exactly like frozen rain
-// (same fragment shader, streak length 0) so they are indistinguishable from the field until the
-// camera reaches the one viewpoint where they spell the word.
+// The alignment drops: frozen beads at fixed world positions, drawn exactly like frozen rain (same
+// fragment shader, streak length 0, same fog, near fade and box-face fade), so they are part of the
+// field from the first frame until the camera reaches the one viewpoint where they spell the word.
 
 uniform vec2 uResolution;
 uniform float uFogDensity;
-uniform float uGlow;      // brightness pulse when the word locks in
-uniform float uReveal;    // 0 → 1 after the dive: the word's drops join the field only then
+uniform vec3 uBoxCenter;  // the rain field's box (shared with Rain): fade at its faces like rain
+uniform vec3 uBoxSize;
+uniform vec2 uVisible;    // fade out between these distances from the camera (see ALIGN.visibleWithin)
 
 attribute vec3 aOffset;   // world position
 attribute vec4 aParams;   // x: radius (world), y: brightness
@@ -18,11 +19,13 @@ varying float vAlpha;
 void main() {
   vec4 v = viewMatrix * vec4(aOffset, 1.0);
   float depth = -v.z;
+  vec3 e = abs(aOffset - uBoxCenter) / (0.5 * uBoxSize);
+  float edge = 1.0 - smoothstep(0.75, 1.0, max(max(e.x, e.y), e.z));
   vAlpha = 0.0;
   vLocal = vec2(0.0);
   vLen = 0.0;
   vRadius = 1.0;
-  if (depth < 0.05) {
+  if (depth < 0.05 || edge <= 0.0 || depth > uVisible.y) {
     gl_Position = vec4(2.0, 2.0, 2.0, 1.0);
     return;
   }
@@ -38,7 +41,6 @@ void main() {
 
   vLocal = local;
   vRadius = r;
-  // The drift flies close to the word's sight line, where the word would already read in the
-  // distance; the drops join the field only after the dive, while the camera is well off-axis.
-  vAlpha = uReveal * exp(-depth * uFogDensity) * smoothstep(0.6, 3.0, depth) * (rTrue / r) * aParams.y * uGlow;
+  float far = 1.0 - smoothstep(uVisible.x, uVisible.y, depth);
+  vAlpha = edge * far * exp(-depth * uFogDensity) * smoothstep(0.6, 3.0, depth) * (rTrue / r) * aParams.y;
 }

@@ -1,4 +1,5 @@
 import gsap from 'gsap'
+import * as THREE from 'three'
 import { FREEZE_SECONDS } from '../config.js'
 
 // Uniforms shared by reference across every material that needs them.
@@ -7,6 +8,9 @@ import { FREEZE_SECONDS } from '../config.js'
 export const globalUniforms = {
   uTimeScale: { value: 1 },
   uSimTime: { value: 0 },
+  // Centre of the rain field's box (it tracks the camera). Rain wraps and fades at its faces; the
+  // word's drops fade at the same faces, so they appear and vanish exactly like rain.
+  uBoxCenter: { value: new THREE.Vector3() },
 }
 
 let frozen = false

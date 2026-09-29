@@ -2,7 +2,6 @@
 const INITIAL = {
   dive: 0, // dive drop optics: 0 ball lens, 1 plain window onto the upright clip
   cityType: 0, // opacity of the city / local time / weather type
-  wordReveal: 0, // the alignment drops fade into the field after the dive
   follow: 0, // camera look target: 0 its spline, 1 the falling drop
   fall: 0, // falling drop: 0 frozen in the word, 1 at the water (hand-off to the baked splash)
   splash: 0, // baked splash progress 0..1 (first to last frame)
