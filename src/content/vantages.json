@@ -1,0 +1,52 @@
+{
+  "_about": "Each city drop looks from `from` toward its landmarks (`toward`; with two, their middle), the view the user chose on 2026-09-29. Coordinates are OpenStreetMap's (Nominatim lookups, 2026-09-29), with the OSM element each came from.",
+  "sydney": {
+    "from": { "name": "Mrs Macquarie's Chair", "at": [-33.8597064, 151.222565], "osm": "node/13887214" },
+    "toward": [
+      { "name": "Sydney Opera House", "at": [-33.857198, 151.2151234], "osm": "relation/9596872" },
+      { "name": "Sydney Harbour Bridge", "at": [-33.8521165, 151.2107812], "osm": "relation/3178788" }
+    ]
+  },
+  "tokyo": {
+    "from": { "name": "Azuma Bridge (Azumabashi), Sumida River", "at": [35.7101071, 139.7989311], "osm": "way/554057521" },
+    "toward": [{ "name": "Tokyo Skytree", "at": [35.7100543, 139.8107141], "osm": "way/288269147" }]
+  },
+  "hong-kong": {
+    "from": { "name": "Avenue of Stars, Tsim Sha Tsui", "at": [22.2941468, 114.1757887], "osm": "relation/14947605" },
+    "toward": [{ "name": "International Finance Centre, Central", "at": [22.2853762, 114.1590347], "osm": "relation/3826645" }]
+  },
+  "mumbai": {
+    "from": { "name": "Girgaon Chowpatty, Marine Drive", "at": [18.9523652, 72.8219144], "osm": "node/14101252979" },
+    "toward": [{ "name": "Nariman Point", "at": [18.927089, 72.8235859], "osm": "node/1640185017" }]
+  },
+  "istanbul": {
+    "from": { "name": "Galata Tower", "at": [41.0256406, 28.9742134], "osm": "way/23236783" },
+    "toward": [
+      { "name": "Süleymaniye Mosque", "at": [41.0162287, 28.9639548], "osm": "relation/1564032" },
+      { "name": "Hagia Sophia", "at": [41.0085046, 28.9800112], "osm": "way/109862851" }
+    ]
+  },
+  "paris": {
+    "from": { "name": "Place du Trocadéro", "at": [48.8623703, 2.2880959], "osm": "way/595908371" },
+    "toward": [{ "name": "Eiffel Tower", "at": [48.8582599, 2.2945006], "osm": "way/5013364" }]
+  },
+  "london": {
+    "from": { "name": "Waterloo Bridge", "at": [51.5082645, -0.1165949], "osm": "way/208169532" },
+    "toward": [
+      { "name": "London Eye", "at": [51.5032255, -0.1158352], "osm": "node/6202085009" },
+      { "name": "Elizabeth Tower", "at": [51.5006944, -0.1245749], "osm": "way/123557148" }
+    ]
+  },
+  "sao-paulo": {
+    "from": { "name": "Ponte do Morumbi", "at": [-23.6183629, -46.6995758], "osm": "way/163655388" },
+    "toward": [{ "name": "Ponte Estaiada (Octávio Frias de Oliveira)", "at": [-23.6127112, -46.6989359], "osm": "node/4385662275" }]
+  },
+  "new-york": {
+    "from": { "name": "Brooklyn Bridge Park, Pier 1", "at": [40.7008598, -73.9966225], "osm": "way/1257921507" },
+    "toward": [{ "name": "One World Trade Center", "at": [40.7129992, -74.0131894], "osm": "way/713565776" }]
+  },
+  "mexico-city": {
+    "from": { "name": "Estela de Luz, Paseo de la Reforma", "at": [19.4229409, -99.175854], "osm": "way/311593047" },
+    "toward": [{ "name": "Ángel de la Independencia", "at": [19.4270032, -99.1676682], "osm": "node/11875045317" }]
+  }
+}

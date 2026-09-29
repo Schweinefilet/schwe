@@ -179,3 +179,14 @@ test('moon tilt: at night a risen moon within the view is tilted into frame', as
   assert.equal(at(-5, 100), 15) // below the horizon
   assert.equal(at(50, 100, 100, false), 15) // daytime
 })
+
+test('vantages: bearings from each city view toward its landmarks', async () => {
+  const { bearing, meanBearing } = await import('../src/sky/astro.js')
+  const { viewBearing } = await import('../src/sky/inputs.js')
+  const views = JSON.parse(await (await import('node:fs/promises')).readFile(new URL('../src/content/vantages.json', import.meta.url), 'utf8'))
+  // Trocadéro → Eiffel Tower is south-east, Azumabashi → Skytree almost due east.
+  assert.ok(Math.abs(bearing(views.paris.from.at, views.paris.toward[0].at) - 134.3) < 0.5)
+  assert.ok(Math.abs(viewBearing(views.tokyo) - 90) < 2)
+  assert.ok(Math.abs(meanBearing([350, 10])) < 1e-9 || Math.abs(meanBearing([350, 10]) - 360) < 1e-9)
+  for (const [id, v] of Object.entries(views)) if (id !== '_about') assert.ok(Number.isFinite(viewBearing(v)), id)
+})

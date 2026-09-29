@@ -1,6 +1,7 @@
 import cities from './content/cities.json'
 import { SRGB_RGB } from './sky/spectrum.js'
 import cityGlowAtlas from './content/cityGlow.json'
+import vantages from './content/vantages.json'
 import { buildDrift } from './core/drift.js'
 import { smoothKeys } from './core/cameraPath.js'
 
@@ -317,9 +318,11 @@ export const SKY = {
   refreshDegrees: 0.25, // re-render a city's sky once its sun or moon has moved this far
   // Which way the city view faces. The drop's axis (camera → drop) maps to this direction, so the
   // lens inverts it exactly as it inverted footage. Moon's azimuth once the sun is below moonBelow.
-  // At night, a moon that is up and within `halfWidth` degrees of the view's direction is tilted into
-  // frame: the view looks up to `below` degrees under it (at most `max`), never lower than `pitch`.
-  facing: { pitch: 15, moonBelow: -12, moonTilt: { halfWidth: 40, below: 10, max: 60 } },
+  // Each drop looks from its city's vantage toward its landmarks (`views`, content/vantages.json; the
+  // user's choice of each city's best side), `pitch` degrees up. At night, a moon that is up and within
+  // `halfWidth` degrees of that direction is tilted into frame: the view looks up to `below` degrees
+  // under it (at most `max`), never lower than `pitch`. The sun and moon show only when on that side.
+  facing: { pitch: 15, moonBelow: -12, moonTilt: { halfWidth: 40, below: 10, max: 60 }, views: vantages },
   // Camera exposure: a metered sky luminance L (cd/m²) comes out at key × (L / ref)^range, so the
   // 18 stops between a clear noon and a city night compress to about 3.6.
   exposure: { key: 0.2, ref: 3000, range: 0.2 },

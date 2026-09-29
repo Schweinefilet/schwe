@@ -107,3 +107,21 @@ export function sunLux(altDeg) {
   const [x1, y1] = SUN_LUX[i]
   return 10 ** (y0 + ((a - x0) / (x1 - x0)) * (y1 - y0))
 }
+
+// Initial great-circle bearing from a to b ([lat, lon], degrees), clockwise from north like SunCalc's
+// azimuths.
+export function bearing([lat1, lon1], [lat2, lon2]) {
+  const p1 = lat1 * RAD
+  const p2 = lat2 * RAD
+  const dl = (lon2 - lon1) * RAD
+  const y = Math.sin(dl) * Math.cos(p2)
+  const x = Math.cos(p1) * Math.sin(p2) - Math.sin(p1) * Math.cos(p2) * Math.cos(dl)
+  return ((Math.atan2(y, x) / RAD) % 360 + 360) % 360
+}
+
+// The middle of several bearings (their circular mean), degrees.
+export function meanBearing(bearings) {
+  const x = bearings.reduce((s, b) => s + Math.cos(b * RAD), 0)
+  const y = bearings.reduce((s, b) => s + Math.sin(b * RAD), 0)
+  return ((Math.atan2(y, x) / RAD) % 360 + 360) % 360
+}

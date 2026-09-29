@@ -1,5 +1,5 @@
 import { getMoonIllumination, getMoonPosition, getPosition } from 'suncalc'
-import { cityToJ2000, dirFromAltAz, lommelSeeligerPhase, moonPhaseLaw, sunLux } from './astro.js'
+import { bearing, cityToJ2000, dirFromAltAz, lommelSeeligerPhase, meanBearing, moonPhaseLaw, sunLux } from './astro.js'
 
 // Everything a city's sky is computed from, for one moment: sun and moon from SunCalc, stars from
 // sidereal time, weather from the one Open-Meteo request. `sky` is SKY from config.js (passed in so
@@ -35,10 +35,13 @@ export function skyInputs({ city, date, weather = null, override = {}, sky }) {
   const metered = meteredLuminance({ sunAlt: sunPos.altitude, moonAlt: moonPos.altitude, moonLaw, cloud: 0, rain: 0, cityZenith: glowZenith }, sky)
   const exposure = exposureFor(metered, sky.exposure)
 
-  // The view faces the sun, or the moon once the sun is well down and the moon is up.
+  // The view faces the city's chosen vantage (sky.facing.views, content/vantages.json): from there toward
+  // its landmarks. A city without one faces the sun, or the moon once the sun is well down and it is up.
   const night = sunPos.altitude < sky.facing.moonBelow
   const useMoon = night && moonPos.altitude > 0
-  const yaw = useMoon ? moonPos.azimuth : sunPos.azimuth
+  const view = sky.facing.views?.[city.id]
+  const yaw = view ? viewBearing(view) : useMoon ? moonPos.azimuth : sunPos.azimuth
+  const toward = view ? 'view' : useMoon ? 'moon' : 'sun'
   const pitch = moonTiltPitch({ night, moon: moonPos, yaw, facing: sky.facing })
 
   const moonRadius = Math.asin(MOON_RADIUS_KM / moonPos.distance)
@@ -58,7 +61,7 @@ export function skyInputs({ city, date, weather = null, override = {}, sky }) {
     fog,
     metered,
     exposure,
-    facing: { yaw, pitch, toward: useMoon ? 'moon' : 'sun' },
+    facing: { yaw, pitch, toward },
     cityBasis: cityBasis(yaw, pitch),
     equatorial: cityToJ2000(date, city.lat, city.lon),
     // Light, already multiplied by the exposure. Colours are linear RGB of unit luminance.
@@ -113,6 +116,9 @@ export const exposureFor = (L, { key, ref, range }) => (key * (L / ref) ** range
 
 // Columns: the city-frame directions the drop's axis, right and up map to. A rotation, so the lens
 // still inverts the image exactly as the optics say.
+// A vantage's facing: the bearing from it to its landmark, or to the middle of its landmarks.
+export const viewBearing = (view) => meanBearing(view.toward.map((t) => bearing(view.from.at, t.at)))
+
 // How far up the view looks: `facing.pitch`, or at night, when the moon is up and within
 // moonTilt.halfWidth of the view's direction, high enough to hold it `moonTilt.below` above the centre.
 export function moonTiltPitch({ night, moon, yaw, facing }) {
