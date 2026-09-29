@@ -1,37 +1,29 @@
 import { useMemo } from 'react'
 import { useFrame } from '@react-three/fiber'
 import * as THREE from 'three'
-import { CAMERA_KEYS } from '../config.js'
+import { CAMERA_KEYS, DIVE_DROP, HERO } from '../config.js'
+import { createCameraPath } from '../core/cameraPath.js'
 import { rig } from '../core/rig.js'
-import { fall, fallPosition } from '../core/fall.js'
+import { state } from '../core/state.js'
+import { fallPosition } from '../core/fall.js'
 
 const _pos = new THREE.Vector3()
 const _look = new THREE.Vector3()
+const _dive = new THREE.Vector3(...DIVE_DROP)
 
 const PORTRAIT_PULLBACK = 1.1 // at 390×844 the camera stands ~1.6× farther from the splash
-
-const same = (a, b) => a.every((v, i) => v === b[i])
+const NEAR = 0.02
+// The drop's proxy mesh reaches 1.06 radii; the camera stops 1.28 radii from its centre in the dive.
+const PROXY_RADIUS = 1.06 * HERO.radius
 
 export default function CameraRig() {
-  const { posCurve, lookCurve, holds } = useMemo(() => {
-    const curve = (key) =>
-      new THREE.CatmullRomCurve3(CAMERA_KEYS.map((k) => new THREE.Vector3(...k[key])), false, 'centripetal')
-    // Segment i is a hold when keys i and i+1 are identical: a spline would loop there, so it is skipped.
-    const holds = CAMERA_KEYS.map((k, i) => i < CAMERA_KEYS.length - 1 && same(k.pos, CAMERA_KEYS[i + 1].pos) && same(k.look, CAMERA_KEYS[i + 1].look))
-    return { posCurve: curve('pos'), lookCurve: curve('look'), holds }
-  }, [])
+  const path = useMemo(() => createCameraPath(CAMERA_KEYS), [])
+  const out = useMemo(() => ({ pos: _pos, look: _look }), [])
 
   useFrame(({ camera }) => {
-    const seg = Math.min(Math.floor(rig.pathT), CAMERA_KEYS.length - 1)
-    if (holds[seg]) {
-      _pos.set(...CAMERA_KEYS[seg].pos)
-      _look.set(...CAMERA_KEYS[seg].look)
-    } else {
-      // getPoint (not getPointAt) is parameterised per control point, so key i sits at i / (keys - 1).
-      const u = rig.pathT / (CAMERA_KEYS.length - 1)
-      posCurve.getPoint(u, _pos)
-      lookCurve.getPoint(u, _look)
-    }
+    // Position and look are functions of timeline time, so scrolling back retraces them exactly.
+    path.sample(state.time, out)
+
     // Beat 7: turn toward the falling drop and keep it framed on the way down.
     if (rig.follow > 0) {
       _look.lerp(fallPosition(rig.fall), rig.follow) // computed here too: no one-frame lag
@@ -43,6 +35,14 @@ export default function CameraRig() {
     }
     camera.position.copy(_pos)
     camera.lookAt(_look)
+
+    // The dive drop is small, so the camera gets closer to it than the default near plane: pull the
+    // near plane in only while that is true, keeping depth precision everywhere else.
+    const near = THREE.MathUtils.clamp(0.5 * (_pos.distanceTo(_dive) - PROXY_RADIUS), 0.002, NEAR)
+    if (Math.abs(near - camera.near) > 1e-5) {
+      camera.near = near
+      camera.updateProjectionMatrix()
+    }
   })
 
   return null

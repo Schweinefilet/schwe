@@ -1,5 +1,5 @@
 import gsap from 'gsap'
-import { ALIGN, BEATS, CAMERA_KEYS, DIVE, SPLASH, TIMELINE_END } from '../config.js'
+import { BEATS, DIVE, SPLASH, TIMELINE_END } from '../config.js'
 import { rig } from './rig.js'
 import { setFrozen } from './uniforms.js'
 import { state } from './state.js'
@@ -26,11 +26,7 @@ export function buildMasterTimeline() {
   BEATS.forEach((b) => tl.addLabel(b.name, b.at))
   tl.addLabel('end', TIMELINE_END)
 
-  // Camera: advance along the spline one key per segment.
-  for (let i = 1; i < CAMERA_KEYS.length; i++) {
-    const prev = CAMERA_KEYS[i - 1]
-    tl.to(rig, { pathT: i, duration: CAMERA_KEYS[i].at - prev.at, ease: CAMERA_KEYS[i].ease ?? 'none' }, prev.at)
-  }
+  // The camera reads the timeline's time directly (CameraRig + core/cameraPath.js); nothing to tween.
 
   // Beat 5: the dive drop's optics turn from ball lens into a plain window and back.
   tl.to(rig, { dive: 1, duration: DIVE.inEnd - DIVE.inStart, ease: 'power1.inOut' }, DIVE.inStart)
@@ -38,11 +34,9 @@ export function buildMasterTimeline() {
   tl.to(rig, { cityType: 0, duration: 0.25 }, DIVE.typeOut)
   tl.to(rig, { dive: 0, duration: DIVE.outEnd - DIVE.outStart, ease: 'power1.inOut' }, DIVE.outStart)
 
-  // Beat 6: the rain field recedes as the camera settles on the eye, and the word glints as it locks.
+  // Beat 6: the word's drops join the field after the dive. Nothing announces the word: no dimming,
+  // no glint. It is there to be found as the camera passes the eye.
   tl.to(rig, { wordReveal: 1, duration: 0.6, ease: 'sine.inOut' }, 11.9) // joins while the camera is well off-axis
-  tl.to(rig, { rainFade: 0.45, duration: ALIGN.arrive - 12 }, 12)
-  tl.to(rig, { alignGlow: 1.9, duration: 0.12, ease: 'power2.out' }, ALIGN.arrive - 0.06)
-  tl.to(rig, { alignGlow: 1.25, duration: 0.6, ease: 'power2.inOut' }, ALIGN.arrive + 0.06)
 
   // Beat 7: time resumes for one drop. The camera turns to it and follows it down; at the water the
   // baked splash takes over, rings spread, and everything fades to black.

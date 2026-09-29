@@ -44,7 +44,10 @@ function loadData(base) {
           t.colorSpace = THREE.NoColorSpace
           t.minFilter = t.magFilter = THREE.NearestFilter
           t.generateMipmaps = false
-          resolve(t)
+          // Decode now, off the main thread, rather than during the first upload (a frame-long stall).
+          Promise.resolve(t.image.decode?.())
+            .catch(() => {})
+            .then(() => resolve(t))
         },
         undefined,
         reject
@@ -139,11 +142,21 @@ export default function Splash({ clips, rainCity }) {
   // Otherwise both compile on the frames they first appear: the fall's start and the impact.
   const { gl, camera, scene } = useThree()
   useEffect(() => prewarm(gl, drop.current, camera, scene, [poster]), [gl, camera, scene, poster, urls])
+  // The splash data arrives mid-drift, so its preparation is spread out: one texture upload per
+  // frame (each is 2048×648), then the shader compile.
+  const warmQueue = useRef([])
   useEffect(() => {
-    if (vat) prewarm(gl, vatMesh.current, camera, scene, [data.hi, data.lo, data.nrm])
+    if (!vat) return
+    warmQueue.current = [
+      () => gl.initTexture(data.hi),
+      () => gl.initTexture(data.lo),
+      () => gl.initTexture(data.nrm),
+      () => prewarm(gl, vatMesh.current, camera, scene),
+    ]
   }, [gl, camera, scene, vat, data])
 
   useFrame(() => {
+    warmQueue.current.shift()?.()
     if (urls) pinDrop(FALL_SLOT, state.time >= SPLASH.fallPinFrom && state.time <= SPLASH.impactAt)
     fallPosition(rig.fall)
     // Hand-off: the VAT's first frame holds the sim's own drop exactly where the falling drop ends.

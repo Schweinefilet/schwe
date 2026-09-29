@@ -7,8 +7,9 @@ import { stepSimTime } from './uniforms.js'
 export default function FrameDriver() {
   const advance = useThree((s) => s.advance)
   const gl = useThree((s) => s.gl)
-  // Dev hook: the renderer, for checking shader compiles and texture uploads per beat.
-  if (import.meta.env.DEV) window.__schwe = Object.assign(window.__schwe ?? {}, { gl })
+  const camera = useThree((s) => s.camera)
+  // Dev hook: the renderer and camera, for checking compiles, uploads and camera placement per beat.
+  if (import.meta.env.DEV) window.__schwe = Object.assign(window.__schwe ?? {}, { gl, camera })
 
   useEffect(() => {
     setAdvance(advance)

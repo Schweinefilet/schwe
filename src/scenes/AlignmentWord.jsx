@@ -117,7 +117,6 @@ export default function AlignmentWord() {
   useFrame(({ gl }) => {
     gl.getDrawingBufferSize(_size)
     material.uniforms.uResolution.value.copy(_size)
-    material.uniforms.uGlow.value = rig.alignGlow
     material.uniforms.uReveal.value = rig.wordReveal
     // Once the drop starts to fall, its bead leaves the word (Splash draws the moving drop).
     if (geometry) {

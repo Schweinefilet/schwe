@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Canvas } from '@react-three/fiber'
 import { OrbitControls } from '@react-three/drei'
+import { HERO } from '../config.js'
 import FrameDriver from '../core/FrameDriver.jsx'
 import { globalUniforms } from '../core/uniforms.js'
 import { loadManifest, clipUrls } from '../content/manifest.js'
@@ -52,14 +53,14 @@ export default function DropLab() {
       frameloop="never"
       dpr={[1, 2]}
       gl={{ antialias: false, preserveDrawingBuffer: true }}
-      camera={{ fov: 50, near: 0.01, far: 200, position: [0, 0, 1.1] }}
+      camera={{ fov: 50, near: 0.002, far: 200, position: [0, 0, 6 * HERO.radius] }}
       style={{ position: 'fixed', inset: 0, touchAction: 'none' }}
     >
       <FrameDriver />
       <Sky />
       <Rain />
       <HeroDrop position={[0, 0, 0]} slot={slot} />
-      <OrbitControls target={[0, 0, 0]} enableDamping minDistance={0.22} maxDistance={8} />
+      <OrbitControls target={[0, 0, 0]} enableDamping minDistance={1.2 * HERO.radius} maxDistance={8} />
       <Effects />
     </Canvas>
   )
