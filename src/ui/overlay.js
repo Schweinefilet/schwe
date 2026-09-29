@@ -3,5 +3,5 @@
 // them never causes a render.
 export const overlay = {
   labels: new Map(), // city id → label element (DropLabels.jsx)
-  outline: null, // the word's outline, once it exists (WordOutline.jsx)
+  sketch: null, // { canvas, ctx, grain }: the word's pencil sketch (WordSketch.jsx)
 }

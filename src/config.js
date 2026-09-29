@@ -136,11 +136,12 @@ export const ALIGN = {
   count: { high: 450, medium: 325, low: 225 }, // sparse: found, not announced
   fallDepth: 9.4, // distance from the eye of the one drop that falls in beat 7 (puddle is below it)
   arrive: 13, // camera passes the eye
+  chimeAt: 13 - 0.02, // the word's shimmer plays crossing this forward, and its sketch starts drawing
   passSpeed: 0.45, // camera speed at the eye relative to its average: a slow pass, not a stop
-  // A loop drawn around the word once the visitor stays on it (ui/WordOutline.jsx): within `window`
-  // timeline units of `arrive`, after `dwell` seconds without scrolling, drawn over `drawSeconds`.
-  // Stroke and glow widths in CSS px.
-  outline: { window: 0.15, dwell: 0.35, drawSeconds: 3.2, stroke: 1.3, glow: 9 },
+  // A pencil sketch around the word's silhouette (ui/pencilSketch.js): it draws in from chimeAt while the
+  // camera is within `until` units past the eye, and retracts `retract` times as fast once it leaves
+  // (either way). `margin`: how far the outline stands off the letters, px at the 240 px sampling size.
+  sketch: { until: 0.15, retract: 1.6, margin: 14, passes: { high: 7, medium: 6, low: 4 } },
 }
 // Beat 7. One drop of the word falls into a puddle on the ground (y = 0) directly below it.
 // The splash is a Mantaflow sim baked to a vertex animation texture (blender/splash/bake_splash.py).

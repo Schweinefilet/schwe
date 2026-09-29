@@ -4,7 +4,7 @@ import Experience from './scenes/Experience.jsx'
 import Loader from './ui/Loader.jsx'
 import CityType from './ui/CityType.jsx'
 import DropLabels from './ui/DropLabels.jsx'
-import WordOutline from './ui/WordOutline.jsx'
+import WordSketch from './ui/WordSketch.jsx'
 import EndType from './ui/EndType.jsx'
 import StillPage from './ui/StillPage.jsx'
 import { initScroll } from './core/scroll.js'
@@ -166,7 +166,7 @@ function Site({ clips, device, diveCity, rainCity }) {
       )}
       <div id="scroll-track" style={{ height: TRACK_HEIGHT }} />
       <DropLabels clips={clips} />
-      <WordOutline />
+      <WordSketch />
       <CityType clips={clips} cityId={diveCity ?? DEFAULT_DIVE_CITY} />
       <EndType clips={clips} rainCity={rainCity} />
       <div id="fade" />

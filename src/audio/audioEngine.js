@@ -238,7 +238,7 @@ const CUES = [
   { at: DIVE.outStart, dir: 1, play: () => whoosh({ from: 2400, to: 300, seconds: 0.8 }) },
   { at: DIVE.outEnd, dir: -1, play: () => whoosh({ from: 300, to: 2400, seconds: 0.9 }) },
   // The word gets a faint shimmer, not an announcement: it is meant to be found.
-  { at: ALIGN.arrive - 0.02, dir: 1, play: () => playFileOrSynth(AUDIO.files.align, () => chime([1567.98, 2093], 0.018, 2.2)) },
+  { at: ALIGN.chimeAt, dir: 1, play: () => playFileOrSynth(AUDIO.files.align, () => chime([1567.98, 2093], 0.018, 2.2)) },
   { at: SPLASH.fallAt, dir: 1, play: () => whoosh({ from: 180, to: 90, seconds: 1.6, peak: 0.12 }) },
   { at: SPLASH.impactAt, dir: 0, play: () => playFileOrSynth(AUDIO.files.splash, () => thud()) },
   { at: SPLASH.ringStart, dir: 1, play: () => bloop(220) },

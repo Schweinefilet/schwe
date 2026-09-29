@@ -8,9 +8,9 @@ import { state } from '../core/state.js'
 import { setFallStart } from '../core/fall.js'
 import { globalUniforms } from '../core/uniforms.js'
 import { envUniforms } from '../content/backdrop.js'
-import { sampleWord } from '../content/wordPoints.js'
+import { sampleWord, wordContours } from '../content/wordPoints.js'
 import { overlay } from '../ui/overlay.js'
-import { outlinePath } from '../ui/WordOutline.jsx'
+import { drawSketch, sketchStrokes } from '../ui/pencilSketch.js'
 import envChunk from '../shaders/env.glsl?raw'
 import vertexShader from '../shaders/align.vert.glsl?raw'
 import rainFrag from '../shaders/rain.frag.glsl?raw'
@@ -19,10 +19,6 @@ const _size = new THREE.Vector2()
 const _o = new THREE.Vector3()
 const _x = new THREE.Vector3()
 const _y = new THREE.Vector3()
-const smoothstep = (a, b, x) => {
-  const t = Math.min(Math.max((x - a) / (b - a), 0), 1)
-  return t * t * (3 - 2 * t)
-}
 // Mean distance of the word's drops from the eye (density along each sight line ∝ depth^depthPower).
 const MEAN_DEPTH = (() => {
   const [a, b] = ALIGN.depth
@@ -114,11 +110,27 @@ export default function AlignmentWord() {
 
   useEffect(() => () => geometry?.dispose(), [geometry])
 
-  // The outline's loop fits this word's shape.
+  // The pencil sketch around the word's silhouette: strokes built once, in the word's units.
+  const sketch = useRef({ strokes: null, total: 0, bounds: null, clock: 0, key: '' })
   useEffect(() => {
-    if (word) overlay.outline?.querySelectorAll('path').forEach((p) => p.setAttribute('d', outlinePath(word.aspect)))
-  }, [word])
-  const outline = useRef({ last: 0, still: 0, progress: 0 })
+    let cancelled = false
+    wordContours(ALIGN.text, ALIGN.sketch.margin).then(({ contours }) => {
+      if (cancelled) return
+      const { strokes, total } = sketchStrokes(contours, ALIGN.sketch.passes[quality.name])
+      const b = [Infinity, Infinity, -Infinity, -Infinity]
+      for (const { pts } of strokes)
+        for (let i = 0; i < pts.length; i += 2) {
+          b[0] = Math.min(b[0], pts[i])
+          b[1] = Math.min(b[1], pts[i + 1])
+          b[2] = Math.max(b[2], pts[i])
+          b[3] = Math.max(b[3], pts[i + 1])
+        }
+      Object.assign(sketch.current, { strokes, total, bounds: b })
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [])
 
   // Same bead shading as frozen rain; built by hand so uniforms stay shared (see Rain.jsx).
   const material = useMemo(
@@ -148,7 +160,7 @@ export default function AlignmentWord() {
   useFrame(({ gl, camera, size }, dt) => {
     gl.getDrawingBufferSize(_size)
     material.uniforms.uResolution.value.copy(_size)
-    if (geometry) placeOutline(outline.current, geometry.userData.frame, camera, size, dt)
+    if (geometry) placeSketch(sketch.current, geometry.userData.frame, camera, size, dt)
     // Once the drop starts to fall, its bead leaves the word (Splash draws the moving drop).
     if (geometry) {
       const attr = geometry.getAttribute('aParams')
@@ -165,26 +177,24 @@ export default function AlignmentWord() {
   return <mesh geometry={geometry} material={material} frustumCulled={false} />
 }
 
-// The word's outline (ui/WordOutline.jsx). Once the camera has stayed within ALIGN.outline.window of
-// the eye for `dwell` seconds, a loop draws around the word; it fades as the camera moves off and is
-// drawn afresh on the next stay. It lies on the plane at the drops' mean depth, so from the eye it
-// frames the word exactly, and just off the eye it moves with the drops.
-function placeOutline(run, frame, camera, size, dt) {
-  const svg = overlay.outline
-  if (!svg) return
-  const O = ALIGN.outline
-  const near = 1 - smoothstep(O.window * 0.5, O.window, Math.abs(state.time - ALIGN.arrive))
-  run.still = Math.abs(state.time - run.last) < 1e-5 ? run.still + dt : 0
-  run.last = state.time
-  if (near <= 0) run.progress = 0
-  else if (run.progress > 0 || run.still >= O.dwell) run.progress = Math.min(1, run.progress + dt / O.drawSeconds)
-  const alpha = near * Math.min(1, run.progress * 5)
-  if (alpha < 0.002) {
-    if (svg.style.visibility !== 'hidden') svg.style.visibility = 'hidden'
+// The word's pencil sketch (ui/pencilSketch.js). It starts drawing with the chime (ALIGN.chimeAt) while
+// the camera is at the word, and retracts, last stroke first, once it leaves in either direction. It
+// lies on the plane at the drops' mean depth, so from the eye it hugs the word exactly, and just off
+// the eye it moves with the drops.
+function placeSketch(run, frame, camera, size, dt) {
+  const el = overlay.sketch
+  if (!el || !run.strokes) return
+  const S = ALIGN.sketch
+  const on = state.time >= ALIGN.chimeAt && state.time <= ALIGN.arrive + S.until
+  run.clock = Math.min(Math.max(run.clock + (on ? dt : -dt * S.retract), 0), run.total)
+  const { canvas, ctx, grain } = el
+  if (run.clock <= 0) {
+    if (canvas.style.visibility !== 'hidden') canvas.style.visibility = 'hidden'
+    run.key = ''
     return
   }
   // Screen positions of the word's centre and of one unit along its x and y: an affine map from the
-  // loop's units to CSS px.
+  // word's units to CSS px.
   const toScreen = (v, x, y) => {
     const { eye, forward, right, up, halfW } = frame
     v.copy(eye).addScaledVector(forward, MEAN_DEPTH).addScaledVector(right, MEAN_DEPTH * halfW * x).addScaledVector(up, MEAN_DEPTH * halfW * y).project(camera)
@@ -193,16 +203,31 @@ function placeOutline(run, frame, camera, size, dt) {
   toScreen(_o, 0, 0)
   toScreen(_x, 1, 0)
   toScreen(_y, 0, 1)
-  const a = _x.x - _o.x
-  const b = _x.y - _o.y
-  const scale = Math.hypot(a, b)
-  const matrix = `matrix(${a} ${b} ${_y.x - _o.x} ${_y.y - _o.y} ${_o.x} ${_o.y})`
-  const drawn = 0.5 - 0.5 * Math.cos(Math.PI * run.progress) // eases in and out
-  for (const path of svg.querySelectorAll('path')) {
-    path.setAttribute('transform', matrix)
-    path.style.strokeDashoffset = 1 - drawn
-    path.style.strokeWidth = (path.classList.contains('word-outline__line') ? O.stroke : O.glow) / scale
+  const m = [_x.x - _o.x, _x.y - _o.y, _y.x - _o.x, _y.y - _o.y, _o.x, _o.y]
+  const key = `${run.clock.toFixed(3)} ${m.map((v) => v.toFixed(1)).join(' ')}`
+  if (key === run.key) return // nothing moved and nothing drew since the last frame
+  run.key = key
+
+  // The canvas covers only the sketch (plus room for the line and its glow), in 64 px steps.
+  const [bx0, by0, bx1, by1] = run.bounds
+  const xs = [bx0, bx1, bx0, bx1].map((x, i) => m[0] * x + m[2] * [by0, by0, by1, by1][i] + m[4])
+  const ys = [bx0, bx1, bx0, bx1].map((x, i) => m[1] * x + m[3] * [by0, by0, by1, by1][i] + m[5])
+  const left = Math.floor(Math.min(...xs) - 16)
+  const top = Math.floor(Math.min(...ys) - 16)
+  const w = Math.ceil((Math.max(...xs) + 16 - left) / 64) * 64
+  const h = Math.ceil((Math.max(...ys) + 16 - top) / 64) * 64
+  const dpr = Math.min(window.devicePixelRatio || 1, 2)
+  if (canvas.width !== w * dpr || canvas.height !== h * dpr) {
+    canvas.width = w * dpr
+    canvas.height = h * dpr
+    canvas.style.width = `${w}px`
+    canvas.style.height = `${h}px`
   }
-  svg.style.visibility = 'visible'
-  svg.style.opacity = alpha
+  canvas.style.transform = `translate3d(${left}px, ${top}px, 0)`
+  canvas.style.visibility = 'visible'
+  ctx.setTransform(1, 0, 0, 1, 0, 0)
+  ctx.clearRect(0, 0, canvas.width, canvas.height)
+  ctx.setTransform(dpr, 0, 0, dpr, -left * dpr, -top * dpr) // draw in screen CSS px: the grain stays put on screen
+  ctx.strokeStyle = grain
+  drawSketch(ctx, run.strokes, run.clock, m)
 }

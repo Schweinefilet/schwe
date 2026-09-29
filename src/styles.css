@@ -129,39 +129,19 @@ body {
   opacity: 0.85;
 }
 
-/* The word's outline: one loop drawn around "schwe" once the visitor stays on it. AlignmentWord.jsx
-   places it and sets its transform, stroke width, progress (dash offset) and opacity. */
-.word-outline {
+/* The word's pencil sketch: a canvas the size of the word's area, moved and drawn from the render loop
+   (AlignmentWord.jsx). White pencil lines with a soft pastel halo. */
+.word-sketch {
   position: fixed;
-  inset: 0;
-  width: 100%;
-  height: 100%;
+  left: 0;
+  top: 0;
   z-index: 1;
-  overflow: visible;
-  opacity: 0;
   visibility: hidden;
   pointer-events: none;
 }
 
-.word-outline path {
-  fill: none;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-  stroke-dasharray: 1;
-  stroke-dashoffset: 1;
-}
-
-.word-outline__line {
-  stroke: #fff;
-}
-
-.word-outline__glow {
-  filter: blur(9px);
-}
-
-.word-outline__glow path {
-  stroke: #e6e3ff; /* pastel lavender, as the drop labels */
-  opacity: 0.9;
+.word-sketch--glow {
+  filter: drop-shadow(0 0 4px rgba(230, 227, 255, 0.55));
 }
 
 /* Beat 7's answer: same type as the city, centred under the rings. Below #fade, so the fade to black
