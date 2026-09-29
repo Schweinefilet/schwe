@@ -11,8 +11,9 @@ export default function FrameDriver() {
   const advance = useThree((s) => s.advance)
   const gl = useThree((s) => s.gl)
   const camera = useThree((s) => s.camera)
-  // Dev hook: the renderer and camera, for checking compiles, uploads and camera placement per beat.
-  if (import.meta.env.DEV) window.__schwe = Object.assign(window.__schwe ?? {}, { gl, camera })
+  const scene = useThree((s) => s.scene)
+  // Dev hook: the renderer, camera and scene, for checking compiles, uploads and placement per beat.
+  if (import.meta.env.DEV) window.__schwe = Object.assign(window.__schwe ?? {}, { gl, camera, scene })
 
   useEffect(() => {
     setAdvance(advance)

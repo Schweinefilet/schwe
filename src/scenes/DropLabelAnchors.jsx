@@ -20,6 +20,10 @@ const smoothstep = (a, b, x) => {
 // drop's label does not return on the way out, since the corner type has just named its city.
 export default function DropLabelAnchors({ drops }) {
   useFrame(({ camera, size }) => {
+    // A drop the tier no longer shows (a live tier drop) takes its label with it.
+    for (const [city, el] of overlay.labels) {
+      if (el.style.visibility !== 'hidden' && !drops.some((d) => d.city === city)) el.style.visibility = 'hidden'
+    }
     const focal = size.height / 2 / Math.tan(THREE.MathUtils.degToRad(camera.fov / 2))
     for (const drop of drops) {
       const el = overlay.labels.get(drop.city)
