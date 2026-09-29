@@ -25,6 +25,18 @@ function paceTable() {
   const path = createCameraPath(CAMERA_KEYS)
   const out = { pos: null, look: null }
   const drops = visibleDrops(heroDropsFor(DEFAULT_DIVE_CITY), quality.heroDrops).map((d) => d.pos)
+  const view = (t) => {
+    path.sample(t, out)
+    const d = out.look.map((v, i) => v - out.pos[i])
+    const l = Math.hypot(...d)
+    return d.map((v) => v / l)
+  }
+  // Radians the view turns per unit of timeline time at t.
+  const turnAt = (t) => {
+    const a = view(t - 0.005)
+    const b = view(t + 0.005)
+    return Math.acos(Math.min(1, a[0] * b[0] + a[1] * b[1] + a[2] * b[2])) / 0.01
+  }
   return buildPaceTable((t) => path.sample(t, out).pos, drops, {
     from: TIMELINE_START,
     to: TIMELINE_END,
@@ -32,6 +44,10 @@ function paceTable() {
     max: PACE.max,
     nearDrop: PACE.nearDrop,
     brake: PACE.brake,
+    turnAt,
+    maxTurn: (PACE.maxTurn * Math.PI) / 180,
+    turnWindow: PACE.turnWindow,
+    round: PACE.round,
   })
 }
 

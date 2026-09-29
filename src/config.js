@@ -1,6 +1,8 @@
 import cities from './content/cities.json'
 import { SRGB_RGB } from './sky/spectrum.js'
 import cityGlowAtlas from './content/cityGlow.json'
+import { buildDrift } from './core/drift.js'
+import { smoothKeys } from './core/cameraPath.js'
 
 export const CITIES = cities
 
@@ -19,7 +21,11 @@ export const FREEZE_SECONDS = 1.5 // real time for uTimeScale to ease 1 → 0 (a
 // city drop is near (the camera within HERO.near of it, where its city shows), braking ahead of it at
 // most `brake` units/s². Wheel and trackpad input runs at most `bank` units ahead of the picture: the
 // rest of a hard flick is dropped instead of playing out for seconds after the hand has stopped.
-export const PACE = { max: 1.5, nearDrop: 0.45, brake: 2.5, smooth: 0.1, bank: 0.5 }
+// `maxTurn`: the view turns no faster than about this many degrees per second, however fast the scroll
+// (averaged over `turnWindow` units, so the limit comes and goes smoothly). `round`: the
+// limit's corners are rounded off over this many units, so following it never makes the camera's
+// acceleration jump (kept under half the drops' spacing, so the camera still speeds up between them).
+export const PACE = { max: 1.5, nearDrop: 0.45, brake: 2.5, smooth: 0.1, bank: 0.5, maxTurn: 40, turnWindow: 0.5, round: 0.5 }
 
 // The beats, in order. `at` is the label position in timeline units. The loader is a screen over the
 // first one, not a beat: "enter" only fades it, and the top of the page is the rain.
@@ -93,29 +99,56 @@ export const HERO = {
   // where the drop is an ordinary bead refracting the backdrop like the rain around it.
   near: [0.9, 1.8],
 }
-// Beat 4, a macro dolly. Hero drops are ordinary-sized, so a city only shows up close: the camera
-// passes each drop DRIFT.pass from its centre, easing as it goes by, head turned slightly toward it.
-// Drops sit mostly above and below the path (angles in DRIFT.around), so they stay in frame on
-// portrait phones, whose horizontal view is narrow. One drop per city; lower tiers show fewer.
+// Beats 2–5: the camera floats from the rain at the top, weaving between the city drops, straight into
+// the dive drop (core/drift.js). Hero drops are ordinary-sized, so a city only shows up close: the
+// camera passes each drop DRIFT.pass from its centre, slowing as it comes up, gaze glancing toward it.
+// Drops sit mostly above and below the path (angles in DRIFT.around), so they stay in frame on portrait
+// phones, whose horizontal view is narrow. One drop per city; lower tiers show fewer.
 export const DRIFT = {
-  start: 2.5, // timeline units
-  end: 8,
+  start: 2.5, // timeline units: the drift's first slow point is one step after this…
+  end: 8, // …its last one step before this, the dive's approach
   y: 4.45, // camera height through the drift
-  zFirst: 5, // first drop; the rest follow every zStep toward -z
-  zStep: 4.5,
-  pass: 0.12, // distance from the camera line to each drop's centre (4 radii)
-  lead: 0.4, // camera key sits this far before each drop: its city then fills ~1/7 of the frame height
+  pass: 0.12, // distance from the camera's path to each drop's centre (4 radii)
+  lead: 0.4, // the camera is slowest this far before each drop: its city then fills ~1/7 of the frame height
   around: [60, 240, 120, 300], // offset direction per drop, degrees (0 = right, 90 = up), cycled
-  ease: 0.5, // camera speed at each drop relative to its average (1 = no easing)
-  lookToward: 0.3, // 0 look straight ahead, 1 look straight at the drop as it passes
+  // The weave (user's choice of slalom, leaf and corkscrew): side to side `weave[0]` units, once every
+  // `weave[1]` units travelled (4 drops), with a bob of `bob[0]` every `bob[1]`.
+  weave: [1.3, 18],
+  bob: [0.35, 11],
+  // Timing: one smooth speed profile, no jumps in acceleration. At each drop the camera slows to `ease`
+  // of its cruising speed (a Gaussian dip `sigma` units wide); it starts from rest over `rampIn`; over
+  // `blendOut` before the approach it settles to `approach` × the approach's average speed, then comes
+  // to rest inside the dive drop.
+  ease: 0.55,
+  sigma: 0.14,
+  rampIn: 1.8,
+  blendOut: 0.7,
+  approach: 1.5,
+  lookToward: 0.35, // how far the gaze turns toward each drop as it comes up (0 not at all, 1 fully)
+  ahead: 3, // the gaze looks this far along the path, so it turns and tilts into each bend
+  sway: [0.07, 0.035], // and drifts slowly of its own: yaw and pitch, radians…
+  swayPeriod: [2.2, 1.6], // …once every so many timeline units
 }
 const DRIFT_DROPS = 9 // the tenth drop is the dive drop, placed separately below
-const driftDrop = (i) => {
-  const a = (DRIFT.around[i % DRIFT.around.length] * Math.PI) / 180
-  return [DRIFT.pass * Math.cos(a), DRIFT.y + DRIFT.pass * Math.sin(a), DRIFT.zFirst - i * DRIFT.zStep]
-}
-const DIVE_DROP_POS = [0.05, DRIFT.y, DRIFT.zFirst - (DRIFT_DROPS + 0.1) * DRIFT.zStep]
-const HERO_POSITIONS = [...Array.from({ length: DRIFT_DROPS }, (_, i) => driftDrop(i)), DIVE_DROP_POS]
+const DIVE_DROP_POS = [0.05, DRIFT.y, 5 - (DRIFT_DROPS + 0.1) * 4.5]
+const DIVE_AIM = [DIVE_DROP_POS[0], DIVE_DROP_POS[1], DIVE_DROP_POS[2] - 6] // far behind the drop, on its line
+// When the camera is slowest at each drift drop.
+export const DRIFT_PASSES = Array.from({ length: DRIFT_DROPS }, (_, i) => DRIFT.start + ((i + 1) * (DRIFT.end - DRIFT.start)) / (DRIFT_DROPS + 1))
+const TAU = 2 * Math.PI
+const drift = buildDrift({
+  from: { at: 1, pos: [0, 5, 14], look: [0, 4, 0] }, // the top: the rain, at rest
+  start: { z: 10 }, // the height has settled to DRIFT.y by here
+  end: { at: DRIFT.end, pos: [DIVE_DROP_POS[0], DIVE_DROP_POS[1], DIVE_DROP_POS[2] + 2.5], look: DIVE_AIM }, // on its axis, the drop a bead dead ahead
+  arrive: { at: 9.4, pos: [DIVE_DROP_POS[0], DIVE_DROP_POS[1], DIVE_DROP_POS[2] + 1.28 * HERO.radius], look: DIVE_AIM }, // it covers every screen corner
+  y: DRIFT.y,
+  passes: DRIFT_PASSES,
+  drops: { pass: DRIFT.pass, around: DRIFT.around, lead: DRIFT.lead },
+  timing: { ease: DRIFT.ease, sigma: DRIFT.sigma, rampIn: DRIFT.rampIn, blendOut: DRIFT.blendOut, approach: DRIFT.approach },
+  curve: (s) => [DRIFT.weave[0] * Math.sin((TAU * s) / DRIFT.weave[1]), DRIFT.bob[0] * Math.sin((TAU * s) / DRIFT.bob[1] + 0.9)],
+  fade: [6, 7], // the weave comes in over the first 6 units travelled and goes over the last 7 before the approach
+  gaze: { ahead: DRIFT.ahead, lookToward: DRIFT.lookToward, sway: DRIFT.sway, swayPeriod: DRIFT.swayPeriod },
+})
+const HERO_POSITIONS = [...drift.drops, DIVE_DROP_POS]
 export const DIVE_DROP_INDEX = 9
 export const DEFAULT_DIVE_CITY = CITIES[DIVE_DROP_INDEX].id
 // The dive city is chosen per visit (content/diveChoice.js). It swaps into the dive slot with the
@@ -221,32 +254,15 @@ const R = HERO.radius
 const { eye: ALIGN_EYE, target: ALIGN_TARGET, arrive: ALIGN_AT } = ALIGN
 export const DIVE_EYE = [D[0], D[1], D[2] + 1.28 * R] // close enough that the drop covers every screen corner
 export const DIVE_DROP = D
-// Look targets in the dive sit far behind the drop on the same line: aiming at the drop's centre,
-// only 1.28 radii away, would swing the view at the slightest movement.
-const DIVE_AIM = [D[0], D[1], D[2] - 6]
+// Look targets in the dive sit far behind the drop on the same line (DIVE_AIM): aiming at the drop's
+// centre, only 1.28 radii away, would swing the view at the slightest movement.
 
-// One key per drift drop: the camera on its line, DRIFT.lead before the drop, looking ahead and
-// partly toward it.
-const driftKeys = HERO_POSITIONS.slice(0, DRIFT_DROPS).map((drop, i) => {
-  const pos = [0, DRIFT.y, drop[2] + DRIFT.lead]
-  const reach = (3 + DRIFT.lead) / DRIFT.lead // extends the camera→drop ray to 3 units past the drop
-  const k = DRIFT.lookToward * reach
-  return {
-    at: DRIFT.start + ((i + 1) * (DRIFT.end - DRIFT.start)) / (DRIFT_DROPS + 1),
-    pos,
-    look: [(drop[0] - pos[0]) * k, pos[1] + (drop[1] - pos[1]) * k, drop[2] - 3],
-    speed: DRIFT.ease,
-  }
-})
-
-export const CAMERA_KEYS = [
-  { at: 1,    pos: [0, 5, 14],                           look: [0, 4, 0] },              // rain
-  { at: 1.08, pos: [0, 5, 13.9],                         look: [0, 4, 0] },              // freeze
-  { at: DRIFT.start, pos: [0, DRIFT.y, 10],              look: [0, DRIFT.y, 0] },        // drift start
-  ...driftKeys,
-  { at: 8,    pos: [D[0] + 0.08, D[1] + 0.04, D[2] + 2.5], look: DIVE_AIM },             // dive: approach, the drop a bead dead ahead
-  { at: 9.4,  pos: DIVE_EYE,                             look: DIVE_AIM },               // drop fills the frame
-  { at: 10.6, pos: DIVE_EYE,                             look: DIVE_AIM },               // inside the city
+// After the dive the keys are placed by hand; smoothKeys (core/cameraPath.js) resamples them smoothed,
+// so acceleration never jumps at a key either. The eye (the word only lines up from there) and the last
+// frame stay exact; the camera eases out of the dive drop from about 10.0 instead of starting at 10.6.
+const AFTER_DIVE = [
+  { at: 9.4,  pos: DIVE_EYE,                             look: DIVE_AIM },               // inside the city (held)
+  { at: 10.6, pos: DIVE_EYE,                             look: DIVE_AIM },
   { at: 11.5, pos: [D[0] - 1.6, D[1] + 0.6, D[2] + 1.8], look: DIVE_AIM },               // pulled back out, off the word's axis
   // Swing in from the side and from above: parallax keeps the word scrambled until the last stretch,
   // and seen from above its drops spread out instead of lining up into a flat strip.
@@ -258,6 +274,10 @@ export const CAMERA_KEYS = [
   { at: SPLASH_AT + 1.8, pos: inWordFrame(FALL_GROUND, [0.4, 0.9, 1.2]),   look: inWordFrame(FALL_GROUND, [0, 0.4, 0]) },
   { at: SPLASH_AT + 2.5, pos: inWordFrame(FALL_GROUND, [0.28, 0.24, 0.8]), look: inWordFrame(FALL_GROUND, [0, 0.05, 0]) }, // impact
   { at: TIMELINE_END, pos: inWordFrame(FALL_GROUND, [0.2, 0.19, 0.6]),     look: inWordFrame(FALL_GROUND, [0, 0.04, 0]) }, // end
+]
+export const CAMERA_KEYS = [
+  ...drift.keys, // the rain (1) → the weave between the drops → the approach (8) → the drop fills the frame (9.4)
+  ...smoothKeys(AFTER_DIVE, { sigma: 0.2, pins: [ALIGN_AT, TIMELINE_END] }),
 ]
 
 // Beat 5 timing, in timeline units. The drop's optics morph from ball lens to plain window

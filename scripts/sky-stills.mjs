@@ -132,12 +132,11 @@ async function timelineShot(page, base, scene, { dive, time, file }) {
 }
 
 async function timeline(page, base, server) {
-  const { CITIES, CAMERA_KEYS, DRIFT, DIVE } = await server.ssrLoadModule('/src/config.js')
-  const driftKeys = CAMERA_KEYS.filter((k) => k.speed === DRIFT.ease && k.at > DRIFT.start && k.at < DRIFT.end)
+  const { CITIES, DRIFT_PASSES, DIVE } = await server.ssrLoadModule('/src/config.js')
   for (const scene of TIMELINE.filter((s) => !ONLY || ONLY.includes(s.name))) {
     // With the default dive city in the dive slot, drop i of the drift is CITIES[i].
     const i = CITIES.findIndex((c) => c.id === scene.city)
-    await timelineShot(page, base, scene, { dive: 'mexico-city', time: driftKeys[i].at, file: `${OUT}/timeline-${scene.name}-drift${SUFFIX}.jpg` })
+    await timelineShot(page, base, scene, { dive: 'mexico-city', time: DRIFT_PASSES[i], file: `${OUT}/timeline-${scene.name}-drift${SUFFIX}.jpg` })
     await timelineShot(page, base, scene, { dive: scene.city, time: (DIVE.inEnd + DIVE.outStart) / 2, file: `${OUT}/timeline-${scene.name}-dive${SUFFIX}.jpg` })
   }
 }

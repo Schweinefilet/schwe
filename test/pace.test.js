@@ -70,3 +70,22 @@ test('pace table: no drops, no slowing', () => {
   const table = buildPaceTable(cameraAt, [], opts)
   assert.ok(table.rate.every((r) => r === 1.5))
 })
+
+test('pace table: the view never turns faster than maxTurn', () => {
+  // Turning 2 radians per unit between 4 and 6, not at all elsewhere.
+  const turnAt = (t) => (t > 4 && t < 6 ? 2 : 0)
+  const table = buildPaceTable(cameraAt, [], { ...opts, turnAt, maxTurn: 0.5 })
+  assert.ok(Math.abs(rateAt(table, 5) - 0.25) < 1e-9) // 0.5 rad/s ÷ 2 rad/unit
+  assert.ok(Math.abs(rateAt(table, 1) - 1.5) < 1e-9)
+})
+
+test('pace table: rounding never raises the limit and removes its corners', () => {
+  // A hard step: the view starts turning fast at 5, and no braking softens it.
+  const step = { ...opts, brake: 1e9, turnAt: (t) => (t > 5 ? 2 : 0), maxTurn: 0.5 }
+  const sharp = buildPaceTable(cameraAt, [], step)
+  const round = buildPaceTable(cameraAt, [], { ...step, round: 0.3 })
+  for (let i = 0; i < sharp.rate.length; i++) assert.ok(round.rate[i] <= sharp.rate[i] + 1e-12, `at ${i}`)
+  // The largest change between neighbouring steps: the whole drop at once when sharp, spread out once rounded.
+  const jump = ({ rate }) => Math.max(...rate.slice(1).map((v, i) => Math.abs(v - rate[i])))
+  assert.ok(jump(sharp) > 1.2 && jump(round) < 0.1, `${jump(round)} vs ${jump(sharp)}`)
+})
