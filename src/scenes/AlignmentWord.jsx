@@ -114,9 +114,10 @@ export default function AlignmentWord() {
   const sketch = useRef({ strokes: null, total: 0, bounds: null, clock: 0, key: '' })
   useEffect(() => {
     let cancelled = false
-    wordContours(ALIGN.text, ALIGN.sketch.margin).then(({ contours }) => {
+    const S = ALIGN.sketch
+    wordContours(ALIGN.text, S.margin, 5, S.inner).then(({ contours }) => {
       if (cancelled) return
-      const { strokes, total } = sketchStrokes(contours, ALIGN.sketch.passes[quality.name])
+      const { strokes, total } = sketchStrokes(contours, S.passes[quality.name], S.inner.delay)
       const b = [Infinity, Infinity, -Infinity, -Infinity]
       for (const { pts } of strokes)
         for (let i = 0; i < pts.length; i += 2) {

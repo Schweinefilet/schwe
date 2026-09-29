@@ -141,7 +141,9 @@ export const ALIGN = {
   // A pencil sketch around the word's silhouette (ui/pencilSketch.js): it draws in from chimeAt while the
   // camera is within `until` units past the eye, and retracts `retract` times as fast once it leaves
   // (either way). `margin`: how far the outline stands off the letters, px at the 240 px sampling size.
-  sketch: { until: 0.15, retract: 1.6, margin: 14, passes: { high: 7, medium: 6, low: 4 } },
+  // `inner`: letters whose negative space also gets lines (their counters and inner curves), `margin`
+  // px inside it, starting `delay` s after the silhouette.
+  sketch: { until: 0.15, retract: 1.6, margin: 14, passes: { high: 7, medium: 6, low: 4 }, inner: { letters: 'ce', margin: 7, delay: 0.45 } },
 }
 // Beat 7. One drop of the word falls into a puddle on the ground (y = 0) directly below it.
 // The splash is a Mantaflow sim baked to a vertex animation texture (blender/splash/bake_splash.py).

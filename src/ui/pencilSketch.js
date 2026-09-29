@@ -1,5 +1,6 @@
-// The word's sketch: rough pencil passes around its silhouette (wordContours), drawn in like an artist
-// going round the word a few times and then adding short accents. Strokes are built once in the word's
+// The word's sketch: rough pencil passes around its silhouette and through the negative space of some
+// letters (wordContours), drawn in like an artist going round the word a few times, then adding the
+// letters' inner lines and short accents. Strokes are built once in the word's
 // units; drawSketch puts them on screen each frame through an affine map, so they follow the camera.
 
 // When each pass starts and how long it takes (seconds), how much of the outline it covers (1 = once
@@ -29,15 +30,21 @@ function noise(x) {
   return (hash(i) + (hash(i + 1) - hash(i)) * u) * 2 - 1
 }
 
-export function sketchStrokes(contours, passes = PASSES.length, seed = 3) {
+// `contours`: [{ pts, closed, inner }]. Inner lines (a letter's negative space) start `innerDelay`
+// seconds after the silhouette and take only the full passes, not the accents, and wander less: they
+// are short and close to the drops. An open line is drawn end to end, give or take a little at the
+// ends; a closed one starts anywhere and runs on past its start.
+export function sketchStrokes(contours, passes = PASSES.length, innerDelay = 0.45, seed = 3) {
   let s = seed
   const rand = () => ((s = (s * 16807) % 2147483647) - 1) / 2147483646
   const strokes = []
   for (const pass of PASSES.slice(0, passes)) {
-    for (const c of contours) {
+    for (const { pts: c, closed, inner } of contours) {
+      if (inner && pass.len < 1) continue
       const n = c.length / 2
-      const count = Math.round(pass.len * n)
-      const from = Math.floor(rand() * n)
+      const count = closed ? Math.round(pass.len * n) : Math.round(n * (0.9 + 0.1 * rand()))
+      const from = closed ? Math.floor(rand() * n) : Math.floor(rand() * (n - count + 1))
+      const wobble = pass.wobble * (inner ? 0.6 : 1)
       const seedA = rand() * 100
       const seedB = rand() * 100
       const drift = (rand() * 2 - 1) * 1.5 * WOBBLE // the end does not meet the start exactly
@@ -46,19 +53,19 @@ export function sketchStrokes(contours, passes = PASSES.length, seed = 3) {
       const pts = new Float32Array(count * 2)
       for (let j = 0; j < count; j++) {
         const i = (from + j) % n
-        const prev = (i - 1 + n) % n
-        const next = (i + 1) % n
+        const prev = closed ? (i - 1 + n) % n : Math.max(i - 1, 0)
+        const next = closed ? (i + 1) % n : Math.min(i + 1, n - 1)
         const tx = c[next * 2] - c[prev * 2]
         const ty = c[next * 2 + 1] - c[prev * 2 + 1]
         const tl = Math.hypot(tx, ty) || 1
-        const d = WOBBLE * pass.wobble * noise(j * 0.03 + seedA) + 0.3 * WOBBLE * noise(j * 0.25 + seedB) + (drift * j) / count
+        const d = WOBBLE * wobble * noise(j * 0.03 + seedA) + 0.3 * WOBBLE * noise(j * 0.25 + seedB) + (drift * j) / count
         pts[j * 2] = c[i * 2] + (ty / tl) * d + shiftX
         pts[j * 2 + 1] = c[i * 2 + 1] - (tx / tl) * d + shiftY
       }
-      strokes.push({ ...pass, pts })
+      strokes.push({ ...pass, at: pass.at + (inner ? innerDelay : 0), pts })
     }
   }
-  return { strokes, total: Math.max(...PASSES.slice(0, passes).map((p) => p.at + p.dur)) }
+  return { strokes, total: Math.max(...strokes.map((st) => st.at + st.dur)) }
 }
 
 // A tileable paper grain: mostly strong, some faint, a few gaps. As a stroke's fill it breaks the
