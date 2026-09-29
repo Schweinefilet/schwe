@@ -16,3 +16,8 @@ __pycache__/
 
 # Contact sheets and other local review output
 review/
+
+# World Atlas of Artificial Night Sky Brightness (GFZ, CC BY-NC), local input for sky:glow only
+World_Atlas_2015.zip
+NewWorldAtlas_ArtificialSkyBrightness.kmz
+data/atlas/

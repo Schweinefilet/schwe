@@ -30,6 +30,7 @@ export default function StillPage({ clips }) {
       {ATLAS_CREDIT && (
         <p className="still__credit">
           Night sky brightness: Falchi et al. 2016, The New World Atlas of Artificial Night Sky Brightness,{' '}
+          <a href="https://doi.org/10.1126/sciadv.1600377">Science Advances</a> and{' '}
           <a href="https://doi.org/10.5880/GFZ.1.4.2016.001">GFZ Data Services</a>,{' '}
           <a href="https://creativecommons.org/licenses/by-nc/4.0/">CC BY-NC 4.0</a>; sampled at each city
           {atlas.source?.startsWith('lightpollutionmap') ? ', read via Jurij Stare, www.lightpollutionmap.info' : ''}.
