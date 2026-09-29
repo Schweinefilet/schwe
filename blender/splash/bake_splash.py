@@ -12,10 +12,13 @@ What it does
 1. Builds a small liquid domain: a shallow pool and one drop fired downward at about a large
    raindrop's terminal velocity.
 2. Bakes Mantaflow with a small time scale, so a fraction of a second of real time spreads over many
-   frames (the slow motion is simulated, not interpolated).
+   frames (the slow motion is simulated, not interpolated). 300 frames (0.625 s of real time) cover
+   the crown, the main jet and its fall, a second smaller jet, and the swell that is left. About
+   50 min on 4 cores.
 3. Writes the domain's dimensions next to the cache (splash_domain.json) and hands the cached meshes
-   to vat_from_cache.py, which crops, simplifies and encodes them. That step is plain numpy and takes
-   seconds; reading the meshes back through Blender took most of an hour at full resolution.
+   to vat_from_cache.py, which picks frames along a speed ramp, crops, simplifies and encodes them.
+   That step is plain numpy and takes about a minute; reading the meshes back through Blender took
+   most of an hour at full resolution.
 """
 
 import argparse
@@ -36,15 +39,16 @@ def parse_args():
     p.add_argument("--out", default="public/splash")
     p.add_argument("--cache", default="/tmp/schwe-splash-cache")
     p.add_argument("--res", type=int, default=160, help="domain resolution along its longest side")
-    p.add_argument("--frames", type=int, default=72)
+    p.add_argument("--frames", type=int, default=300)
     p.add_argument("--time-scale", type=float, default=0.05, help="sim seconds per second of playback at 24 fps")
     args, rest = p.parse_known_args(argv)
     return args, rest  # the rest (--max-tris, --crop, --bits, …) goes to the exporter
 
 
 # ---- Scene -------------------------------------------------------------------------------------
-# Meters, Blender Z-up. Domain 0.2 × 0.2 × 0.12 m; pool 0.03 m deep; drop radius 6 mm.
-DOMAIN = (0.2, 0.2, 0.12)
+# Meters, Blender Z-up. Domain 0.2 m cube; pool 0.03 m deep; drop radius 6 mm. The domain's top is a
+# wall: at 0.12 m tall the crown's spray reached it and stuck there flat, so it has room to spare.
+DOMAIN = (0.2, 0.2, 0.2)
 POOL_DEPTH = 0.03
 DROP_RADIUS = 0.006
 DROP_HEIGHT = 0.02  # gap between drop bottom and pool surface at frame 1

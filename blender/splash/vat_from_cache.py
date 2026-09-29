@@ -13,15 +13,18 @@ vertex (average position and normal), and triangles whose corners collapse toget
 Flat, calm water gets a coarse grid; the crown and crater get a fine one. The fine cell size is
 searched per frame so each frame lands just under the budget.
 
-A liquid mesh changes topology every frame, so vertices can't be tracked between frames. Every
-frame is stored as a "triangle soup" (three vertices per triangle), padded to the largest frame with
-degenerate triangles (all three vertices at one point), which the GPU skips.
+A liquid mesh changes topology every frame, so vertices can't be tracked between frames. Each frame
+is stored as its own indexed mesh: its vertices (each once, in spatial order, so neighbouring texels
+are alike and compress well) and three 16-bit indices per triangle. Every frame starts on a new
+texture row and the site draws only the current frame's triangles.
 
 Outputs, plain RGB PNGs (no alpha, so no browser can premultiply the data):
-    splash_hi.png    R,G,B = high byte of the quantized x, y, z
-    splash_lo.png    R,G,B = low byte of x, y, z
-    splash_nrm.png   R,G = octahedral-encoded normal
-    splash.json      layout, bounds (meters, Y-up), quantMax, drop size, frame count
+    splash_hi.png    per vertex: R,G,B = high byte of the quantized x, y, z
+    splash_lo.png    per vertex: R,G,B = low byte of x, y, z
+    splash_nrm.png   per vertex: R,G = octahedral-encoded normal
+    splash_idx.png   per triangle corner: R,G = high and low byte of the vertex index in its frame
+    splash.json      layout (each frame's first rows and triangle count), bounds (meters, Y-up),
+                     quantMax, drop size, frame count
 """
 
 import argparse
@@ -46,6 +49,12 @@ def parse_args(argv=None):
     # 12 bits is ~0.03 mm over the splash's span, far below a pixel, and leaves the low-byte PNG
     # mostly zeros, so it compresses better.
     p.add_argument("--bits", type=int, default=12, help="position precision, at most 16")
+    p.add_argument("--frames", type=int, default=0, help="use only the first N cached frames (0: all)")
+    # Speed ramp: which cached frames to keep. "frame:step" knots, linear between them; the step is
+    # how many cached frames one stored frame advances. The crown and the jet's rise play in full
+    # slow motion, then the step widens as the water calms, so the ending leaves slow motion
+    # smoothly and the file stays small. "" keeps every frame.
+    p.add_argument("--ramp", default="1:1,60:1,150:2.05,240:3.7,300:5.4")
     return p.parse_args(argv)
 
 
@@ -110,11 +119,12 @@ def frame_mesh(path, domain, args):
     keep = (np.hypot(c[:, 0], c[:, 1]) <= args.crop) & (c[:, 2] >= domain["poolDepth"] * 0.5)
     # Calm water (at rest height, facing up) is drawn by the site's puddle, and the splash shader
     # makes it transparent anyway: drop it here so the whole budget goes to the crown, jet and crater.
-    calm_v = (np.abs(v[:, 2] - domain["restHeight"]) < 0.0015) & (n[:, 2] > 0.985)
+    # The thresholds are the shader's: within 2 mm of rest and tilted less than 1 - 0.97 is invisible.
+    calm_v = (np.abs(v[:, 2] - domain["restHeight"]) < 0.002) & (n[:, 2] > 0.97)
     keep &= ~calm_v[tris].all(axis=1)
     tris = tris[keep]
     if len(tris) == 0:
-        return np.zeros((0, 3, 3), np.float32), np.zeros((0, 3, 3), np.float32)
+        return np.zeros((0, 3), np.float32), np.zeros((0, 3), np.float32), np.zeros((0, 3), np.int64)
     used, remap = np.unique(tris, return_inverse=True)
     v, n, tris = v[used], n[used], remap.reshape(-1, 3)
 
@@ -131,11 +141,24 @@ def frame_mesh(path, domain, args):
                 best = (cv, cn, ct)
         v, n, tris = best if best else cluster(v, n, tris, hi, hi * args.coarse, domain["restHeight"])
 
+    # Vertices in Morton (Z-curve) order of their position, triangles by their lowest index: nearby
+    # texels then hold nearby points, which is what the PNG compressor can use.
+    g = np.clip(((v - v.min(axis=0)) / 0.0005).astype(np.int64), 0, 1023)
+    code = np.zeros(len(v), np.int64)
+    for bit in range(10):
+        for axis in range(3):
+            code |= ((g[:, axis] >> bit) & 1) << (3 * bit + axis)
+    order = np.argsort(code, kind="stable")
+    rank = np.empty_like(order)
+    rank[order] = np.arange(len(order))
+    v, n, tris = v[order], n[order], rank[tris]
+    tris = tris[np.argsort(tris.min(axis=1), kind="stable")]
+
     # Blender Z-up → three.js Y-up: (x, y, z) → (x, z, -y)
     def y_up(a):
         return np.stack([a[..., 0], a[..., 2], -a[..., 1]], axis=-1).astype(np.float32)
 
-    return y_up(v[tris]), y_up(n[tris])
+    return y_up(v), y_up(n), tris
 
 
 def oct_encode(n):
@@ -149,7 +172,16 @@ def oct_encode(n):
 
 def write_png(path, rgb):
     h, w, _ = rgb.shape
-    raw = b"".join(b"\x00" + rgb[y].tobytes() for y in range(h))
+    # Each row takes the PNG filter (none, left neighbour, row above) with the smallest residuals.
+    rows = rgb.reshape(h, w * 3).astype(np.int16)
+    sub = rows.copy()
+    sub[:, 3:] -= rows[:, :-3]
+    up = rows.copy()
+    up[1:] -= rows[:-1]
+    options = np.stack([rows, sub, up]) % 256
+    cost = np.abs(options.astype(np.int8).astype(np.int16)).sum(axis=2)  # residuals as signed bytes
+    best = cost.argmin(axis=0)
+    raw = b"".join(bytes([best[y]]) + options[best[y], y].astype(np.uint8).tobytes() for y in range(h))
 
     def chunk(tag, data):
         c = struct.pack(">I", len(data)) + tag + data
@@ -161,12 +193,31 @@ def write_png(path, rgb):
         f.write(png)
 
 
+def ramp_frames(ramp, count):
+    """Cached frame numbers (1-based) to store, from the first to the last."""
+    if not ramp:
+        return list(range(1, count + 1))
+    knots = [tuple(float(x) for x in k.split(":")) for k in ramp.split(",")]
+    kx, ky = [k[0] for k in knots], [k[1] for k in knots]
+    picks, f = [1.0], 1.0
+    while True:
+        f += float(np.interp(f, kx, ky))
+        if f > count:
+            break
+        picks.append(f)
+    keep = sorted({min(count, int(round(x))) for x in picks} | {count})
+    return keep
+
+
 def export(args):
     with open(os.path.join(args.cache, "splash_domain.json")) as f:
         domain = json.load(f)
     files = sorted(glob.glob(os.path.join(args.cache, "mesh", "fluid_mesh_*.bobj.gz")))
     if not files:
         raise SystemExit(f"no meshes in {args.cache}/mesh")
+    if args.frames:
+        files = files[: args.frames]
+    source = ramp_frames(args.ramp, len(files))
     # Where the water actually rests: the level-set surface sits a little above the nominal pool depth.
     # Measured on frame 1 (before the impact) over the calm outer ring, so the site can put rest height
     # exactly on its puddle plane.
@@ -178,48 +229,52 @@ def export(args):
     domain = {**domain, "restHeight": rest}
 
     frames = []
-    for i, path in enumerate(files):
-        frames.append(frame_mesh(path, domain, args))
-        print(f"[splash] frame {i + 1}/{len(files)}: {len(frames[-1][0])} tris", flush=True)
+    for i, f in enumerate(source):
+        frames.append(frame_mesh(files[f - 1], domain, args))
+        print(f"[splash] frame {i + 1}/{len(source)} (cache {f}): {len(frames[-1][2])} tris", flush=True)
 
     os.makedirs(args.out, exist_ok=True)
-    max_tris = max(1, max(len(p) for p, _ in frames))
-    verts_per_frame = max_tris * 3
-    all_p = np.concatenate([p.reshape(-1, 3) for p, _ in frames if len(p)])
+    max_tris = max(1, max(len(t) for _, _, t in frames))
+    all_p = np.concatenate([p for p, _, _ in frames if len(p)])
     lo, hi = all_p.min(axis=0), all_p.max(axis=0)
     span = np.maximum(hi - lo, 1e-6)
     levels = (1 << args.bits) - 1
     shift = 16 - args.bits
 
-    width = 1
-    while width < min(verts_per_frame, 2048):
-        width *= 2
-    rows_per_frame = math.ceil(verts_per_frame / width)
-    height = rows_per_frame * len(frames)
-    tex = np.zeros((3, height, width, 3), np.uint8)
+    width = 2048
+    vert_rows = [math.ceil(len(p) / width) for p, _, _ in frames]
+    idx_rows = [math.ceil(len(t) * 3 / width) for _, _, t in frames]
+    first = lambda rows: np.concatenate([[0], np.cumsum(rows)[:-1]]).astype(int)  # noqa: E731
+    vert_first, idx_first = first(vert_rows), first(idx_rows)
+    vtex = np.zeros((3, max(1, sum(vert_rows)), width, 3), np.uint8)
+    itex = np.zeros((max(1, sum(idx_rows)), width, 3), np.uint8)
+    for height in (vtex.shape[1], itex.shape[0]):
+        if height > 4096:
+            print(f"[splash] warning: a texture is {height} rows; some phones cap textures at 4096", flush=True)
 
-    for fi, (p, n) in enumerate(frames):
-        flat_p = np.repeat(lo[None], verts_per_frame, 0).astype(np.float32)  # padding: one point → degenerate
-        flat_n = np.tile(np.array([0, 1, 0], np.float32), (verts_per_frame, 1))
-        if len(p):
-            flat_p[: len(p) * 3] = p.reshape(-1, 3)
-            flat_n[: len(p) * 3] = n.reshape(-1, 3)
-        q = np.clip(np.round((flat_p - lo) / span * levels), 0, levels).astype(np.uint32) << shift
-        o = np.clip(np.round(oct_encode(flat_n) * 255), 0, 255).astype(np.uint8)
-        block = np.zeros((3, rows_per_frame * width, 3), np.uint8)
-        block[0, :verts_per_frame] = q >> 8
-        block[1, :verts_per_frame] = q & 255
-        block[2, :verts_per_frame, :2] = o
-        r0 = fi * rows_per_frame
-        tex[:, r0 : r0 + rows_per_frame] = block.reshape(3, rows_per_frame, width, 3)
+    for fi, (p, n, t) in enumerate(frames):
+        if not len(t):
+            continue
+        q = np.clip(np.round((p - lo) / span * levels), 0, levels).astype(np.uint32) << shift
+        o = np.clip(np.round(oct_encode(n) * 255), 0, 255).astype(np.uint8)
+        flat = vtex[:, vert_first[fi] : vert_first[fi] + vert_rows[fi]].reshape(3, -1, 3)
+        flat[0, : len(p)] = q >> 8
+        flat[1, : len(p)] = q & 255
+        flat[2, : len(p), :2] = o
+        c = t.reshape(-1).astype(np.uint32)
+        iflat = itex[idx_first[fi] : idx_first[fi] + idx_rows[fi]].reshape(-1, 3)
+        iflat[: len(c), 0] = c >> 8
+        iflat[: len(c), 1] = c & 255
 
-    for name, t in zip(("splash_hi.png", "splash_lo.png", "splash_nrm.png"), tex):
-        write_png(os.path.join(args.out, name), t)
+    for name, tex in zip(("splash_hi.png", "splash_lo.png", "splash_nrm.png"), vtex):
+        write_png(os.path.join(args.out, name), tex)
+    write_png(os.path.join(args.out, "splash_idx.png"), itex)
     meta = {
         "frames": len(frames),
-        "vertsPerFrame": verts_per_frame,
+        "maxCorners": max_tris * 3,  # the longest frame, in triangle corners (3 per triangle)
         "width": width,
-        "rowsPerFrame": rows_per_frame,
+        "vertexRows": vert_first.tolist(),  # each frame's first row in the vertex textures
+        "indexRows": idx_first.tolist(),  # each frame's first row in the index texture
         "boundsMin": lo.tolist(),
         "boundsMax": hi.tolist(),
         "quantMax": levels << shift,  # decoded position = mix(min, max, (hi * 256 + lo) / quantMax)
@@ -229,11 +284,12 @@ def export(args):
         "dropStartAbove": domain["poolDepth"] + domain["dropStartAbove"] - domain["restHeight"],
         "fps": domain["fps"],
         "timeScale": domain["timeScale"],
-        "trisPerFrame": [len(p) for p, _ in frames],
+        "trisPerFrame": [len(t) for _, _, t in frames],
+        "sourceFrames": source,  # the cached frame each stored frame shows (the speed ramp)
     }
     with open(os.path.join(args.out, "splash.json"), "w") as f:
         json.dump(meta, f, indent=2)
-    print(f"[splash] wrote {width}x{height} VAT, {max_tris} tris max → {args.out}", flush=True)
+    print(f"[splash] wrote {len(frames)} frames, {max_tris} tris max, vertex textures {width}x{vtex.shape[1]}, index {width}x{itex.shape[0]} → {args.out}", flush=True)
 
 
 if __name__ == "__main__":
