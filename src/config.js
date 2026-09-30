@@ -302,6 +302,9 @@ export const DIVE = {
   typeOut: 10.45,
   outStart: 10.6,
   outEnd: 11.3,
+  // Inside the drop the city shows through a normal lens: this many degrees across the screen's wider
+  // side (a 35 mm lens on full frame), not the scene camera's wide angle, which stretches the edges.
+  viewFov: 55,
 }
 
 // Sky in a drop (provisional, lab only: /?lab=drop). Each city's real sky, computed from the sun,
@@ -354,7 +357,7 @@ export const SKY = {
   // and of its lit windows (display-referred, after the sky's exposure: a real window, a hundred times
   // brighter than a city's night sky, would blow the skyline out); `hazePerKm`: how fast distant
   // buildings fade into the light around them (plus rain or fog).
-  skyline: { url: 'skyline/', lights: 0.18, windows: 0.22, hazePerKm: 0.12 },
+  skyline: { url: 'skyline/', lights: 0.3, windows: 0.3, hazePerKm: 0.12 },
 }
 
 // Sound. Every sound is synthesized until a licensed file fills its slot (paths under public/).

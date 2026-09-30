@@ -13,6 +13,10 @@ import { loadStarTexture } from './stars.js'
 // texture and the uniforms its drop reads; set() takes new inputs (src/sky/inputs.js) and the texture
 // is re-rendered only when an input it depends on has changed.
 
+// The cities' own clock, seconds (their falling rain in sky.glsl). Live, not the site's simulated time:
+// the city in a drop goes on when the rain around the drop freezes. Set by the drops each frame.
+export const skyClock = { value: 0 }
+
 // `coefficients`: the atmosphere at the channels' wavelengths (SKY.atmosphere; the lab can swap it).
 export function createSkyGlobals(renderer, { model = createHillaire, coefficients = SKY.atmosphere } = {}) {
   const atmosphereModel = model(renderer, { coefficients })
@@ -25,6 +29,7 @@ export function createSkyGlobals(renderer, { model = createHillaire, coefficient
     uSkyCloudNoise: { value: null },
     uSkyCityShape: { value: new THREE.Vector3(glow.horizon, glow.cloud, glow.ground) },
     uSkyCityMottle: { value: glow.mottle ?? 0 },
+    uSkyTime: skyClock,
   }
   const globals = {
     atmosphere: atmosphereModel,
@@ -107,6 +112,7 @@ export class CitySky {
       uSkyCloudOffset: { value: new THREE.Vector2() },
       uSkyCityGlow: { value: new THREE.Vector3() },
       uSkyHaze: { value: 0 },
+      uSkyRain: { value: 0 },
       uSkyPreExposure: { value: 1 },
       uSkyMeter: { value: new THREE.Vector3(SKY.exposure.key, SKY.exposure.ref, SKY.exposure.range) },
       uSkylineLight: { value: NO_SKYLINE },
@@ -163,14 +169,15 @@ export class CitySky {
     u.uSkyCityGlow.value.fromArray(inputs.cityGlow)
     u.uSkyPreExposure.value = inputs.exposure
     u.uSkylineLit.value.set(1 - inputs.windows.late, inputs.windows.late, inputs.windows.dark)
-    this.setWeather(inputs.clouds, inputs.haze)
+    this.setWeather(inputs.clouds, inputs.haze, inputs.rain)
   }
 
-  // Weather only (cloud deck and haze): the site eases these between readings, so a new reading never
-  // cuts. Never re-renders the texture, which does not depend on weather.
-  setWeather({ cover, tau, baseKm, tileKm }, haze) {
+  // Weather only (cloud deck, haze, rain): the site eases these between readings, so a new reading
+  // never cuts. Never re-renders the texture, which does not depend on weather.
+  setWeather({ cover, tau, baseKm, tileKm }, haze, rain = 0) {
     this.uniforms.uSkyCloud.value.set(cover, tau, baseKm, tileKm)
     this.uniforms.uSkyHaze.value = haze
+    this.uniforms.uSkyRain.value = rain
   }
 
   render(renderer) {

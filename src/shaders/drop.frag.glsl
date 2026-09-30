@@ -22,6 +22,7 @@ uniform float uEnvGain;     // brightness of the environment seen through the dr
 uniform vec2 uNear;         // camera distance: the city in full within x; beyond y an ordinary bead
 uniform float uDive;        // 0: ball lens; 1: plain window showing the clip upright, filling the screen
 uniform vec2 uCoverTan;     // clip framing that exactly covers the screen, used at uDive = 1
+uniform float uDiveZoom;    // sky content at uDive = 1: the screen's view angle narrowed to a normal lens's
 uniform float uTimeScale;   // the rain's: 1 falling, 0 frozen
 uniform vec3 uBoxCenter;    // the rain field's box, whose faces it fades at
 uniform vec3 uBoxSize;
@@ -50,6 +51,14 @@ float nearMix;  // how much of the city shows: 0 far off, 1 close (uNear)
 float skyFoot; // angular size of one pixel along the ray leaving the drop, measured in main()
 
 vec3 behind(vec3 dir, vec3 axis, vec3 right, vec3 up) {
+  // Inside the drop the camera's wide view (50° high, about 80° across at 16:9, more on wider screens)
+  // would stretch the city at the sides and corners; the view narrows to a normal lens's instead, still
+  // a plain perspective (a zoom in the image plane), as the dive completes.
+  float z = dot(dir, axis);
+  if (uDive > 0.0 && z > 0.0) {
+    vec2 t = vec2(dot(dir, right), dot(dir, up)) / z * mix(1.0, uDiveZoom, uDive);
+    dir = normalize(axis + t.x * right + t.y * up);
+  }
   return citySky(normalize(uSkyCityBasis * vec3(dot(dir, axis), dot(dir, right), dot(dir, up))), skyFoot);
 }
 #else
@@ -104,7 +113,7 @@ void main() {
     envFoot = length(fwidth(exitDir));
     reflFoot = length(fwidth(reflect(rd, n)));
 #ifdef SKY
-    skyFoot = clamp(envFoot, 1e-5, 0.05);
+    skyFoot = clamp(envFoot * mix(1.0, uDiveZoom, uDive), 1e-5, 0.05);
 #endif
   }
   if (alpha <= 0.0 || !gl_FrontFacing) discard;

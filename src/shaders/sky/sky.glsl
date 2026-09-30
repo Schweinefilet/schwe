@@ -40,6 +40,8 @@ uniform vec3 uSkylineLit;     // weights of the evening and late windows (local 
 uniform vec3 uSkylineGain;    // on-screen gain of the fixed lights and of the windows (display-referred: added
                               // after the exposure), and haze per km
 uniform float uSkyHaze;       // rain or fog extinction near the ground, per km
+uniform float uSkyRain;       // rain now, mm/h (eased between readings)
+uniform float uSkyTime;       // seconds, the city's own live clock (its falling rain), wrapping every 600
 uniform float uSkyPreExposure; // the exposure every light uniform and the sky-view texture carry
 uniform vec3 uSkyMeter;       // key, ref (cd/m²), range: a metered L comes out at key × (L / ref)^range
 
@@ -248,6 +250,52 @@ vec4 skyline(vec3 d, float foot, vec3 horizon, out vec3 lights) {
   return vec4(c, cover);
 }
 
+// Falling rain in front of the city (while it rains there), as a camera at 1/60 s sees it: streaks at
+// four distances, 2 to 16 m, each as long as a drop falls (6.5 m/s) in the shutter time and as wide as
+// the drop blurred out of focus, the nearest widest and faintest. Each streak refracts the light around
+// it, a little brighter than that light (the drop gathers it), and the city's own light at night, when
+// the streaks show brightest against the dark.
+// How many fall follows the rate (drizzle a few, a downpour many); decoration shaped by the physics,
+// not a simulation. `foot`: this pixel's angular size, so a streak thinner than a pixel spreads its
+// light over it instead of flickering, and a tiny drop far off reads the rain as a faint veil.
+float rainHash(vec2 p) {
+  return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453);
+}
+
+vec4 cityRain(vec3 d, float foot, vec3 light) {
+  if (uSkyRain <= 0.0) return vec4(0.0);
+  float az = atan(d.x, -d.z);
+  float el = asin(clamp(d.y, -1.0, 1.0));
+  float share = clamp(0.22 * pow(uSkyRain, 0.5), 0.12, 0.9); // share of cells holding a streak: drizzle shows too
+  const float FALL = 6.5;   // m/s
+  const float SHUTTER = 1.0 / 60.0;
+  float cover = 0.0;
+  for (int i = 0; i < 4; i++) {
+    float dist = 2.0 * exp2(float(i));               // 2, 4, 8, 16 m
+    float len = FALL * SHUTTER / dist;               // radians the streak spans
+    float width = max(0.006 / dist, 0.0004);         // out of focus near, a hair far off
+    float cell = len * 1.6;                          // one streak per cell at most
+    float speed = FALL / dist;                       // radians a second, downward
+    vec2 g = vec2(az / cell * 0.35, (el + uSkyTime * speed) / cell);
+    vec2 id = floor(g);
+    vec2 f = fract(g);
+    float h = rainHash(id + float(i) * 37.1);
+    if (h > share) continue;
+    float x = 0.15 + 0.7 * rainHash(id + 11.3 + float(i));
+    float y = 0.32 + 0.36 * rainHash(id + 23.9 + float(i)); // the whole streak inside its cell
+    // Across: the streak's width (at least a pixel's, its light spread over that); along: its length,
+    // fading in and out at the ends.
+    float w = max(width, foot);
+    float across = abs(f.x - x) * cell / 0.35;
+    float a = 1.0 - smoothstep(0.5 * w, w, across);
+    float along = (f.y - y) * 1.6;                    // in streak lengths
+    a *= smoothstep(-0.5, -0.3, along) * (1.0 - smoothstep(0.3, 0.5, along));
+    a *= width / w * mix(0.5, 0.85, float(i) / 3.0); // near streaks blur fainter
+    cover = max(cover, a);
+  }
+  return vec4(light * 1.25 + uSkyCityGlow * 6.0, cover);
+}
+
 // Center-weighted metering of what the view faces, read from the sky itself (the same few texels
 // for every pixel). Returns the factor that takes the pre-exposed sky to its final exposure.
 float skyMeter(vec3 deck) {
@@ -302,14 +350,16 @@ vec3 citySky(vec3 d, float foot) {
     col = mix(col, deck, 1.0 - exp(-uSkyHaze * min(path, 60.0)));
   }
   vec3 lights = vec3(0.0);
+  // The light around the view's horizon, live: the sky there, or under a deck the light beneath it;
+  // rain and fog grey it towards the deck's. It lit the skyline, and it lights the falling rain.
+  vec3 hd = normalize(vec3(d.x, 0.04, d.z));
+  vec3 horizon = skyAtmosphere(hd) + uSkyCityGlow * uSkyCityShape.x;
+  horizon = mix(horizon, deck, max(uSkyCloud.x, 1.0 - exp(-uSkyHaze * 10.0)));
   if (uSkylineOn > 0.5) {
-    // The light the skyline was lit by, live: the sky at the horizon in this direction, or under a deck
-    // the light beneath it; rain and fog grey it towards the deck's.
-    vec3 hd = normalize(vec3(d.x, 0.04, d.z));
-    vec3 horizon = skyAtmosphere(hd) + uSkyCityGlow * uSkyCityShape.x;
-    horizon = mix(horizon, deck, max(uSkyCloud.x, 1.0 - exp(-uSkyHaze * 10.0)));
     vec4 s = skyline(d, foot, horizon, lights);
     col = col * (1.0 - s.a) + s.rgb;
   }
-  return skyShoulder(col * exposure + lights);
+  vec4 rain = cityRain(d, foot, horizon);
+  col = mix(col, rain.rgb, rain.a);
+  return skyShoulder(col * exposure + lights * (1.0 - rain.a));
 }

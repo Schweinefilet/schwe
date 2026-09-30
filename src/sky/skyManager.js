@@ -85,11 +85,11 @@ function readInputs() {
     const weather = row && { cloudCover: row.cloudCover, mmPerHour: row.mmPerHour, code: row.code }
     const inputs = skyInputs({ city: CITY[id], date, weather, sky: SKY })
     entry.sky.set(inputs)
-    entry.target = { ...inputs.clouds, haze: inputs.haze }
+    entry.target = { ...inputs.clouds, haze: inputs.haze, rain: inputs.rain }
     // The first real reading is shown as it is (nothing is on screen yet); later ones ease in.
     if (!entry.shown || (!entry.hadRows && rows)) entry.shown = { ...entry.target }
     entry.hadRows = !!rows
-    entry.sky.setWeather(entry.shown, entry.shown.haze)
+    entry.sky.setWeather(entry.shown, entry.shown.haze, entry.shown.rain)
   }
 }
 
@@ -99,13 +99,13 @@ function ease(dt) {
     const { shown, target } = entry
     if (!shown || !target) continue
     let moved = false
-    for (const key of ['cover', 'tau', 'baseKm', 'haze']) {
+    for (const key of ['cover', 'tau', 'baseKm', 'haze', 'rain']) {
       const d = target[key] - shown[key]
       if (Math.abs(d) < 1e-4) continue
       shown[key] += d * k
       moved = true
     }
-    if (moved) entry.sky.setWeather(shown, shown.haze)
+    if (moved) entry.sky.setWeather(shown, shown.haze, shown.rain)
   }
 }
 

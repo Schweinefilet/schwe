@@ -65,7 +65,12 @@ def write(path, rgb, a):
     out = np.concatenate([srgb(rgb), np.clip(a, 0, 1)[..., None]], axis=-1)
     out = (out * 255 + 0.5).astype(np.uint8)
     o = oiio.ImageOutput.create(path)
-    o.open(path, oiio.ImageSpec(out.shape[1], out.shape[0], 4, 'uint8'))
+    spec = oiio.ImageSpec(out.shape[1], out.shape[0], 4, 'uint8')
+    # Write the numbers as they are. PNG's alpha is "unassociated", so OIIO would otherwise divide RGB by
+    # alpha on the way out; these alphas are coverage or data (distance, the late share), and RGB is
+    # meant premultiplied by coverage.
+    spec.attribute('oiio:UnassociatedAlpha', 1)
+    o.open(path, spec)
     o.write_image(out)
     o.close()
     print('→', path, f'{os.path.getsize(path) / 1e6:.1f} MB')

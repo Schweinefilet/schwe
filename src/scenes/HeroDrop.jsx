@@ -1,13 +1,14 @@
 import { useEffect, useMemo, useRef } from 'react'
 import { useFrame } from '@react-three/fiber'
 import * as THREE from 'three'
-import { HERO, RAIN } from '../config.js'
+import { DIVE, HERO, RAIN } from '../config.js'
 import { getSlot } from '../content/videoManager.js'
 import { rig } from '../core/rig.js'
 import { globalUniforms } from '../core/uniforms.js'
 import envChunk from '../shaders/env.glsl?raw'
 import { envUniforms } from '../content/backdrop.js'
 import dropFrag from '../shaders/drop.frag.glsl?raw'
+import { skyClock } from '../sky/citySky.js'
 
 const vertexShader = /* glsl */ `
 varying vec3 vWorld;
@@ -58,6 +59,7 @@ export function createDropMaterial({ radius = HERO.radius, dispersion = true, sk
       uNear: { value: new THREE.Vector2(...HERO.near) },
       uDive: { value: 0 },
       uCoverTan: { value: new THREE.Vector2(1, 1) },
+      uDiveZoom: { value: 1 },
       // Shared by reference, so the drop hides and fades exactly as the rain does (drop.frag.glsl).
       uTimeScale: globalUniforms.uTimeScale,
       uFocus: globalUniforms.uFocus,
@@ -81,6 +83,14 @@ function coverTan(camera, out) {
   if (camera.aspect > CLIP_ASPECT) out.set(tx, tx / CLIP_ASPECT)
   else out.set(ty * CLIP_ASPECT, ty)
   out.multiplyScalar(COVER_MARGIN)
+}
+
+// Sky content inside the drop: how much to narrow the camera's view so its wider side spans a normal
+// lens's DIVE.viewFov (never widened).
+function diveZoom(camera) {
+  const ty = Math.tan(THREE.MathUtils.degToRad(camera.fov / 2))
+  const wide = ty * Math.max(camera.aspect, 1)
+  return Math.min(1, Math.tan(THREE.MathUtils.degToRad(DIVE.viewFov / 2)) / wide)
 }
 
 // One hero drop. `poster` + `rect`: its cell in the poster atlas. The video budget manager's record
@@ -126,8 +136,12 @@ export default function HeroDrop({
     }
     if (dive) {
       u.uDive.value = rig.dive
-      if (rig.dive > 0) coverTan(camera, u.uCoverTan.value)
+      if (rig.dive > 0) {
+        coverTan(camera, u.uCoverTan.value)
+        u.uDiveZoom.value = diveZoom(camera)
+      }
     }
+    if (sky) skyClock.value = (performance.now() / 1000) % 600 // the city's live rain (sky.glsl cityRain)
     const s = slot ?? (slotKey ? getSlot(slotKey) : null)
     const live = s?.texture ? s.live : 0
     u.uLive.value = live
