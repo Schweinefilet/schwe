@@ -261,16 +261,17 @@ bool skylineUv(vec3 d, out vec2 uv, out float sides) {
   return uv.x <= 1.0 && uv.y >= 0.0 && uv.y <= 1.0;
 }
 
-// A panorama's three samples decoded (light premultiplied by coverage in all three): daylight under the
-// live `horizon` light, which distant buildings fade into (rgb, premultiplied; a: coverage), and
-// `lights`, the city's own lights and windows after dark, display-referred (added after the exposure: a
-// real window, a hundred times brighter than a city's night sky, would blow the skyline out).
-vec4 skylineDecode(vec4 L, vec4 N, vec4 W, vec3 scale, vec3 horizon, float sides, out vec3 lights) {
+// A panorama's three samples decoded (light premultiplied by coverage in all three): daylight, the walls
+// lit by `fill` (the sky behind us, which the walls we see face) and fading with distance into `horizon`
+// (the light behind them), as rgb premultiplied, a: coverage; and `lights`, the city's own lights and
+// windows after dark, display-referred (added after the exposure: a real window, a hundred times brighter
+// than a city's night sky, would blow the skyline out).
+vec4 skylineDecode(vec4 L, vec4 N, vec4 W, vec3 scale, vec3 fill, vec3 horizon, float sides, out vec3 lights) {
   float cover = L.a * sides;
   float km = exp(uSkylineDist.x + (N.a / max(L.a, 1e-3)) * uSkylineDist.y) / 1000.0;
   // Aerial perspective: farther buildings fade into the light around them, faster in rain or fog.
   float clear = exp(-km * (uSkylineGain.z + uSkyHaze));
-  vec3 lit = L.rgb * scale.x * horizon * sides;
+  vec3 lit = L.rgb * scale.x * fill * sides;
   vec3 c = horizon * cover * (1.0 - clear) + lit * clear;
   // After dark: the fixed lights, and the windows, the evening's giving way to the few still lit late.
   vec3 windows = W.rgb * scale.z * (1.0 - uSkylineLit.y * (1.0 - W.a / max(L.a, 1e-3)));
@@ -282,7 +283,7 @@ vec4 skylineDecode(vec4 L, vec4 N, vec4 W, vec3 scale, vec3 horizon, float sides
 // premultiplied by its coverage (a) and its `lights` (skylineDecode). Every texture holds light
 // premultiplied by coverage, decoded linear before filtering, so the drift's tiny drops read its averaged
 // mip levels correctly.
-vec4 skyline(vec2 uv, float sides, float foot, vec3 horizon, out vec3 lights) {
+vec4 skyline(vec2 uv, float sides, float foot, vec3 fill, vec3 horizon, out vec3 lights) {
   lights = vec3(0.0);
   float texelsPerRadian = float(textureSize(uSkylineLight, 0).x) / uSkylineRect.y;
   float lod = log2(max(foot * texelsPerRadian, 1.0));
@@ -290,7 +291,7 @@ vec4 skyline(vec2 uv, float sides, float foot, vec3 horizon, out vec3 lights) {
   if (L.a * sides <= 1e-3) return vec4(0.0);
   vec4 N = textureLod(uSkylineNight, uv, lod);
   vec4 W = textureLod(uSkylineWindows, uv, lod);
-  return skylineDecode(L, N, W, uSkylineScale, horizon, sides, lights);
+  return skylineDecode(L, N, W, uSkylineScale, fill, horizon, sides, lights);
 }
 
 // Smooth sampling of a soft texture seen magnified: a cubic B-spline from four bilinear reads, so no
@@ -425,9 +426,18 @@ float glitterNoise(vec3 p, float cycles) {
   return mix(a, b, f.z);
 }
 
+// Value noise in the plane, 0..1.
+float waterNoise(vec2 p) {
+  vec2 i = floor(p);
+  vec2 f = fract(p);
+  f = f * f * (3.0 - 2.0 * f);
+  return mix(mix(glitterHash(vec3(i, 7.0)), glitterHash(vec3(i + vec2(1.0, 0.0), 7.0)), f.x),
+             mix(glitterHash(vec3(i + vec2(0.0, 1.0), 7.0)), glitterHash(vec3(i + vec2(1.0, 1.0), 7.0)), f.x), f.y);
+}
+
 // The water seen along d (below the horizon, where the skyline leaves it uncovered): rgb before the
 // exposure; `lights`, the city's lights reflected, after it.
-vec3 water(vec3 d, float foot, vec3 horizon, vec3 zenith, vec3 deck, out vec3 lights) {
+vec3 water(vec3 d, float foot, vec3 fill, vec3 horizon, vec3 zenith, vec3 deck, out vec3 lights) {
   float sinE = max(-d.y, 1e-4);
   float cosE = sqrt(1.0 - sinE * sinE);
   vec2 h = d.xz / cosE;                  // the view's direction across the water
@@ -444,6 +454,13 @@ vec3 water(vec3 d, float foot, vec3 horizon, vec3 zenith, vec3 deck, out vec3 li
   vec2 slope = vec2(0.0);
   vec2 vRes = vec2(0.0);
   vec2 vAll = vec2(0.0);
+  // Wind waves are short-crested: no crest runs straight across the river. The surface bends slowly (a
+  // warp of a third of a peak wavelength over three) and the trains come in groups, swelling and fading
+  // over a few wavelengths (longer trains in longer groups).
+  float peakL = 4.0 * uSkyGlitter.x;
+  vec2 Pw = P + (vec2(waterNoise(P / (3.0 * peakL)), waterNoise(P / (3.0 * peakL) + 17.3)) - 0.5) * 0.7 * peakL;
+  float groupLong = 0.4 + 1.2 * waterNoise(P / (5.0 * peakL) + 3.1);
+  float groupShort = 0.4 + 1.2 * waterNoise(P / (1.5 * peakL) + 9.7);
   for (int i = 0; i < WAVES; i++) {
     vec4 w = uSkyWaves[i];
     float k = length(w.xy);
@@ -455,8 +472,9 @@ vec3 water(vec3 d, float foot, vec3 horizon, vec3 zenith, vec3 deck, out vec3 li
     float fa = k * ca * along * 0.5;
     float fc = k * cc * across * 0.5;
     float att = exp(-0.5 * (fa * fa + fc * fc));
-    float phase = dot(w.xy, P) - w.w * t + 6.2831853 * fract(float(i) * 0.618034);
-    slope += att * w.z * w.xy * cos(phase);
+    float phase = dot(w.xy, Pw) - w.w * t + 6.2831853 * fract(float(i) * 0.618034);
+    float group = mix(groupLong, groupShort, float(i) / float(WAVES - 1));
+    slope += att * group * w.z * w.xy * cos(phase);
     float v = 0.5 * (w.z * k) * (w.z * k);
     vec2 share = vec2(ca * ca, cc * cc);
     vAll += v * share;
@@ -504,7 +522,7 @@ vec3 water(vec3 d, float foot, vec3 horizon, vec3 zenith, vec3 deck, out vec3 li
     vec4 N = textureGrad(uSkylineMirrorNight, uv, gx, gy) * inside;
     vec4 W = dark ? textureGrad(uSkylineMirrorWindows, uv, gx, gy) * inside : vec4(0.0);
     vec3 li;
-    vec4 m = skylineDecode(L, N, W, uSkylineMirrorScale, horizon, 1.0, li);
+    vec4 m = skylineDecode(L, N, W, uSkylineMirrorScale, fill, horizon, 1.0, li);
     float q = 0.5 * tj;
     vec3 st = skyTap[1] + q * 0.5 * (skyTap[2] - skyTap[0]) + q * q * 0.5 * (skyTap[2] - 2.0 * skyTap[1] + skyTap[0]);
     mirrorDay += wj * F * m.rgb;
@@ -666,16 +684,21 @@ vec3 citySky(vec3 d, float foot) {
   // The light around the view's horizon, live: the sky there, or under a deck the light beneath it;
   // rain and fog grey it towards the deck's. It lit the skyline, and it lights the falling rain.
   vec3 hd = normalize(vec3(d.x, 0.04, d.z));
+  float grey = max(uSkyCloud.x, 1.0 - exp(-uSkyHaze * 10.0));
   vec3 horizon = skyAtmosphere(hd) + uSkyCityGlow * uSkyCityShape.x;
-  horizon = mix(horizon, deck, max(uSkyCloud.x, 1.0 - exp(-uSkyHaze * 10.0)));
+  horizon = mix(horizon, deck, grey);
+  // What lights the walls we see: they face us, so the horizon behind us, not the one behind them (at dusk
+  // the sunset glow they have their backs to). Taken as `horizon` is, so the overcast render's scale holds.
+  vec3 fill = skyAtmosphere(normalize(vec3(-d.x, 0.04, -d.z))) + uSkyCityGlow * uSkyCityShape.x;
+  fill = mix(fill, deck, grey);
   vec2 uv;
   float sides;
   if (uSkylineOn > 0.5 && skylineUv(d, uv, sides)) {
-    vec4 s = skyline(uv, sides, foot, horizon, lights);
+    vec4 s = skyline(uv, sides, foot, fill, horizon, lights);
     // Below the horizon, what the skyline leaves uncovered is the city's water, where it has some.
     if (uSkylineWater.x > 0.5 && d.y < 0.0 && s.a < 0.999) {
       vec3 wl;
-      vec3 w = water(d, foot, horizon, zenith, deck, wl);
+      vec3 w = water(d, foot, fill, horizon, zenith, deck, wl);
       col = mix(col, w, sides);
       lights += wl * sides * (1.0 - s.a);
     }
