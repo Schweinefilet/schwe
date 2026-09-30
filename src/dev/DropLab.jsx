@@ -29,7 +29,7 @@ import Effects from '../scenes/Effects.jsx'
 //   ?at=2026-09-29T14:30Z  the moment (default: now, following the clock)
 //   ?clip=tokyo_night_clear  show that clip instead of a sky
 //   ?wl=hillaire          Hillaire's original wavelengths (680/550/440 nm), for before/after comparison
-// Sliders preview extremes: cloud cover, rain, local time of day. Views: orbit, drift (the drop at
+// Sliders preview extremes: cloud cover, rain, local time of day, wind. Views: orbit, drift (the drop at
 // true size, posed exactly as at a drift key), dive (the dive's eye; the dive slider eases the optics).
 // window.__lab drives it from scripts (scripts/sky-stills.mjs).
 
@@ -180,7 +180,7 @@ function SkyContent() {
 
 function SkyPanel({ view, setView, dive, setDive }) {
   const [weather, setWeather] = useState(undefined) // undefined: loading
-  const [override, setOverride] = useState({ cloud: null, rain: null, hour: null, fog: null })
+  const [override, setOverride] = useState({ cloud: null, rain: null, hour: null, fog: null, wind: null, windFrom: null })
   const [now, setNow] = useState(() => new Date())
   const [, tick] = useState(0)
 
@@ -234,7 +234,8 @@ function SkyPanel({ view, setView, dive, setDive }) {
             {' '}· sun {deg(inputs.sun.alt)} · moon {deg(inputs.moon.alt)} {Math.round(inputs.moon.fraction * 100)}% lit · faces {inputs.facing.toward}
             <br />
             cloud {Math.round(inputs.cloud * 100)}% ({source('cloud')}) · rain {inputs.rain.toFixed(1)} mm/h ({source('rain')})
-            {inputs.fog ? ' · fog' : ''} · pre-exposure meter {inputs.metered.toPrecision(3)} cd/m²
+            {inputs.fog ? ' · fog' : ''} · wind {inputs.wind.ms.toFixed(1)} m/s{inputs.wind.towardDeg == null ? '' : ` to ${Math.round(inputs.wind.towardDeg)}°`} ({source('wind')})
+            {' '}· pre-exposure meter {inputs.metered.toPrecision(3)} cd/m²
           </>
         )}
         {weather === undefined && ' · weather loading'}
@@ -245,8 +246,9 @@ function SkyPanel({ view, setView, dive, setDive }) {
       <Slider label="cloud" min={0} max={1} step={0.01} value={override.cloud ?? inputs?.cloud ?? 0} onChange={set('cloud')} />
       <Slider label="rain" min={0} max={30} step={0.1} value={override.rain ?? inputs?.rain ?? 0} onChange={set('rain')} />
       <Slider label="time" min={0} max={24} step={0.05} value={hour} onChange={set('hour')} />
+      <Slider label="wind" min={0} max={15} step={0.1} value={override.wind ?? inputs?.wind.ms ?? 0} onChange={set('wind')} />
       <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
-        <button onClick={() => setOverride({ cloud: null, rain: null, hour: null, fog: null })}>live</button>
+        <button onClick={() => setOverride({ cloud: null, rain: null, hour: null, fog: null, wind: null, windFrom: null })}>live</button>
         {Object.keys(VIEWS).map((v) => (
           <button key={v} onClick={() => setView(v)} style={{ fontWeight: v === view ? 700 : 400 }}>
             {v}

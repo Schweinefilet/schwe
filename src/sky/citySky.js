@@ -5,6 +5,7 @@ import { loadCloudNoise } from './cloudNoise.js'
 import { createHillaire, lutTarget } from './hillaire.js'
 import { skylineVariant } from './skylineVariant.js'
 import { loadStarTexture } from './stars.js'
+import { waveEnergy, waveTrains } from './waves.js'
 
 // Sky as a drop's content source. createSkyGlobals() builds what every city shares, once per visit:
 // the atmosphere model's tables, the star catalogue and the cloud noise. It returns at once; `ready`
@@ -33,6 +34,7 @@ export function createSkyGlobals(renderer, { model = createHillaire, coefficient
   }
   const globals = {
     atmosphere: atmosphereModel,
+    maxAnisotropy: renderer.capabilities?.getMaxAnisotropy?.() ?? 1, // the water's streaks read the mirror anisotropically
     stars: null, // until it loads (or if it fails) the sky has no stars
     uniforms,
     dispose() {
@@ -58,7 +60,7 @@ NO_SKYLINE.needsUpdate = true
 
 // One of a skyline's images, rows bottom-up (v runs up with elevation). RGB is light encoded sRGB, so the
 // GPU decodes it before filtering and its mip levels average light as a camera would; alpha is data.
-async function loadSkylineImage(url) {
+async function loadSkylineImage(url, anisotropy = 1) {
   const blob = await (await fetch(url)).blob()
   const bitmap = await createImageBitmap(blob, { imageOrientation: 'flipY', premultiplyAlpha: 'none', colorSpaceConversion: 'none' })
   const texture = new THREE.Texture(bitmap)
@@ -67,23 +69,37 @@ async function loadSkylineImage(url) {
   texture.colorSpace = THREE.SRGBColorSpace
   texture.minFilter = THREE.LinearMipmapLinearFilter
   texture.generateMipmaps = true
+  texture.anisotropy = anisotropy
   texture.needsUpdate = true
   return texture
 }
 
 // A city's skyline (scripts/blender/: rendered in Blender, packed by encode.py): the variant for this
 // month as three textures (daylight and coverage; the fixed lights and distance; the windows), their
-// scales, and where the panorama sits in the sky. null when the city has none.
-async function loadSkyline(cityId, month = new Date().getUTCMonth() + 1) {
+// scales, and where the panorama sits in the sky; where the city has water, the same three for its
+// reflection (the mirror render). null when the city has none.
+async function loadSkyline(cityId, anisotropy, month = new Date().getUTCMonth() + 1) {
   const base = `${import.meta.env.BASE_URL}${SKY.skyline.url}${cityId}`
   const res = await fetch(`${base}.json`)
   if (!res.ok || !(res.headers.get('content-type') ?? '').includes('json')) return null
   const meta = await res.json()
   const variant = meta.version === 2 ? skylineVariant(meta, month) : null
   if (!variant) return null
-  const [light, night, windows] = await Promise.all(['light', 'night', 'windows'].map((k) => loadSkylineImage(`${base}/${variant}-${k}.png`)))
-  return { meta, variant, scale: meta.variants[variant].scale, textures: { light, night, windows } }
+  const scale = meta.variants[variant].scale
+  const names = ['light', 'night', 'windows']
+  const mirror = meta.mirror && scale.mirror
+  const images = await Promise.all([
+    ...names.map((k) => loadSkylineImage(`${base}/${variant}-${k}.png`)),
+    ...(mirror ? names.map((k) => loadSkylineImage(`${base}/${variant}-mirror-${k}.png`, anisotropy)) : []),
+  ])
+  const [light, night, windows, mirrorLight, mirrorNight, mirrorWindows] = images
+  const textures = { light, night, windows, ...(mirror && { mirrorLight, mirrorNight, mirrorWindows }) }
+  return { meta, variant, scale, textures }
 }
+
+const WAVES = SKY.water.waves
+
+const angleBetween = (a, b) => Math.abs(((a - b + 540) % 360) - 180)
 
 export class CitySky {
   constructor(globals, [width, height], cityId = null) {
@@ -124,9 +140,23 @@ export class CitySky {
       uSkylineScale: { value: new THREE.Vector3() },
       uSkylineLit: { value: new THREE.Vector3() },
       uSkylineGain: { value: new THREE.Vector3(SKY.skyline.lights, SKY.skyline.windows, SKY.skyline.hazePerKm) },
+      uSkylineMirrorLight: { value: NO_SKYLINE },
+      uSkylineMirrorNight: { value: NO_SKYLINE },
+      uSkylineMirrorWindows: { value: NO_SKYLINE },
+      uSkylineMirrorRect: { value: new THREE.Vector4() },
+      uSkylineMirrorScale: { value: new THREE.Vector3() },
+      uSkylineWater: { value: new THREE.Vector2() },
+      uSkyWaves: { value: Array.from({ length: WAVES }, () => new THREE.Vector4()) },
+      uSkyWaveTail: { value: new THREE.Vector4() },
+      uSkyGlitter: { value: new THREE.Vector3(1, 1, 1) },
+      uSkyWaterBody: { value: new THREE.Vector3(...SKY.water.body) },
     }
+    this.fetch = SKY.water.fetch[cityId] ?? SKY.water.defaultFetch
+    this.waves = null // the trains, fixed once the wind is first known (src/sky/waves.js)
+    this.wind = 0
+    this.rain = 0
     if (cityId)
-      loadSkyline(cityId).then(
+      loadSkyline(cityId, globals.maxAnisotropy).then(
         (s) => {
           if (!s) return
           const RAD = Math.PI / 180
@@ -138,6 +168,15 @@ export class CitySky {
           u.uSkylineScale.value.set(s.scale.light, s.scale.night, s.scale.windows)
           u.uSkylineRect.value.set(s.meta.azimuth[0] * RAD, s.meta.azimuth[1] * RAD, s.meta.elevation[0] * RAD, (s.meta.elevation[1] - s.meta.elevation[0]) * RAD)
           u.uSkylineDist.value.set(Math.log(s.meta.distance[0]), Math.log(s.meta.distance[1] / s.meta.distance[0]))
+          if (s.textures.mirrorLight) {
+            const m = s.meta.mirror
+            u.uSkylineMirrorLight.value = s.textures.mirrorLight
+            u.uSkylineMirrorNight.value = s.textures.mirrorNight
+            u.uSkylineMirrorWindows.value = s.textures.mirrorWindows
+            u.uSkylineMirrorScale.value.set(s.scale.mirror.light, s.scale.mirror.night, s.scale.mirror.windows)
+            u.uSkylineMirrorRect.value.set(s.meta.azimuth[0] * RAD, s.meta.azimuth[1] * RAD, m.elevation[0] * RAD, (m.elevation[1] - m.elevation[0]) * RAD)
+            u.uSkylineWater.value.set(1, m.eyeAboveWater)
+          }
           u.uSkylineOn.value = 1
         },
         (err) => console.warn(`[sky] no skyline for ${cityId}:`, err.message)
@@ -169,15 +208,39 @@ export class CitySky {
     u.uSkyCityGlow.value.fromArray(inputs.cityGlow)
     u.uSkyPreExposure.value = inputs.exposure
     u.uSkylineLit.value.set(1 - inputs.windows.late, inputs.windows.late, inputs.windows.dark)
-    this.setWeather(inputs.clouds, inputs.haze, inputs.rain)
+    // The waves run where the wind blows. Their trains are laid once; a later reading turns them only
+    // if the wind has swung well round (turning them moves the whole pattern at once).
+    const toward = inputs.wind.towardDeg
+    if (!this.waves || (toward != null && angleBetween(toward, this.waves.towardDeg) > 45)) this.layWaves(inputs.wind.ms, toward ?? 0)
+    this.setWeather(inputs.clouds, inputs.haze, inputs.rain, inputs.wind.ms)
   }
 
-  // Weather only (cloud deck, haze, rain): the site eases these between readings, so a new reading
+  layWaves(windMs, towardDeg) {
+    this.waves = { ...waveTrains({ windMs, towardDeg, fetchM: this.fetch, count: WAVES }), towardDeg }
+    const u = this.uniforms
+    const g = this.waves.glitter
+    u.uSkyGlitter.value.set(g.cell, g.period, g.cycles)
+    this.setWaves(windMs, this.rain)
+  }
+
+  setWaves(windMs, rain) {
+    this.wind = windMs
+    this.rain = rain
+    if (!this.waves) return
+    const w = SKY.water
+    const e = waveEnergy(this.waves, { windMs, fetchM: this.fetch, slopeScale: w.slopeScale, rainMmH: rain, rainSlope: w.rainSlope })
+    const u = this.uniforms
+    this.waves.trains.forEach((t, i) => u.uSkyWaves.value[i].set(t.vector[0], t.vector[1], e.amplitudes[i], t.omega))
+    u.uSkyWaveTail.value.set(this.waves.dir[0], this.waves.dir[1], e.tail[0], e.tail[1])
+  }
+
+  // Weather only (cloud deck, haze, rain, wind): the site eases these between readings, so a new reading
   // never cuts. Never re-renders the texture, which does not depend on weather.
-  setWeather({ cover, tau, baseKm, tileKm }, haze, rain = 0) {
+  setWeather({ cover, tau, baseKm, tileKm }, haze, rain = 0, wind = this.wind) {
     this.uniforms.uSkyCloud.value.set(cover, tau, baseKm, tileKm)
     this.uniforms.uSkyHaze.value = haze
     this.uniforms.uSkyRain.value = rain
+    if (wind !== this.wind || rain !== this.rain) this.setWaves(wind, rain)
   }
 
   render(renderer) {

@@ -10,8 +10,8 @@ const realFetch = globalThis.fetch
 afterEach(() => (globalThis.fetch = realFetch))
 
 // Open-Meteo's shape for several locations: an array, one entry per location, times in UTC.
-const location = ({ code = 0, rain = 0, showers = 0, slots = [], cloud = 0 } = {}) => ({
-  current: { time: '2026-09-28T21:15', interval: 900, weather_code: code, temperature_2m: 12, rain, showers, cloud_cover: cloud },
+const location = ({ code = 0, rain = 0, showers = 0, slots = [], cloud = 0, wind = 3.4, windFrom = 230 } = {}) => ({
+  current: { time: '2026-09-28T21:15', interval: 900, weather_code: code, temperature_2m: 12, rain, showers, cloud_cover: cloud, wind_speed_10m: wind, wind_direction_10m: windFrom },
   minutely_15: {
     time: slots.map((_, i) => `2026-09-28T${String(21 + Math.floor((15 + i * 15) / 60)).padStart(2, '0')}:${String((15 + i * 15) % 60).padStart(2, '0')}`),
     rain: slots,
@@ -60,6 +60,23 @@ test('cloud cover: percent becomes 0..1, missing stays null', async () => {
   const wx = await fetchWeather(cities)
   assert.equal(wx.a.cloudCover, 0.87)
   assert.equal(wx.b.cloudCover, null)
+})
+
+test('wind: m/s and where it blows from, missing stays null', async () => {
+  const still = location()
+  delete still.current.wind_speed_10m
+  delete still.current.wind_direction_10m
+  let asked = null
+  globalThis.fetch = async (url) => {
+    asked = new URL(url)
+    return { ok: true, status: 200, json: async () => [location({ wind: 5.2, windFrom: 270 }), still] }
+  }
+  const wx = await fetchWeather(cities)
+  assert.equal(asked.searchParams.get('wind_speed_unit'), 'ms')
+  assert.equal(wx.a.windMs, 5.2)
+  assert.equal(wx.a.windFromDeg, 270)
+  assert.equal(wx.b.windMs, null)
+  assert.equal(wx.b.windFromDeg, null)
 })
 
 test('snow is its own variant, never rain', () => {

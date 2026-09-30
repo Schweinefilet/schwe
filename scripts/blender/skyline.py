@@ -294,7 +294,9 @@ def roof_material():
 
 
 def water_material():
-    """The Thames: dark, glossy water with small wind ripples, so reflections break into long streaks."""
+    """The river. The camera does not see it (a holdout: alpha 0, so the site draws the water itself, live,
+    from the mirror render below); to every other ray it is dark, glossy water with small wind ripples,
+    so it still lights the walls and bridges above it as before."""
     mat = bpy.data.materials.new('water')
     nt = nodes_of(mat)
     L = nt.links
@@ -314,8 +316,14 @@ def water_material():
     b = node(nt, 'ShaderNodeBsdfPrincipled', Roughness=0.03, **{'Base Color': (0.008, 0.011, 0.01, 1)})
     b.inputs['IOR'].default_value = 1.333
     L.new(bump.outputs['Normal'], b.inputs['Normal'])
+    path = node(nt, 'ShaderNodeLightPath')
+    hold = node(nt, 'ShaderNodeHoldout')
+    mix = node(nt, 'ShaderNodeMixShader')
+    L.new(path.outputs['Is Camera Ray'], mix.inputs['Fac'])
+    L.new(b.outputs[0], mix.inputs[1])
+    L.new(hold.outputs[0], mix.inputs[2])
     out = node(nt, 'ShaderNodeOutputMaterial')
-    L.new(b.outputs[0], out.inputs['Surface'])
+    L.new(mix.outputs[0], out.inputs['Surface'])
     return mat
 
 
@@ -928,22 +936,79 @@ def render(path):
     print('→', path + '.exr')
 
 
+def clip_below_water():
+    """For the mirror render: the camera sees nothing below the water plane (the underwater parts of
+    walls and piers would stand in front of their own reflections). Every other ray sees the scene as it is."""
+    wz = SITE['water']
+    for m in bpy.data.materials:
+        if not m.node_tree:
+            continue
+        nt = m.node_tree
+        out = next((n for n in nt.nodes if n.type == 'OUTPUT_MATERIAL'), None)
+        if out is None or not out.inputs['Surface'].is_linked:
+            continue
+        src = out.inputs['Surface'].links[0].from_socket
+        geo = node(nt, 'ShaderNodeNewGeometry')
+        sep = node(nt, 'ShaderNodeSeparateXYZ')
+        nt.links.new(geo.outputs['Position'], sep.inputs[0])
+        below = math_node(nt, 'LESS_THAN', sep.outputs['Z'], wz)
+        camera = node(nt, 'ShaderNodeLightPath').outputs['Is Camera Ray']
+        mix = node(nt, 'ShaderNodeMixShader')
+        nt.links.new(math_node(nt, 'MULTIPLY', below, camera), mix.inputs['Fac'])
+        nt.links.new(src, mix.inputs[1])
+        nt.links.new(node(nt, 'ShaderNodeBsdfTransparent').outputs[0], mix.inputs[2])
+        nt.links.new(mix.outputs[0], out.inputs['Surface'])
+
+
+def render_set(prefix, passes):
+    """The light renders (sky, city, windows, late windows) and the distance, with this camera."""
+    for name, lights in (('sky', dict(sky=True)), ('city', dict(city=True)), ('win', dict(windows=True)), ('late', dict(windows=True, late=True))):
+        if name in passes:
+            set_lights(**lights)
+            render(f'{prefix}-{name}')
+    if 'depth' in passes:
+        set_lights()
+        scene.view_layers[0].material_override = DEPTH
+        scene.cycles.samples = 1
+        scene.cycles.use_denoising = False
+        filter_width = scene.cycles.filter_width
+        scene.cycles.filter_width = 0.01
+        render(prefix + '-depth')
+        scene.view_layers[0].material_override = None
+        scene.cycles.samples = SAMPLES
+        scene.cycles.use_denoising = True
+        scene.cycles.filter_width = filter_width
+
+
 # Five renders of the one scene: light adds linearly, so each source can be rendered alone and the
 # site mixes them by the live sky, the dark and the local hour.
+DEPTH = depth_material()
 passes = arg('passes', 'sky,city,win,late,depth').split(',')
-for name, lights in (('sky', dict(sky=True)), ('city', dict(city=True)), ('win', dict(windows=True)), ('late', dict(windows=True, late=True))):
-    if name in passes:
-        set_lights(**lights)
-        render(f'{OUT}-{name}')
+render_set(OUT, passes)
+mirror = None
+if VIEW == 'pano' and scene_data['water'] and arg('mirror', '1') == '1':
+    # The river's reflection, exactly: the same panorama seen from the eye's mirror image below the
+    # water plane, looking up, the water itself hidden from the camera. A reflected ray leaving the water
+    # at elevation e is this camera's ray at +e, so the site reads the river's pixel at -e from here at +e,
+    # tilted by its live waves. Half the vertical resolution: the waves blur it far more than that.
+    cam = scene.camera
+    wz = SITE['water']
+    cam.location = (0, 0, 2 * wz - SITE['eye'])
+    ppd = PANO['ppd']
+    top = -PANO['el'][0]
+    cam.data.latitude_min = 0.0
+    cam.data.latitude_max = math.radians(top)
+    scene.render.resolution_y = int(top * ppd / 2 * SCALE)
+    for ob in bpy.data.objects:
+        if ob.name.startswith('water'):
+            ob.visible_camera = False
+    clip_below_water()  # every material, the distance render's too
+    render_set(OUT + '-mirror', passes)
+    mirror = {'elevation': [0.0, top], 'size': [scene.render.resolution_x, scene.render.resolution_y],
+              'eyeAboveWater': SITE['eye'] - wz}
 if VIEW == 'pano':
     # Where the panorama sits in the sky, for scripts/blender/encode.py.
+    res_y = int((PANO['el'][1] - PANO['el'][0]) * PANO['ppd'] * SCALE)
     json.dump({'bearing': BEARING, 'span': PANO['span'], 'elevation': list(PANO['el']), 'season': SEASON,
-               'size': [scene.render.resolution_x, scene.render.resolution_y]}, open(OUT + '.json', 'w'))
-if 'depth' in passes:
-    set_lights()
-    scene.view_layers[0].material_override = depth_material()
-    scene.cycles.samples = 1
-    scene.cycles.use_denoising = False
-    scene.cycles.filter_width = 0.01
-    render(OUT + '-depth')
+               'size': [scene.render.resolution_x, res_y], 'mirror': mirror}, open(OUT + '.json', 'w'))
 print('done')

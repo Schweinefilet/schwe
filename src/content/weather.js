@@ -24,15 +24,17 @@ export function describeWeather(code) {
   return { variant: 'clear', label: 'clear' }
 }
 
-// Returns { [cityId]: { code, variant, label, tempC, mmPerHour, rainInMinutes, cloudCover } }.
+// Returns { [cityId]: { code, variant, label, tempC, mmPerHour, rainInMinutes, cloudCover, windMs, windFromDeg } }.
 // Cities missing from the response get clear. Rain amounts count rain and showers only, never snow.
 // mmPerHour: current rain rate. rainInMinutes: minutes until the first 15-minute slot in the next 6 h
-// with rain (0 = the current slot), or null. cloudCover: total cloud cover 0..1, or null.
+// with rain (0 = the current slot), or null. cloudCover: total cloud cover 0..1, or null. windMs: wind at
+// 10 m (m/s), windFromDeg: where it blows from (clockwise from north), each null when missing.
 export async function fetchWeather(cities) {
   const params = new URLSearchParams({
     latitude: cities.map((c) => c.lat).join(','),
     longitude: cities.map((c) => c.lon).join(','),
-    current: 'weather_code,temperature_2m,rain,showers,cloud_cover',
+    current: 'weather_code,temperature_2m,rain,showers,cloud_cover,wind_speed_10m,wind_direction_10m',
+    wind_speed_unit: 'ms',
     minutely_15: 'rain,showers',
     forecast_minutely_15: '24',
     timezone: 'UTC',
@@ -56,6 +58,8 @@ export async function fetchWeather(cities) {
             mmPerHour: rainRate(cur),
             rainInMinutes: minutesUntilRain(list[i]?.minutely_15, cur?.time),
             cloudCover: cur?.cloud_cover == null ? null : cur.cloud_cover / 100,
+            windMs: cur?.wind_speed_10m ?? null,
+            windFromDeg: cur?.wind_direction_10m ?? null,
           },
         ]
       })
@@ -63,7 +67,7 @@ export async function fetchWeather(cities) {
   } catch (err) {
     console.warn('[weather] unavailable, assuming clear:', err.message)
     return Object.fromEntries(
-      cities.map((c) => [c.id, { ...describeWeather(null), code: null, tempC: null, mmPerHour: null, rainInMinutes: null, cloudCover: null }])
+      cities.map((c) => [c.id, { ...describeWeather(null), code: null, tempC: null, mmPerHour: null, rainInMinutes: null, cloudCover: null, windMs: null, windFromDeg: null }])
     )
   } finally {
     clearTimeout(timer)

@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useRef } from 'react'
 import { useFrame } from '@react-three/fiber'
 import * as THREE from 'three'
-import { DIVE, HERO, RAIN } from '../config.js'
+import { DIVE, HERO, RAIN, SKY } from '../config.js'
+import { quality } from '../core/quality.js'
 import { getSlot } from '../content/videoManager.js'
 import { rig } from '../core/rig.js'
 import { globalUniforms } from '../core/uniforms.js'
@@ -35,7 +36,7 @@ const proxy = new THREE.SphereGeometry(1.06, 32, 24)
 export function createDropMaterial({ radius = HERO.radius, dispersion = true, sky = null, still = true } = {}) {
   const halfFov = THREE.MathUtils.degToRad(HERO.clipFov / 2)
   const defines = dispersion ? { DISPERSION: '' } : {}
-  if (sky) defines.SKY = ''
+  if (sky) Object.assign(defines, { SKY: '', WAVES: SKY.water.waves, WATER_TAPS: SKY.water.taps[quality.name] ?? SKY.water.taps.low })
   return new THREE.ShaderMaterial({
     vertexShader,
     fragmentShader: sky ? `${envChunk}\n${sky.glsl}\n${dropFrag}` : fragmentShader,

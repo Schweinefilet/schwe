@@ -8,6 +8,11 @@ decoded by the GPU (sRGB, so mip levels average light correctly):
   <variant>-windows.png  RGB the evening's lit windows, / scale; A the share of that light still on late,
                          times coverage
 
+and, where the city has water, the same three for the river's reflection (skyline.py's mirror render,
+from the eye's mirror image below the water plane, elevations 0 up):
+
+  <variant>-mirror-light.png, -mirror-night.png, -mirror-windows.png
+
 and the city's meta (public/skyline/<city>.json), which lists the variants and when each shows. Every
 RGB is premultiplied by coverage, as rendered, so it averages as light does.
 
@@ -38,10 +43,10 @@ MONTHS = [int(m) for m in arg('months', '1,2,3,4,5,6,7,8,9,10,11,12').split(',')
 NEAR, FAR = 20.0, 12000.0  # metres, the log-encoded distance range
 
 
-def read(name):
-    inp = oiio.ImageInput.open(f'{SRC}-{name}.exr')
+def read(name, prefix=SRC):
+    inp = oiio.ImageInput.open(f'{prefix}-{name}.exr')
     if inp is None:
-        raise SystemExit(f'no {SRC}-{name}.exr: {oiio.geterror()}')
+        raise SystemExit(f'no {prefix}-{name}.exr: {oiio.geterror()}')
     spec = inp.spec()
     px = inp.read_image(0, 0, 0, spec.nchannels, 'float').reshape(spec.height, spec.width, spec.nchannels)
     inp.close()
@@ -76,22 +81,34 @@ def write(path, rgb, a):
     print('→', path, f'{os.path.getsize(path) / 1e6:.1f} MB')
 
 
-sky, city, win, late, depth = (read(n) for n in ('sky', 'city', 'win', 'late', 'depth'))
-cover = sky[..., 3]
-# Distance: the depth render's premultiplied distance over its coverage, log between NEAR and FAR.
-d = depth[..., 0] / np.maximum(depth[..., 3], 1e-4)
-logd = np.clip(np.log(np.maximum(d, NEAR) / NEAR) / math.log(FAR / NEAR), 0, 1)
-logd = np.where(cover > 1e-3, logd, 1.0)
 lum = lambda x: 0.2126 * x[..., 0] + 0.7152 * x[..., 1] + 0.0722 * x[..., 2]
-late_share = np.where(lum(win[..., :3]) > 1e-4, np.clip(lum(late[..., :3]) / np.maximum(lum(win[..., :3]), 1e-4), 0, 1), 0.0)
-
 out_dir = os.path.join(ROOT, 'public', 'skyline', CITY)
 os.makedirs(out_dir, exist_ok=True)
-scales = {}
-# Alphas premultiplied by coverage too, so the mip levels average them over the covered part only.
-for name, rgb, a in (('light', sky[..., :3], cover), ('night', city[..., :3], logd * cover), ('windows', win[..., :3], late_share * cover)):
-    scales[name] = scale_for(rgb, cover)
-    write(os.path.join(out_dir, f'{VARIANT}-{name}.png'), rgb / scales[name], a)
+
+
+def encode_set(prefix, tag):
+    """One panorama's renders → its three PNGs (<variant><tag>-light, -night, -windows); returns their
+    scales and the coverage."""
+    sky, city, win, late, depth = (read(n, prefix) for n in ('sky', 'city', 'win', 'late', 'depth'))
+    cover = sky[..., 3]
+    # Distance: the depth render's premultiplied distance over its coverage, log between NEAR and FAR.
+    d = depth[..., 0] / np.maximum(depth[..., 3], 1e-4)
+    logd = np.clip(np.log(np.maximum(d, NEAR) / NEAR) / math.log(FAR / NEAR), 0, 1)
+    logd = np.where(cover > 1e-3, logd, 1.0)
+    late_share = np.where(lum(win[..., :3]) > 1e-4, np.clip(lum(late[..., :3]) / np.maximum(lum(win[..., :3]), 1e-4), 0, 1), 0.0)
+    scales = {}
+    # Alphas premultiplied by coverage too, so the mip levels average them over the covered part only.
+    for name, rgb, a in (('light', sky[..., :3], cover), ('night', city[..., :3], logd * cover), ('windows', win[..., :3], late_share * cover)):
+        scales[name] = scale_for(rgb, cover)
+        write(os.path.join(out_dir, f'{VARIANT}{tag}-{name}.png'), rgb / scales[name], a)
+    return scales, cover
+
+
+scales, cover = encode_set(SRC, '')
+geometry = json.load(open(SRC + '.json'))  # written by skyline.py beside its renders
+mirror = geometry.get('mirror')
+if mirror:
+    scales['mirror'], _ = encode_set(SRC + '-mirror', '-mirror')
 
 # The meta: the panorama's place in the sky (as skyline.py rendered it) and the variants.
 scene = json.load(open(os.path.join(ROOT, 'data', 'skyline', CITY, 'scene.json')))
@@ -100,7 +117,6 @@ meta = json.load(open(meta_path)) if os.path.exists(meta_path) else {}
 if meta.get('version') != 2:
     meta = {}
 h, w = cover.shape
-geometry = json.load(open(SRC + '.json'))  # written by skyline.py beside its renders
 span = geometry['span']
 el = geometry['elevation']
 meta.update({
@@ -112,6 +128,9 @@ meta.update({
     'elevation': el,  # degrees, bottom and top rows
     'distance': [NEAR, FAR],
     'size': [w, h],
+    # The river's reflection: where its panorama sits (elevations from the mirror eye, which is as far
+    # below the water as the eye is above it) and the eye's height above the water (m).
+    'mirror': mirror,
     'source': '© OpenStreetMap contributors (ODbL); rendered in Blender (Cycles) with hand-modelled landmarks',
 })
 meta.setdefault('variants', {})[VARIANT] = {'months': MONTHS, 'scale': scales}

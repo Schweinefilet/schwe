@@ -23,7 +23,8 @@ const OUT = arg('out', 'review/skyline')
 const CHROME = process.env.CHROME || '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome'
 // UTC. For London: dusk 18:10 in late September; change per city (its local sunset + ~25 min).
 const TIMES = { night: '2026-09-29T21:30:00Z', dusk: '2026-09-29T18:10:00Z', day: '2026-09-29T12:00:00Z' }
-const WEATHER = { rain: { cloud: 1, rain: 2, fog: false }, clear: { cloud: 0, rain: 0, fog: false } }
+// Wind fixed too (from the south-west, London's prevailing), so the water is comparable between runs.
+const WEATHER = { rain: { cloud: 1, rain: 2, fog: false, wind: 6, windFrom: 225 }, clear: { cloud: 0, rain: 0, fog: false, wind: 3, windFrom: 225 } }
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
 
 await mkdir(OUT, { recursive: true })

@@ -34,8 +34,13 @@
       ],
       "scale": {
         "light": 1.0,
-        "night": 16.0,
-        "windows": 16.0
+        "night": 32.0,
+        "windows": 16.0,
+        "mirror": {
+          "light": 1.0,
+          "night": 32.0,
+          "windows": 16.0
+        }
       }
     },
     "bare": {
@@ -47,9 +52,25 @@
       ],
       "scale": {
         "light": 1.0,
-        "night": 16.0,
-        "windows": 16.0
+        "night": 32.0,
+        "windows": 16.0,
+        "mirror": {
+          "light": 1.0,
+          "night": 32.0,
+          "windows": 16.0
+        }
       }
     }
+  },
+  "mirror": {
+    "elevation": [
+      0.0,
+      20.0
+    ],
+    "size": [
+      3840,
+      320
+    ],
+    "eyeAboveWater": 12.5
   }
 }

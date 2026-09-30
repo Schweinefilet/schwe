@@ -4,7 +4,8 @@ import { bearing, cityToJ2000, dirFromAltAz, lommelSeeligerPhase, meanBearing, m
 // Everything a city's sky is computed from, for one moment: sun and moon from SunCalc, stars from
 // sidereal time, weather from the one Open-Meteo request. `sky` is SKY from config.js (passed in so
 // this runs in tests). `weather` may be null: no data counts as clear, and nothing is made up.
-// `override` (lab sliders): { cloud 0..1, rain mm/h, fog } replace the live values when set.
+// `override` (lab sliders): { cloud 0..1, rain mm/h, fog, wind m/s, windFrom degrees } replace the live
+// values when set.
 
 const MOON_RADIUS_KM = 1737.4
 const SUN_RADIUS = 0.004654 // radians (mean angular radius 0.2666°)
@@ -23,6 +24,9 @@ export function skyInputs({ city, date, weather = null, override = {}, sky }) {
   const cloud = clamp01(override.cloud ?? weather?.cloudCover ?? 0)
   const rain = Math.max(0, override.rain ?? weather?.mmPerHour ?? 0)
   const fog = override.fog ?? FOG_CODES.has(weather?.code)
+  // Wind at 10 m: no data counts as calm. Where it blows to (clockwise from north), null when unknown.
+  const windMs = Math.max(0, override.wind ?? weather?.windMs ?? 0)
+  const windFrom = override.windFrom ?? weather?.windFromDeg ?? null
 
   // Phase angle ψ (sun-moon-earth) from the lit fraction SunCalc reports: fraction = (1 + cos ψ) / 2.
   const psi = (Math.acos(Math.max(-1, Math.min(1, 2 * illum.fraction - 1))) * 180) / Math.PI
@@ -59,6 +63,7 @@ export function skyInputs({ city, date, weather = null, override = {}, sky }) {
     cloud,
     rain,
     fog,
+    wind: { ms: windMs, towardDeg: windFrom == null ? null : (windFrom + 180) % 360 },
     metered,
     exposure,
     facing: { yaw, pitch, toward },

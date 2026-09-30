@@ -358,6 +358,16 @@ export const SKY = {
   // brighter than a city's night sky, would blow the skyline out); `hazePerKm`: how fast distant
   // buildings fade into the light around them (plus rain or fog).
   skyline: { url: 'skyline/', lights: 0.3, windows: 0.3, hazePerKm: 0.12 },
+  // The water below a skyline (a river), drawn live in the drop: its waves from the city's wind
+  // (src/sky/waves.js), reflecting the city (the skyline's mirror render), the sky, the sun and the moon.
+  // `slopeScale`: the share of the open sea's mean-square slope (Cox and Munk) a sheltered city river
+  // has, chosen against the Thames from Waterloo Bridge (reference photos 1 at night and 6 at dusk);
+  // `fetch`: how far the wind blows over it (m), the river's width at the vantage from OpenStreetMap
+  // (bank to bank along Waterloo Bridge); `rainSlope`: slope variance that rain's rings add per √(mm/h),
+  // chosen, not measured; `body`: light leaving the water from below, per unit light at the horizon (the
+  // Thames is silty, olive brown), chosen against reference photo 4; `taps`: samples across the waves'
+  // spread per pixel, by tier.
+  water: { waves: 10, slopeScale: 0.15, fetch: { london: 290 }, defaultFetch: 300, rainSlope: 0.002, body: [0.05, 0.05, 0.035], taps: { high: 8, medium: 6, low: 4 } },
 }
 
 // Sound. Every sound is synthesized until a licensed file fills its slot (paths under public/).
