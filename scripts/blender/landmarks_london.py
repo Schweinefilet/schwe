@@ -20,7 +20,9 @@ FLOODLIT = {
     'County Hall': 0.45, 'Whitehall Court': 0.5, 'Ministry of Defence': 0.3,
 }
 # The Eye's LEDs: blue as in ref6 (they change colour for occasions; the colour is the user's to choose).
-EYE_LED = (0.2, 0.35, 1.0)
+# A pure LED blue: the site's AgX tone curve takes bright light toward white through its own hue, so a
+# paler blue (0.2, 0.35, 1.0, as first set) burned white; this one stays blue, as in ref6.
+EYE_LED = (0.04, 0.12, 1.0)
 # The Jubilee stays' glow at the top of the fan (see rods_material).
 ROD_GLOW = 16.0
 

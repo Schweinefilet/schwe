@@ -88,12 +88,16 @@ async function loadSkyline(cityId, anisotropy, month = new Date().getUTCMonth() 
   const scale = meta.variants[variant].scale
   const names = ['light', 'night', 'windows']
   const mirror = meta.mirror && scale.mirror
+  const glow = meta.glow && scale.glow
   const images = await Promise.all([
     ...names.map((k) => loadSkylineImage(`${base}/${variant}-${k}.png`)),
     ...(mirror ? names.map((k) => loadSkylineImage(`${base}/${variant}-mirror-${k}.png`, anisotropy)) : []),
+    ...(glow ? ['glow', 'halo'].map((k) => loadSkylineImage(`${base}/${variant}-${k}.png`)) : []),
   ])
-  const [light, night, windows, mirrorLight, mirrorNight, mirrorWindows] = images
-  const textures = { light, night, windows, ...(mirror && { mirrorLight, mirrorNight, mirrorWindows }) }
+  const [light, night, windows] = images
+  const textures = { light, night, windows }
+  if (mirror) [textures.mirrorLight, textures.mirrorNight, textures.mirrorWindows] = images.slice(3, 6)
+  if (glow) [textures.glow, textures.halo] = images.slice(mirror ? 6 : 3)
   return { meta, variant, scale, textures }
 }
 
@@ -150,6 +154,14 @@ export class CitySky {
       uSkyWaveTail: { value: new THREE.Vector4() },
       uSkyGlitter: { value: new THREE.Vector3(1, 1, 1) },
       uSkyWaterBody: { value: new THREE.Vector3(...SKY.water.body) },
+      uSkylineGlow: { value: NO_SKYLINE },
+      uSkylineHalo: { value: NO_SKYLINE },
+      uSkylineGlowRect: { value: new THREE.Vector4() },
+      uSkylineGlowScale: { value: new THREE.Vector3() },
+      uSkylineGlowGain: { value: new THREE.Vector3(SKY.glow.tight, SKY.glow.wide, SKY.glow.haze) },
+      uSkyLift: { value: new THREE.Vector3() },
+      uSkyGain: { value: new THREE.Vector3(1, 1, 1) },
+      uSkyLook: { value: new THREE.Vector2(1, 1) },
     }
     this.fetch = SKY.water.fetch[cityId] ?? SKY.water.defaultFetch
     this.waves = null // the trains, fixed once the wind is first known (src/sky/waves.js)
@@ -176,6 +188,13 @@ export class CitySky {
             u.uSkylineMirrorScale.value.set(s.scale.mirror.light, s.scale.mirror.night, s.scale.mirror.windows)
             u.uSkylineMirrorRect.value.set(s.meta.azimuth[0] * RAD, s.meta.azimuth[1] * RAD, m.elevation[0] * RAD, (m.elevation[1] - m.elevation[0]) * RAD)
             u.uSkylineWater.value.set(1, m.eyeAboveWater)
+          }
+          if (s.textures.glow) {
+            const g = s.meta.glow
+            u.uSkylineGlow.value = s.textures.glow
+            u.uSkylineHalo.value = s.textures.halo
+            u.uSkylineGlowScale.value.set(s.scale.glow, s.scale.halo, g.lateShare)
+            u.uSkylineGlowRect.value.set(s.meta.azimuth[0] * RAD, s.meta.azimuth[1] * RAD, g.elevation[0] * RAD, (g.elevation[1] - g.elevation[0]) * RAD)
           }
           u.uSkylineOn.value = 1
         },
@@ -208,6 +227,13 @@ export class CitySky {
     u.uSkyCityGlow.value.fromArray(inputs.cityGlow)
     u.uSkyPreExposure.value = inputs.exposure
     u.uSkylineLit.value.set(1 - inputs.windows.late, inputs.windows.late, inputs.windows.dark)
+    // The camera's look, day and night mixed by how dark it is.
+    const { day, night } = SKY.grade
+    const k = inputs.windows.dark
+    const mix = (a, b) => a + (b - a) * k
+    u.uSkyLift.value.set(...day.lift.map((v, i) => mix(v, night.lift[i])))
+    u.uSkyGain.value.set(...day.gain.map((v, i) => mix(v, night.gain[i])))
+    u.uSkyLook.value.set(mix(day.contrast, night.contrast), mix(day.saturation, night.saturation))
     // The waves run where the wind blows. Their trains are laid once; a later reading turns them only
     // if the wind has swung well round (turning them moves the whole pattern at once).
     const toward = inputs.wind.towardDeg

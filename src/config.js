@@ -357,7 +357,7 @@ export const SKY = {
   // and of its lit windows (display-referred, after the sky's exposure: a real window, a hundred times
   // brighter than a city's night sky, would blow the skyline out); `hazePerKm`: how fast distant
   // buildings fade into the light around them (plus rain or fog).
-  skyline: { url: 'skyline/', lights: 0.3, windows: 0.3, hazePerKm: 0.12 },
+  skyline: { url: 'skyline/', lights: 0.15, windows: 0.18, hazePerKm: 0.12 },
   // The water below a skyline (a river), drawn live in the drop: its waves from the city's wind
   // (src/sky/waves.js), reflecting the city (the skyline's mirror render), the sky, the sun and the moon.
   // `slopeScale`: the share of the open sea's mean-square slope (Cox and Munk) a sheltered city river
@@ -367,6 +367,20 @@ export const SKY = {
   // chosen, not measured; `body`: light leaving the water from below, per unit light at the horizon (the
   // Thames is silty, olive brown), chosen against reference photo 4; `taps`: samples across the waves'
   // spread per pixel, by tier.
+  // The glow round the lights after dark (encode.py bakes it from the renders' unclipped light; sky.glsl
+  // skylineGlow), on screen as the lights are: `tight`, a camera's bloom, and `wide`, its long tail, shaped
+  // after Unreal Engine's default Gaussian-sum bloom (which would be 0.33 and 0.21: intensity 0.675 times
+  // the tints of its sizes); `haze`: the halo the air adds, times the share of the light it scatters over
+  // a kilometre (more in rain and fog). The user's choice of three strengths (2026-09-30): the subtle one.
+  glow: { tight: 0.35, wide: 0.25, haze: 1.0 },
+  // The camera's look (sky.glsl skyTonemap: AgX, then this in its log space as Blender applies looks), by
+  // day and by night, mixed by how dark it is. `lift` raises the blacks toward its colour, `gain` tints the
+  // highlights, then `contrast` (a power) and `saturation`. Night: the user's choice of three strengths
+  // (2026-09-30), the subtle one: the warm city night with a little blue in the blacks.
+  grade: {
+    day: { lift: [0, 0.003, 0.008], gain: [1.02, 1.0, 0.97], contrast: 1.1, saturation: 1.1 },
+    night: { lift: [0, 0.015, 0.045], gain: [1.04, 1.0, 0.94], contrast: 1.2, saturation: 1.25 },
+  },
   water: { waves: 10, slopeScale: 0.15, fetch: { london: 290 }, defaultFetch: 300, rainSlope: 0.002, body: [0.05, 0.05, 0.035], taps: { high: 8, medium: 6, low: 4 } },
 }
 

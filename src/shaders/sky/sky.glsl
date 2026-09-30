@@ -65,6 +65,18 @@ uniform vec4 uSkyWaves[WAVES];
 uniform vec4 uSkyWaveTail;
 uniform vec3 uSkyGlitter;
 uniform vec3 uSkyWaterBody;       // light leaving the water from below, per unit light at the horizon
+// The glow round the city's lights after dark (encode.py): a camera's bloom (tight) and the air's halo
+// (wide, stronger in rain and fog), baked from the renders' unclipped light; a: the windows' share.
+uniform sampler2D uSkylineGlow;
+uniform sampler2D uSkylineHalo;
+uniform vec4 uSkylineGlowRect;    // as uSkylineRect (it reaches higher: a halo spreads past the tallest light)
+uniform vec3 uSkylineGlowScale;   // what the glow and halo were divided by; the share of windows lit late
+uniform vec3 uSkylineGlowGain;    // on-screen gain of the glow, of the halo, and the halo the air adds in haze
+// The camera's look (SKY.grade, day and night mixed by how dark it is), applied in AgX's own space as
+// Blender applies its looks: lift and gain per channel, contrast (a power), saturation.
+uniform vec3 uSkyLift;
+uniform vec3 uSkyGain;
+uniform vec2 uSkyLook;            // contrast, saturation
 
 const float SUN_RADIUS = 0.004654;
 const float CLOUD_NOISE_SIZE = 512.0;
@@ -279,6 +291,47 @@ vec4 skyline(vec2 uv, float sides, float foot, vec3 horizon, out vec3 lights) {
   vec4 N = textureLod(uSkylineNight, uv, lod);
   vec4 W = textureLod(uSkylineWindows, uv, lod);
   return skylineDecode(L, N, W, uSkylineScale, horizon, sides, lights);
+}
+
+// Smooth sampling of a soft texture seen magnified: a cubic B-spline from four bilinear reads, so no
+// texel grid shows (Sigg and Hadwiger 2005). Plain mip-mapped reads once it is minified.
+vec4 textureSoft(sampler2D t, vec2 uv, float lod) {
+  if (lod > 0.5) return textureLod(t, uv, lod);
+  vec2 size = vec2(textureSize(t, 0));
+  vec2 p = uv * size - 0.5;
+  vec2 f = fract(p);
+  vec2 i = p - f;
+  vec2 f2 = f * f;
+  vec2 f3 = f2 * f;
+  vec2 w0 = (1.0 - 3.0 * f + 3.0 * f2 - f3) / 6.0;
+  vec2 w1 = (4.0 - 6.0 * f2 + 3.0 * f3) / 6.0;
+  vec2 w2 = (1.0 + 3.0 * f + 3.0 * f2 - 3.0 * f3) / 6.0;
+  vec2 w3 = f3 / 6.0;
+  vec2 g0 = w0 + w1;
+  vec2 g1 = w2 + w3;
+  vec2 h0 = (i - 0.5 + w1 / g0) / size;
+  vec2 h1 = (i + 1.5 + w3 / g1) / size;
+  return g0.y * (g0.x * textureLod(t, vec2(h0.x, h0.y), 0.0) + g1.x * textureLod(t, vec2(h1.x, h0.y), 0.0))
+       + g1.y * (g0.x * textureLod(t, vec2(h0.x, h1.y), 0.0) + g1.x * textureLod(t, vec2(h1.x, h1.y), 0.0));
+}
+
+// The glow round the lights along d, after dark, display-referred like the lights: a camera's bloom and
+// the air's halo. The halo grows with the haze the light crosses (taken over a kilometre: the landmarks
+// stand half a kilometre to two away); late at night the windows' share of it dims with the windows.
+vec3 skylineGlow(vec3 d, float foot) {
+  if (uSkylineLit.z <= 0.0 || uSkylineGlowRect.y <= 0.0) return vec3(0.0);
+  float rel = mod(atan(d.x, -d.z) - uSkylineGlowRect.x, 2.0 * PI);
+  vec2 uv = vec2(rel / uSkylineGlowRect.y, (asin(clamp(d.y, -1.0, 1.0)) - uSkylineGlowRect.z) / uSkylineGlowRect.w);
+  if (uv.x > 1.0 || uv.y < 0.0 || uv.y > 1.0) return vec3(0.0);
+  float sides = smoothstep(0.0, 0.04, uv.x) * smoothstep(0.0, 0.04, 1.0 - uv.x) * smoothstep(1.0, 0.9, uv.y);
+  float tpr = float(textureSize(uSkylineGlow, 0).x) / uSkylineGlowRect.y;
+  vec4 g = textureSoft(uSkylineGlow, uv, log2(max(foot * tpr, 1.0)));
+  vec4 h = textureSoft(uSkylineHalo, uv, log2(max(foot * tpr * 0.5, 1.0)));
+  float lateOff = uSkylineLit.y * (1.0 - uSkylineGlowScale.z); // the share of the windows' light gone late
+  float air = 1.0 - exp(-(uSkylineGain.z + uSkyHaze));
+  vec3 c = g.rgb * uSkylineGlowScale.x * uSkylineGlowGain.x * (1.0 - lateOff * g.a)
+         + h.rgb * uSkylineGlowScale.y * (uSkylineGlowGain.y + uSkylineGlowGain.z * air) * (1.0 - lateOff * h.a);
+  return c * uSkylineGain.x * uSkylineLit.z * exp(-uSkyHaze) * sides;
 }
 
 // The sky alone along d (above the horizon): the atmosphere and the city's glow, the sun, moon and stars
@@ -557,11 +610,36 @@ float skyMeter(vec3 deck) {
   return uSkyMeter.x * pow(L / uSkyMeter.y, uSkyMeter.z) / L / uSkyPreExposure;
 }
 
-// A camera's highlight shoulder: linear to 0.6, then rolling off toward 1, so the sky arrives in the
-// same 0..1 range as footage and the site's one LUT grades both.
-vec3 skyShoulder(vec3 x) {
-  const float s = 0.6;
-  return mix(x, s + (1.0 - s) * (1.0 - exp(-(x - s) / (1.0 - s))), step(s, x));
+// The camera's tone curve and look: AgX (Troy Sobotka's, as Blender and Filament have it; three.js's
+// port, r186), which rolls bright light off toward white through its own hue, so a lamp's core burns
+// white inside a coloured glow; the look (SKY.grade) applied in its log-encoded space before it returns
+// to linear. The result arrives in 0..1 like footage, for the site's one LUT.
+const mat3 SKY_SRGB_TO_REC2020 = mat3(vec3(0.6274, 0.0691, 0.0164), vec3(0.3293, 0.9195, 0.0880), vec3(0.0433, 0.0113, 0.8956));
+const mat3 SKY_REC2020_TO_SRGB = mat3(vec3(1.6605, -0.1246, -0.0182), vec3(-0.5876, 1.1329, -0.1006), vec3(-0.0728, -0.0083, 1.1187));
+const mat3 SKY_AGX_INSET = mat3(
+  vec3(0.856627153315983, 0.137318972929847, 0.11189821299995),
+  vec3(0.0951212405381588, 0.761241990602591, 0.0767994186031903),
+  vec3(0.0482516061458583, 0.101439036467562, 0.811302368396859));
+const mat3 SKY_AGX_OUTSET = mat3(
+  vec3(1.1271005818144368, -0.1413297634984383, -0.14132976349843826),
+  vec3(-0.11060664309660323, 1.157823702216272, -0.11060664309660294),
+  vec3(-0.016493938717834573, -0.016493938717834257, 1.2519364065950405));
+
+vec3 skyTonemap(vec3 c) {
+  c = SKY_AGX_INSET * (SKY_SRGB_TO_REC2020 * max(c, 0.0));
+  c = clamp((log2(max(c, 1e-10)) + 12.47393) / 16.5, 0.0, 1.0); // -10 to +6.5 stops around 0.18
+  vec3 c2 = c * c;
+  vec3 c4 = c2 * c2;
+  c = 15.5 * c4 * c2 - 40.14 * c4 * c + 31.96 * c4 - 6.868 * c2 * c + 0.4298 * c2 + 0.1191 * c - 0.00232;
+  // The look: lift raises the blacks toward its colour, gain tints the highlights, then contrast and
+  // saturation (Blender's "Punchy" is contrast 1.35, saturation 1.4).
+  c = c * uSkyGain + uSkyLift * (1.0 - c);
+  c = pow(max(c, 0.0), vec3(uSkyLook.x));
+  float y = dot(c, vec3(0.2126, 0.7152, 0.0722));
+  c = y + (c - y) * uSkyLook.y;
+  c = SKY_AGX_OUTSET * c;
+  c = pow(max(c, 0.0), vec3(2.2));
+  return clamp(SKY_REC2020_TO_SRGB * c, 0.0, 1.0);
 }
 
 vec3 citySky(vec3 d, float foot) {
@@ -603,7 +681,8 @@ vec3 citySky(vec3 d, float foot) {
     }
     col = col * (1.0 - s.a) + s.rgb;
   }
+  if (uSkylineOn > 0.5) lights += skylineGlow(d, foot);
   vec4 rain = cityRain(d, foot, horizon);
   col = mix(col, rain.rgb, rain.a);
-  return skyShoulder(col * exposure + lights * (1.0 - rain.a));
+  return skyTonemap(col * exposure + lights * (1.0 - rain.a));
 }

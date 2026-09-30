@@ -40,7 +40,9 @@
           "light": 1.0,
           "night": 32.0,
           "windows": 16.0
-        }
+        },
+        "glow": 8.0,
+        "halo": 2.0
       }
     },
     "bare": {
@@ -58,7 +60,9 @@
           "light": 1.0,
           "night": 32.0,
           "windows": 16.0
-        }
+        },
+        "glow": 8.0,
+        "halo": 2.0
       }
     }
   },
@@ -72,5 +76,20 @@
       320
     ],
     "eyeAboveWater": 12.5
+  },
+  "glow": {
+    "elevation": [
+      -20.0,
+      26.0
+    ],
+    "lateShare": 0.3189,
+    "glowSize": [
+      1920,
+      736
+    ],
+    "haloSize": [
+      960,
+      368
+    ]
   }
 }
