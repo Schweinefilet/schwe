@@ -84,7 +84,7 @@ FLOOD_GAIN = 6.0
 # The share of the evening's lit windows still lit late at night (the site mixes the two by local hour):
 # about 6% of all windows, as chosen.
 LATE_SHARE = 0.32
-FLOODLIT = {}  # building (or the building it is part of) by name -> flood, from landmarks_<city>.py
+FLOODLIT = {}  # building (or the building it is part of) by name, or a part by OSM id -> flood, from landmarks_<city>.py
 
 # Reference photos (data/refs/<city>/, Wikimedia Commons, see sources.json): where the camera looks,
 # its horizontal field of view and pitch, and the photo's size.
@@ -333,13 +333,24 @@ def simple_material(name, colour, roughness=0.8, **extra):
 
 
 def roof_material():
+    """Roofs; floodlit ones (a crown's pyramid, a spire: the 'flood' attribute) lit as the walls are."""
     mat = bpy.data.materials.new('roof')
     nt = nodes_of(mat)
     col = attr(nt, 'roofc', 'Color')
     b = node(nt, 'ShaderNodeBsdfPrincipled', Roughness=0.7)
     nt.links.new(col, b.inputs['Base Color'])
+    gain = node(nt, 'ShaderNodeValue', name='city_gain', label='city_gain')
+    gain.outputs[0].default_value = 1.0
+    bb = node(nt, 'ShaderNodeBlackbody')
+    bb.inputs['Temperature'].default_value = 2600.0
+    e = node(nt, 'ShaderNodeEmission')
+    nt.links.new(mix_colour(nt, 1.0, col, bb.outputs[0], 'MULTIPLY'), e.inputs['Color'])
+    nt.links.new(math_node(nt, 'MULTIPLY', math_node(nt, 'MULTIPLY', attr(nt, 'flood'), gain.outputs[0]), FLOOD_GAIN), e.inputs['Strength'])
+    add = node(nt, 'ShaderNodeAddShader')
+    nt.links.new(b.outputs[0], add.inputs[0])
+    nt.links.new(e.outputs[0], add.inputs[1])
     out = node(nt, 'ShaderNodeOutputMaterial')
-    nt.links.new(b.outputs[0], out.inputs['Surface'])
+    nt.links.new(add.outputs[0], out.inputs['Surface'])
     return mat
 
 
@@ -654,7 +665,7 @@ def add_building(mb, b):
         roofc = tuple(c * 0.7 for c in NAMED[rc])
     elif rc and rc.startswith('#') and len(rc) == 7:
         roofc = desaturate(tuple(min(srgb_to_linear(int(rc[i:i + 2], 16) / 255) * 0.6, 0.4) for i in (1, 3, 5)), 0.5)
-    flood = FLOODLIT.get(b.get('name')) or FLOODLIT.get((b.get('within') or {}).get('name')) or 0.0
+    flood = FLOODLIT.get(b['id']) or FLOODLIT.get(b.get('name')) or FLOODLIT.get((b.get('within') or {}).get('name')) or 0.0
     face_attrs = dict(wall=col, style=style, bay=bay, floorh=floorh, win_w=win_w, win_h=win_h, frame=frame, busy=busy, seed=seed, roofc=roofc, flood=flood,
                       **facade_runs(style))
     for ring in [*outer, *inner]:
@@ -825,6 +836,18 @@ def build_bridges():
                 mb.face([(*q, deck - 1.6) for q in quad[::-1]])
                 for (p0, p1) in ((quad[0], quad[1]), (quad[2], quad[3])):
                     mb.face([(*p0, deck - 1.6), (*p1, deck - 1.6), (*p1, deck + 1.1), (*p0, deck + 1.1)])
+            # Its lamps, which OSM does not map: one every 35 m along the deck's edge (chosen; reference
+            # photo 8 shows an unbroken chain of them along the waterfront), as the street lamps are.
+            walked = 17.5
+            for i in range(1, len(pts)):
+                (ax, ay), (cx, cy) = pts[i - 1], pts[i]
+                L = math.hypot(cx - ax, cy - ay)
+                while walked < L:
+                    t = walked / L
+                    nx, ny = -(cy - ay) / L * (half - 0.5), (cx - ax) / L * (half - 0.5)
+                    scene_data['lamps'].append({'at': [ax + (cx - ax) * t + nx, ay + (cy - ay) * t + ny], 'base': deck, 'colour': None, 'count': 1})
+                    walked += 35.0
+                walked -= L
     return mb.build([MAT['bridge']])
 
 

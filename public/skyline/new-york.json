@@ -35,7 +35,7 @@
       -20.0,
       32.0
     ],
-    "lateShare": 0.231,
+    "lateShare": 0.2309,
     "glowSize": [
       1920,
       832
@@ -60,7 +60,7 @@
       ],
       "scale": {
         "light": 1.0,
-        "night": 16.0,
+        "night": 32.0,
         "windows": 16.0,
         "mirror": {
           "light": 1.0,
@@ -80,7 +80,7 @@
       ],
       "scale": {
         "light": 1.0,
-        "night": 16.0,
+        "night": 32.0,
         "windows": 16.0,
         "mirror": {
           "light": 1.0,

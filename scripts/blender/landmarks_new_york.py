@@ -14,9 +14,20 @@ ONE_WTC = 'way/713565776'
 BB_TOWER = 'way/1255363983'  # the Brooklyn Bridge's Manhattan tower (OSM: an 82.9 m stone block)
 BB_OUTLINE = 'way/375157262'  # its outline as man_made=bridge (a 26 m slab at deck height otherwise)
 REPLACES = {ONE_WTC, BB_TOWER, BB_OUTLINE}
-# Floodlit at night, by name (a building or the building a part belongs to), relative brightness: the
-# crowns the reference photos show lit (ref5, ref8): the Woolworth Building's gold, 70 Pine's lantern.
-FLOODLIT = {'Woolworth Building': 1.0}
+# Floodlit at night, by name (a building or the building a part belongs to) or a part by its OSM id,
+# relative brightness. The crowns the reference photos show lit: the Woolworth Building's gold from its
+# setbacks up (ref5, ref8; its parts above 120 m); two lit spires among the pre-war towers (ref8): 70 Pine's
+# lantern and spire (its parts above 242 m) and 40 Wall Street's copper pyramid and spire; and at the view's
+# right edge the Empire State Building's top (its parts above 255 m), lit every night.
+FLOODLIT = {
+    'Woolworth Building': 0.6,
+    **{f'way/{i}': 1.0 for i in (274782341, 274782325, 274782329, 274782334, 274782339, 274782344, 274782327, 274782330,
+                                 274782332, 274782336, 274782323)},
+    **{f'way/{i}': 0.9 for i in (286032722, 286032716, 286032720, 286032710, 286032719, 286032714, 286032721, 286032743,
+                                 286032742, 286032740)},
+    **{f'way/{i}': 0.9 for i in (277555174, 286057082, 286057109, 286057105)},
+    **{f'way/{i}': 1.4 for i in (137425145, 265932618, 137425125, 137425129)},
+}
 
 # One World Trade Center (Wikipedia): a 61 m (200 ft) square; a 56 m (185 ft) windowless base; from there
 # its edges chamfered into eight isosceles triangles up to the roof at 417.0 m, where the square is turned
