@@ -214,7 +214,7 @@ meta.update({
     # The glow textures: their elevations (the panorama's bottom to above its top) and the share of the
     # evening's windows' light still on late.
     'glow': glow_meta,
-    'source': '© OpenStreetMap contributors (ODbL); rendered in Blender (Cycles) with hand-modelled landmarks',
+    'source': f"{scene.get('source', '© OpenStreetMap contributors, ODbL')}; rendered in Blender (Cycles) with hand-modelled landmarks",
 })
 meta.setdefault('variants', {})[VARIANT] = {'months': MONTHS, 'scale': scales}
 json.dump(meta, open(meta_path, 'w'), indent=2)

@@ -29,3 +29,5 @@ data/osm/
 # are checked against (Wikimedia Commons; data/refs/<city>/sources.json credits each)
 data/skyline/
 data/refs/
+# Terrain tiles cached by scripts/skyline/terrain.mjs (AWS Terrain Tiles)
+data/terrain/

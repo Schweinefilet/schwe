@@ -363,7 +363,7 @@ export const SKY = {
   // `slopeScale`: the share of the open sea's mean-square slope (Cox and Munk) a sheltered city river
   // has, chosen against the Thames from Waterloo Bridge (reference photos 1 at night and 6 at dusk);
   // `fetch`: how far the wind blows over it (m), the river's width at the vantage from OpenStreetMap
-  // (bank to bank along Waterloo Bridge); `rainSlope`: slope variance that rain's rings add per √(mm/h),
+  // (the Thames bank to bank along Waterloo Bridge; the East River from Pier 1 to Manhattan along the view); `rainSlope`: slope variance that rain's rings add per √(mm/h),
   // chosen, not measured; `body`: light leaving the water from below, per unit light at the horizon (the
   // Thames is silty, olive brown), chosen against reference photo 4; `taps`: samples across the waves'
   // spread per pixel, by tier.
@@ -381,7 +381,7 @@ export const SKY = {
     day: { lift: [0, 0.003, 0.008], gain: [1.02, 1.0, 0.97], contrast: 1.1, saturation: 1.1 },
     night: { lift: [0, 0.015, 0.045], gain: [1.04, 1.0, 0.94], contrast: 1.2, saturation: 1.25 },
   },
-  water: { waves: 10, slopeScale: 0.15, fetch: { london: 290 }, defaultFetch: 300, rainSlope: 0.002, body: [0.05, 0.05, 0.035], taps: { high: 8, medium: 6, low: 4 } },
+  water: { waves: 10, slopeScale: 0.15, fetch: { london: 290, 'new-york': 530 }, defaultFetch: 300, rainSlope: 0.002, body: [0.05, 0.05, 0.035], taps: { high: 8, medium: 6, low: 4 } },
 }
 
 // Sound. Every sound is synthesized until a licensed file fills its slot (paths under public/).

@@ -9,6 +9,7 @@
 //   node scripts/skyline/extract.mjs --city london
 
 import { mkdir, readFile, writeFile } from 'node:fs/promises'
+import { terrainSampler } from './terrain.mjs'
 
 const arg = (name, fallback = null) => {
   const i = process.argv.indexOf(`--${name}`)
@@ -32,6 +33,17 @@ const BEARING = (mean(view.toward.map((t) => bearingTo(view.from.at, t.at))) + 3
 
 const KX = 111320 * Math.cos(lat0 * RAD)
 const KY = 110540
+// Cities on uneven ground: each building, tree and lamp stands on the terrain under it (terrain.mjs),
+// `datum` metres of it (the tiles' vertical datum) being the scene's z = 0. New York: the Lower
+// Manhattan waterfront, 2.5 m above NAVD88 (USGS 3DEP lidar: South Street 1.8 m, Water Street 2.6 m,
+// Pearl Street 2.7 m; Broadway at Liberty Street is 9.4 m).
+const TERRAIN = { 'new-york': { datum: 2.5 } }[CITY] ?? null
+const ground = TERRAIN ? await terrainSampler({ lat0, lon0, r: FAR, kx: KX, ky: KY, cacheDir: new URL('../../data/terrain/', import.meta.url) }) : null
+const baseAt = ([x, y]) => {
+  if (!ground) return 0
+  const e = ground(x, y)
+  return e == null ? 0 : +(e - TERRAIN.datum).toFixed(2)
+}
 const local = ({ lat, lon }) => [+((lon - lon0) * KX).toFixed(2), +((lat - lat0) * KY).toFixed(2)]
 const metres = (v) => {
   const m = String(v ?? '').match(/-?\d+(\.\d+)?/)
@@ -123,8 +135,10 @@ for (const e of osm.elements) {
   const tall = metres(t.height) ?? (t['building:levels'] ? metres(t['building:levels']) * FLOOR : 0)
   if (!inWedge(all, tall >= 30 ? FAR : NEAR)) continue
   if (outer.some((r) => contains(r, [0, 0]))) continue // the vantage itself
-  let height = metres(t.height)
-  const levels = metres(t['building:levels'])
+  // A building site's mapped height is what is planned (2 World Trade Center: 373.7 m, opening 2031),
+  // not what stands: it gets a low one below.
+  let height = t.building === 'construction' || t['building:part'] === 'construction' ? null : metres(t.height)
+  const levels = t.building === 'construction' ? null : metres(t['building:levels'])
   if (height == null && levels != null) height = levels * FLOOR + (metres(t['roof:height']) ?? (t['roof:levels'] ? metres(t['roof:levels']) * FLOOR : 0))
   const estimated = height == null
   if (height == null) height = DEFAULT_HEIGHT
@@ -156,7 +170,12 @@ for (const e of osm.elements) {
 // Landmarks modelled by hand (scripts/blender/landmarks_<city>.py): their outline is kept for placing
 // the model, and neither it nor anything mapped inside it is raised as a building (the London Eye is
 // mapped in OSM as dozens of parts, which would make a crude stepped wheel beside the model).
-const LANDMARK_OUTLINES = { london: ['way/204068874'] }[CITY] ?? []
+const LANDMARK_OUTLINES = {
+  london: ['way/204068874'],
+  // One World Trade Center (mapped as parts: its chamfers as skillion roofs, its mast as a pyramid) and the
+  // Brooklyn Bridge's Manhattan tower (mapped as an 82.9 m stone block).
+  'new-york': ['way/713565776', 'way/1255363983'],
+}[CITY] ?? []
 // Structures that are not storeyed buildings get small heights when none is mapped (a median of the
 // neighbours would raise a canopy or a moored ship to office height).
 const LOW = { roof: 4.5, carport: 3, kiosk: 3.5, toilets: 3.5, shed: 3, hut: 3, garage: 3, garages: 3, container: 3, service: 4, construction: 4, ship: 8, boat: 5, houseboat: 5, pier: 3, pavilion: 6, bridge: 0 }
@@ -237,6 +256,12 @@ for (const b of buildings) {
   }
 }
 
+// Where each stands: the ground under its outline's centre, above the scene's z = 0. A building's parts all
+// stand where the building does (each part's own centre would step a flat roof across a slope).
+const outlineBase = new Map(outlines.map((o) => [o.id, baseAt(centroid(o.outer[0]))]))
+for (const b of buildings) b.base = (b.within && outlineBase.get(b.within.id)) ?? outlineBase.get(b.id) ?? baseAt(centroid(b.outer[0]))
+const landmarkBases = Object.fromEntries(Object.entries(landmarkOutlines).map(([id, o]) => [id, baseAt(centroid(o[0]))]))
+
 // ---- The rest ----------------------------------------------------------------------------------
 const water = []
 const bridges = []
@@ -258,7 +283,7 @@ for (const e of [...waterRelations, ...extra.elements.filter((e) => !(e.type ===
     if (pts && inWedge(pts, NEAR)) piers.push({ id: `${e.type}/${e.id}`, name: t.name ?? null, pts, closed: pts.length > 3 && pts[0][0] === pts.at(-1)[0] && pts[0][1] === pts.at(-1)[1] })
   } else if (t.natural === 'tree' && e.type === 'node') {
     const p = local(e)
-    if (inWedge([p], 2000)) trees.push({ at: p, height: metres(t.height), crown: metres(t.diameter_crown), leaf: t.leaf_type ?? null })
+    if (inWedge([p], 2000)) trees.push({ at: p, base: baseAt(p), height: metres(t.height), crown: metres(t.diameter_crown), leaf: t.leaf_type ?? null, genus: t.genus ?? null, species: t.species ?? null })
   } else if (t.natural === 'tree_row' && e.geometry) {
     const pts = e.geometry.map(local)
     if (inWedge(pts, 2000)) {
@@ -267,22 +292,27 @@ for (const e of [...waterRelations, ...extra.elements.filter((e) => !(e.type ===
         const [ax, ay] = pts[i - 1]
         const [bx, by] = pts[i]
         const n = Math.max(1, Math.round(Math.hypot(bx - ax, by - ay) / 9))
-        for (let k = 0; k < n; k++) trees.push({ at: [ax + ((bx - ax) * k) / n, ay + ((by - ay) * k) / n], height: null, crown: null, leaf: null, row: true })
+        for (let k = 0; k < n; k++) {
+          const at = [ax + ((bx - ax) * k) / n, ay + ((by - ay) * k) / n]
+          trees.push({ at, base: baseAt(at), height: null, crown: null, leaf: null, row: true })
+        }
       }
     }
   } else if (t.highway === 'street_lamp' && e.type === 'node') {
     const p = local(e)
-    if (inWedge([p], 1500)) lamps.push({ at: p, colour: t['light:colour'] ?? null, count: metres(t['light:count']) ?? 1 })
+    if (inWedge([p], 1500)) lamps.push({ at: p, base: baseAt(p), colour: t['light:colour'] ?? null, count: metres(t['light:count']) ?? 1 })
   }
 }
 
 const out = {
   city: CITY,
   vantage: { name: view.from.name, bearing: +BEARING.toFixed(3) },
-  source: '© OpenStreetMap contributors, ODbL',
+  source: TERRAIN ? '© OpenStreetMap contributors, ODbL; terrain: USGS 3DEP via Mapzen terrain tiles' : '© OpenStreetMap contributors, ODbL',
+  terrain: TERRAIN,
   counts: { buildings: buildings.length, partsReplacingOutlines: replaced, estimatedHeights: buildings.filter((b) => b.estimated).length, heightsFromNeighbours: byMedian, water: water.length, bridges: bridges.length, piers: piers.length, trees: trees.length, lamps: lamps.length },
   buildings,
   landmarkOutlines,
+  landmarkBases,
   replacedOutlines,
   water,
   bridges,

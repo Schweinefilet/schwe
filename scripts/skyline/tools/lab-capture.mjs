@@ -8,7 +8,7 @@
 //   node scripts/skyline/tools/lab-capture.mjs --city london [--out review/skyline] [--times night,dusk,day]
 //   node scripts/skyline/tools/lab-capture.mjs --city london --dive      the site at timeline 9.4 to 10.2
 //
-// Times are fixed dates (edit TIMES for the city's own dusk). Env: CHROME=/path/to/chrome.
+// Times are fixed dates, per city (TIMES). Env: CHROME=/path/to/chrome.
 
 import { mkdir, writeFile } from 'node:fs/promises'
 import { createServer } from 'vite'
@@ -21,8 +21,11 @@ const arg = (name, fallback = null) => {
 const CITY = arg('city', 'london')
 const OUT = arg('out', 'review/skyline')
 const CHROME = process.env.CHROME || '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome'
-// UTC. For London: dusk 18:10 in late September; change per city (its local sunset + ~25 min).
-const TIMES = { night: '2026-09-29T21:30:00Z', dusk: '2026-09-29T18:10:00Z', day: '2026-09-29T12:00:00Z' }
+// UTC, per city: dusk about 25 minutes after its sunset on 29 September (suncalc), night and midday local.
+const TIMES = {
+  london: { night: '2026-09-29T21:30:00Z', dusk: '2026-09-29T18:10:00Z', day: '2026-09-29T12:00:00Z' },
+  'new-york': { night: '2026-09-30T02:30:00Z', dusk: '2026-09-29T23:05:00Z', day: '2026-09-29T16:00:00Z' },
+}[CITY]
 // Wind fixed too (from the south-west, London's prevailing), so the water is comparable between runs.
 const WEATHER = { rain: { cloud: 1, rain: 2, fog: false, wind: 6, windFrom: 225 }, clear: { cloud: 0, rain: 0, fog: false, wind: 3, windFrom: 225 } }
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms))

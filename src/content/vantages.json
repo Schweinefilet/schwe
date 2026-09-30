@@ -130,7 +130,8 @@
   "new-york": {
     "from": {
       "name": "Brooklyn Bridge Park, Pier 1",
-      "at": [40.7008598, -73.9966225],
+      "note": "The water's edge of Pier 1, on the lowest of the Granite Prospect steps, on the line toward One World Trade Center (so the drop shows only water below the skyline, as London's). Nominatim's point (40.7008598, -73.9966225, on the Brooklyn Bridge Park Greenway, way/1257921507) is 144 m inland, looking across a cove and the pier's lawn. USGS 3DEP lidar: the step about 1.95 m NAVD88 (the promenade above, 3.53 m).",
+      "at": [40.7017631, -73.9978520],
       "osm": "way/1257921507"
     },
     "toward": [

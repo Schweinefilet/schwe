@@ -3,7 +3,7 @@ horizontal field of view to where known landmarks fall in the photo. Positions a
 local metres (east x, north y of the city's vantage, src/content/vantages.json); each landmark's
 position is the middle of its OpenStreetMap element's bounds (data/osm/<city>.json, from fetch.mjs).
 
-    python3 scripts/skyline/tools/fit_camera.py data/refs/<city>/<ref>.fit.json [--pin x,y,eye]
+    python3 scripts/skyline/tools/fit_camera.py data/refs/<city>/<ref>.fit.json [--pin x,y,eye | --pin-eye eye]
 
 The .fit.json file (write one per photo; measure u, v by eye on a gridded crop, compare.py --grid):
     {"city": "london", "size": [3840, 2556],
@@ -11,7 +11,8 @@ The .fit.json file (write one per photo; measure u, v by eye on a gridded crop, 
                 {"osm": "way/367642689", "z": null, "u": 0.4835, "v": null, "what": "Victoria Tower, centre"}]}
 u, v: fractions of the photo's width and height (v down); z: the point's height above the street in
 metres (null: horizontal only). With few vertical points the height and position trade off: pin the
-camera where the photographer must have stood (--pin) and fit only heading, pitch and field of view.
+camera where the photographer must have stood (--pin) and fit only heading, pitch and field of view, or pin
+only the eye's height (--pin-eye: standing on a pier or promenade of known height) and fit where along it.
 London's photo 4 fitted to 12 px rms at 3840 px this way (scripts/blender/skyline.py REFS).
 """
 
@@ -24,6 +25,7 @@ import numpy as np
 ROOT = __file__.rsplit('/scripts/', 1)[0]
 cfg = json.load(open(sys.argv[1]))
 pin = [float(v) for v in sys.argv[sys.argv.index('--pin') + 1].split(',')] if '--pin' in sys.argv else None
+pin_eye = float(sys.argv[sys.argv.index('--pin-eye') + 1]) if '--pin-eye' in sys.argv else None
 city = cfg['city']
 vantages = json.load(open(f'{ROOT}/src/content/vantages.json'))
 LAT0, LON0 = vantages[city]['from']['at']
@@ -103,6 +105,14 @@ h0 = math.degrees(math.atan2(mx, my)) % 360
 if pin:
     q, c = nelder_mead(lambda q: cost([*pin, *q]), [h0, 0.0, 30.0], [2, 1, 3])
     q = np.array([*pin, *q])
+elif pin_eye is not None:
+    best = None
+    for dx, dy in ((0, 0), (80, 0), (-80, 0), (0, 80), (0, -80)):
+        q, c = nelder_mead(lambda q: cost([q[0], q[1], pin_eye, *q[2:]]), [dx, dy, h0, 0.0, 30.0], [30, 30, 2, 1, 3])
+        if best is None or c < best[1]:
+            best = (q, c)
+    q, c = best
+    q = np.array([q[0], q[1], pin_eye, *q[2:]])
 else:
     best = None
     for dx, dy in ((0, 0), (80, 0), (-80, 0), (0, 80), (0, -80)):

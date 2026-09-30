@@ -38,7 +38,8 @@ export default function StillPage({ clips }) {
       )}
       <p className="still__credit">
         Skylines: building data © <a href="https://www.openstreetmap.org/copyright">OpenStreetMap contributors</a>,{' '}
-        <a href="https://opendatacommons.org/licenses/odbl/">ODbL</a>.
+        <a href="https://opendatacommons.org/licenses/odbl/">ODbL</a>; terrain data courtesy of the U.S. Geological Survey
+        (3DEP), via Mapzen's terrain tiles.
       </p>
     </main>
   )

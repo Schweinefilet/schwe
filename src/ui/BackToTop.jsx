@@ -32,6 +32,7 @@ export default function BackToTop({ onTop }) {
         <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">
           OpenStreetMap contributors
         </a>
+        ; terrain: USGS 3DEP, Mapzen
       </p>
     </div>
   )
