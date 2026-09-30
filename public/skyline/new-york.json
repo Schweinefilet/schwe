@@ -1,0 +1,27 @@
+{
+  "city": "new-york",
+  "from": "Brooklyn Bridge Park, Pier 1",
+  "bearing": 314.033,
+  "azimuth": [
+    254.033,
+    120
+  ],
+  "elevation": [
+    -4,
+    26
+  ],
+  "eye": 12,
+  "distance": [
+    20,
+    8000
+  ],
+  "size": [
+    1920,
+    480
+  ],
+  "buildings": 26707,
+  "defaultedHeights": 269,
+  "defaultHeight": 10,
+  "landmarks": [],
+  "source": "© OpenStreetMap contributors (ODbL); heights from height, else building:levels × 3.2 m, else the default; window pattern decorative"
+}

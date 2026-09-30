@@ -1,0 +1,27 @@
+{
+  "city": "tokyo",
+  "from": "Azuma Bridge (Azumabashi), Sumida River",
+  "bearing": 90.313,
+  "azimuth": [
+    30.313,
+    120
+  ],
+  "elevation": [
+    -4,
+    26
+  ],
+  "eye": 12,
+  "distance": [
+    20,
+    8000
+  ],
+  "size": [
+    1920,
+    480
+  ],
+  "buildings": 110462,
+  "defaultedHeights": 14717,
+  "defaultHeight": 10,
+  "landmarks": [],
+  "source": "© OpenStreetMap contributors (ODbL); heights from height, else building:levels × 3.2 m, else the default; window pattern decorative"
+}

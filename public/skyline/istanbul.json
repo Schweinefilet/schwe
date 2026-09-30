@@ -1,0 +1,27 @@
+{
+  "city": "istanbul",
+  "from": "Galata Tower",
+  "bearing": 192.556,
+  "azimuth": [
+    132.556,
+    120
+  ],
+  "elevation": [
+    -4,
+    26
+  ],
+  "eye": 12,
+  "distance": [
+    20,
+    8000
+  ],
+  "size": [
+    1920,
+    480
+  ],
+  "buildings": 16114,
+  "defaultedHeights": 9238,
+  "defaultHeight": 10,
+  "landmarks": [],
+  "source": "© OpenStreetMap contributors (ODbL); heights from height, else building:levels × 3.2 m, else the default; window pattern decorative"
+}

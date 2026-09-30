@@ -1,0 +1,27 @@
+{
+  "city": "mexico-city",
+  "from": "Estela de Luz, Paseo de la Reforma",
+  "bearing": 62.245,
+  "azimuth": [
+    2.245,
+    120
+  ],
+  "elevation": [
+    -4,
+    26
+  ],
+  "eye": 12,
+  "distance": [
+    20,
+    8000
+  ],
+  "size": [
+    1920,
+    480
+  ],
+  "buildings": 8699,
+  "defaultedHeights": 6765,
+  "defaultHeight": 10,
+  "landmarks": [],
+  "source": "© OpenStreetMap contributors (ODbL); heights from height, else building:levels × 3.2 m, else the default; window pattern decorative"
+}
