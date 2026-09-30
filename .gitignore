@@ -25,3 +25,7 @@ data/atlas/
 # Poly Haven HDR sources for `npm run backdrop` (CC0; the built JPEGs in public/backdrop are what ship)
 data/backdrop/
 data/osm/
+# The skylines' working data (npm run skyline): scenes and Blender renders, and the reference photos they
+# are checked against (Wikimedia Commons; data/refs/<city>/sources.json credits each)
+data/skyline/
+data/refs/

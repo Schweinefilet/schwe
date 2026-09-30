@@ -347,14 +347,14 @@ export const SKY = {
   // `exposureStops`: stars as a long exposure over a city would record them (user's choice): this many
   // stops above what the metered sky alone would show. Positions and magnitudes stay the catalogue's.
   stars: { url: 'sky/stars.bin', maxMag: 4.5, cells: 64, seeingDeg: 0.02, lux0: 2.5e-6, exposureStops: 4 },
-  // Each city's skyline from its vantage (npm run skyline; public/skyline/<city>.png and .json), in
-  // front of its sky: OpenStreetMap buildings and drawn landmarks as dark shapes, their windows lit
-  // after dark. Only cities with a built skyline show one. `window`: a lit window's brightness on screen
-  // (display-referred, after the sky's exposure: a real window, a hundred times brighter than a city's
-  // night sky, would blow the skyline out; this reads as points of light up close and a soft glitter at
-  // drift size); `windowColour` warm; `facade`: a wall's share of the sky's light by day, and of the
-  // city glow at night; `hazePerKm`: how fast distant buildings fade into the sky (plus rain or fog).
-  skyline: { url: 'skyline/', window: 1.1, windowColour: [1.0, 0.8, 0.55], facade: [0.35, 2.5], hazePerKm: 0.12 },
+  // Each city's skyline from its vantage, rendered in Blender from OpenStreetMap and hand-modelled
+  // landmarks (scripts/blender/; public/skyline/<city>.json and <city>/<variant>-*.png), in front of its
+  // sky: lit by the live sky by day, by its own lights after dark. Only cities with a rendered skyline
+  // show one. `lights`, `windows`: the on-screen gain of its fixed lights (lamps, floodlights, landmarks)
+  // and of its lit windows (display-referred, after the sky's exposure: a real window, a hundred times
+  // brighter than a city's night sky, would blow the skyline out); `hazePerKm`: how fast distant
+  // buildings fade into the light around them (plus rain or fog).
+  skyline: { url: 'skyline/', lights: 0.18, windows: 0.22, hazePerKm: 0.12 },
 }
 
 // Sound. Every sound is synthesized until a licensed file fills its slot (paths under public/).

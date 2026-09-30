@@ -78,7 +78,6 @@ export function skyInputs({ city, date, weather = null, override = {}, sky }) {
     // The skyline's lit windows (decorative): the share of the evening's lit windows still on at this
     // local hour, and how dark it is (none by day).
     windows: { late: lateness(localHour(date, city.tz)), dark: smoothstep(3, -6, sunPos.altitude) },
-    windowE: tint(sky.skyline?.windowColour ?? [1, 1, 1]).map((c) => c * (sky.skyline?.window ?? 0)),
     cityGlow: tint(glow.colour).map((c) => c * glowZenith * exposure),
     clouds: {
       cover: cloud,

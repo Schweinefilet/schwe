@@ -3,6 +3,7 @@ import { SKY } from '../config.js'
 import skyChunk from '../shaders/sky/sky.glsl?raw'
 import { loadCloudNoise } from './cloudNoise.js'
 import { createHillaire, lutTarget } from './hillaire.js'
+import { skylineVariant } from './skylineVariant.js'
 import { loadStarTexture } from './stars.js'
 
 // Sky as a drop's content source. createSkyGlobals() builds what every city shares, once per visit:
@@ -47,28 +48,36 @@ export function createSkyGlobals(renderer, { model = createHillaire, coefficient
   return globals
 }
 
-const NO_SKYLINE = new THREE.DataTexture(new Uint8Array([0, 255, 0, 0]), 1, 1)
+const NO_SKYLINE = new THREE.DataTexture(new Uint8Array([0, 0, 0, 0]), 1, 1)
 NO_SKYLINE.needsUpdate = true
 
-// A city's skyline (scripts/build-skyline.mjs): its panorama as a texture with its own mip levels
-// (every channel is a share of the pixel, so averaging is right), and where it sits in the sky. null
-// when the city has none.
-async function loadSkyline(cityId) {
-  const base = `${import.meta.env.BASE_URL}${SKY.skyline.url}${cityId}`
-  const res = await fetch(`${base}.json`)
-  if (!res.ok || !(res.headers.get('content-type') ?? '').includes('json')) return null
-  const meta = await res.json()
-  const blob = await (await fetch(`${base}.png`)).blob()
-  // Rows bottom-up (v runs up with elevation); values exactly as stored: they are data, not colour.
+// One of a skyline's images, rows bottom-up (v runs up with elevation). RGB is light encoded sRGB, so the
+// GPU decodes it before filtering and its mip levels average light as a camera would; alpha is data.
+async function loadSkylineImage(url) {
+  const blob = await (await fetch(url)).blob()
   const bitmap = await createImageBitmap(blob, { imageOrientation: 'flipY', premultiplyAlpha: 'none', colorSpaceConversion: 'none' })
   const texture = new THREE.Texture(bitmap)
   texture.flipY = false
   texture.premultiplyAlpha = false
-  texture.colorSpace = THREE.NoColorSpace
+  texture.colorSpace = THREE.SRGBColorSpace
   texture.minFilter = THREE.LinearMipmapLinearFilter
   texture.generateMipmaps = true
   texture.needsUpdate = true
-  return { meta, texture }
+  return texture
+}
+
+// A city's skyline (scripts/blender/: rendered in Blender, packed by encode.py): the variant for this
+// month as three textures (daylight and coverage; the fixed lights and distance; the windows), their
+// scales, and where the panorama sits in the sky. null when the city has none.
+async function loadSkyline(cityId, month = new Date().getUTCMonth() + 1) {
+  const base = `${import.meta.env.BASE_URL}${SKY.skyline.url}${cityId}`
+  const res = await fetch(`${base}.json`)
+  if (!res.ok || !(res.headers.get('content-type') ?? '').includes('json')) return null
+  const meta = await res.json()
+  const variant = meta.version === 2 ? skylineVariant(meta, month) : null
+  if (!variant) return null
+  const [light, night, windows] = await Promise.all(['light', 'night', 'windows'].map((k) => loadSkylineImage(`${base}/${variant}-${k}.png`)))
+  return { meta, variant, scale: meta.variants[variant].scale, textures: { light, night, windows } }
 }
 
 export class CitySky {
@@ -100,13 +109,15 @@ export class CitySky {
       uSkyHaze: { value: 0 },
       uSkyPreExposure: { value: 1 },
       uSkyMeter: { value: new THREE.Vector3(SKY.exposure.key, SKY.exposure.ref, SKY.exposure.range) },
-      uSkyline: { value: NO_SKYLINE },
+      uSkylineLight: { value: NO_SKYLINE },
+      uSkylineNight: { value: NO_SKYLINE },
+      uSkylineWindows: { value: NO_SKYLINE },
       uSkylineOn: { value: 0 },
       uSkylineRect: { value: new THREE.Vector4() },
       uSkylineDist: { value: new THREE.Vector2() },
+      uSkylineScale: { value: new THREE.Vector3() },
       uSkylineLit: { value: new THREE.Vector3() },
-      uSkylineWindow: { value: new THREE.Vector3() },
-      uSkylineLook: { value: new THREE.Vector3(SKY.skyline.facade[0], SKY.skyline.facade[1], SKY.skyline.hazePerKm) },
+      uSkylineGain: { value: new THREE.Vector3(SKY.skyline.lights, SKY.skyline.windows, SKY.skyline.hazePerKm) },
     }
     if (cityId)
       loadSkyline(cityId).then(
@@ -115,7 +126,10 @@ export class CitySky {
           const RAD = Math.PI / 180
           const u = this.uniforms
           this.skyline = s
-          u.uSkyline.value = s.texture
+          u.uSkylineLight.value = s.textures.light
+          u.uSkylineNight.value = s.textures.night
+          u.uSkylineWindows.value = s.textures.windows
+          u.uSkylineScale.value.set(s.scale.light, s.scale.night, s.scale.windows)
           u.uSkylineRect.value.set(s.meta.azimuth[0] * RAD, s.meta.azimuth[1] * RAD, s.meta.elevation[0] * RAD, (s.meta.elevation[1] - s.meta.elevation[0]) * RAD)
           u.uSkylineDist.value.set(Math.log(s.meta.distance[0]), Math.log(s.meta.distance[1] / s.meta.distance[0]))
           u.uSkylineOn.value = 1
@@ -149,7 +163,6 @@ export class CitySky {
     u.uSkyCityGlow.value.fromArray(inputs.cityGlow)
     u.uSkyPreExposure.value = inputs.exposure
     u.uSkylineLit.value.set(1 - inputs.windows.late, inputs.windows.late, inputs.windows.dark)
-    u.uSkylineWindow.value.fromArray(inputs.windowE)
     this.setWeather(inputs.clouds, inputs.haze)
   }
 
@@ -169,6 +182,6 @@ export class CitySky {
 
   dispose() {
     this.target.dispose()
-    this.skyline?.texture.dispose()
+    for (const t of Object.values(this.skyline?.textures ?? {})) t.dispose()
   }
 }

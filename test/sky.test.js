@@ -15,6 +15,7 @@ import {
 } from '../src/sky/astro.js'
 import { cityBasis, exposureFor, meteredLuminance, skyInputs } from '../src/sky/inputs.js'
 import { buildStarCells, cubeFace, faceDir, EMPTY_MAG } from '../src/sky/starCells.js'
+import { skylineVariant } from '../src/sky/skylineVariant.js'
 
 const RAD = Math.PI / 180
 const CITIES = [
@@ -189,4 +190,14 @@ test('vantages: bearings from each city view toward its landmarks', async () => 
   assert.ok(Math.abs(viewBearing(views.tokyo) - 90) < 2)
   assert.ok(Math.abs(meanBearing([350, 10])) < 1e-9 || Math.abs(meanBearing([350, 10]) - 360) < 1e-9)
   for (const [id, v] of Object.entries(views)) if (id !== '_about') assert.ok(Number.isFinite(viewBearing(v)), id)
+})
+
+test('skyline variant: the one whose months include this month, else the first, else none', () => {
+  const meta = { variants: { leaf: { months: [4, 5, 6, 7, 8, 9, 10, 11] }, bare: { months: [12, 1, 2, 3] } } }
+  assert.equal(skylineVariant(meta, 9), 'leaf')
+  assert.equal(skylineVariant(meta, 1), 'bare')
+  assert.equal(skylineVariant(meta, 12), 'bare')
+  assert.equal(skylineVariant({ variants: { leaf: { months: [6] } } }, 1), 'leaf')
+  assert.equal(skylineVariant({}, 1), null)
+  assert.equal(skylineVariant(null, 1), null)
 })
