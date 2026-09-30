@@ -277,11 +277,12 @@ def brooklyn_bridge(g, mats):
     top = wz + BB['top']
     road = wz + BB['road']
 
-    # ---- The Manhattan tower: stone, floodlit gold. Below the roadway a solid block; above it three piers
+    # ---- The Manhattan tower: stone, floodlit gold (as bright as the Woolworth crown's gold in ref4 and ref7,
+    # not brighter). Below the roadway a solid block; above it three piers
     # and two pointed arches, then solid to the cornice; the whole with a slight batter.
     rng = g['rng']
     stone = dict(wall=(0.42, 0.38, 0.31), style=3, bay=3.0, floorh=3.0, win_w=0, win_h=0, frame=0.3, busy=0.0, seed=rng.random() * 1000,
-                 roofc=(0.3, 0.28, 0.24), flood=1.1, run_l=1.0, run_b=1.0, glass_ior=0.0)
+                 roofc=(0.3, 0.28, 0.24), flood=0.5, run_l=1.0, run_b=1.0, glass_ior=0.0)
     shrink = lambda z: 1 - BB['batter'] * (z - wz) / BB['top']
 
     def P(x, z, t):
