@@ -41,7 +41,7 @@ export async function selectClips(manifest, cities, date = new Date(), weather =
   const wx = weather ?? (await fetchWeather(cities))
   return cities.map((city) => {
     const light = lightStateAt(city, date)
-    const w = wx[city.id] ?? { variant: FALLBACK_WEATHER, label: 'clear', tempC: null }
+    const w = wx[city.id] ?? { variant: FALLBACK_WEATHER, label: null, known: false, tempC: null }
     const entry = pickClip(manifest, city.id, light, w.variant)
     return {
       city: city.id,
@@ -49,7 +49,8 @@ export async function selectClips(manifest, cities, date = new Date(), weather =
       localTime: localTimeString(city, date),
       light,
       weather: w.variant,
-      weatherLabel: w.label,
+      weatherLabel: w.label, // null when the weather was not read: the type then shows the time only
+      weatherKnown: w.known ?? w.code != null,
       tempC: w.tempC,
       mmPerHour: w.mmPerHour ?? null,
       cloudCover: w.cloudCover ?? null,

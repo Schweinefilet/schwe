@@ -55,7 +55,26 @@ def parse_args(argv=None):
     # slow motion, then the step widens as the water calms, so the ending leaves slow motion
     # smoothly and the file stays small. "" keeps every frame.
     p.add_argument("--ramp", default="1:1,60:1,150:2.05,240:3.7,300:5.4")
-    return p.parse_args(argv)
+    # Calm water (left to the site's puddle) is within this height of rest and tilted less than
+    # 1 - calm-tilt; the splash shader uses the same numbers. The hero's are in its own sim meters.
+    p.add_argument("--calm-height", type=float, default=0.002)
+    p.add_argument("--calm-tilt", type=float, default=0.97)
+    p.add_argument("--width", type=int, default=2048, help="texture width")
+    # Rain library (bake_rain.py): every cached frame at one rate (no ramp), crop, budget and calm
+    # thresholds in drop sizes, a far copy at a small budget, and the splash's surface profile.
+    p.add_argument("--rain", action="store_true")
+    p.add_argument("--far-tris", type=int, default=1500, help="rain: triangle budget of the far copy (0: none)")
+    args = p.parse_args(argv)
+    if args.rain:
+        # Anything not given explicitly takes the rain defaults.
+        given = set(a.split("=")[0] for a in (argv if argv is not None else []) if a.startswith("--"))
+        if "--ramp" not in given:
+            args.ramp = ""
+        if "--max-tris" not in given:
+            args.max_tris = 12000
+        if "--width" not in given:
+            args.width = 4096
+    return args
 
 
 def read_bobj(path):
@@ -109,18 +128,18 @@ def cluster(v, n, tris, cell_fine, cell_coarse, surface_z):
     return cv, cn, t[np.sort(first)]
 
 
-def frame_mesh(path, domain, args):
+def frame_mesh(path, domain, args, max_tris):
     v, n, tris = read_bobj(path)
     # Cache coordinates are the domain normalized by its longest side, centered on the domain.
     v = v * domain["maxSize"] + np.array(domain["center"], np.float32)
     n = n / np.maximum(np.linalg.norm(n, axis=1, keepdims=True), 1e-8)
 
     c = v[tris].mean(axis=1)
-    keep = (np.hypot(c[:, 0], c[:, 1]) <= args.crop) & (c[:, 2] >= domain["poolDepth"] * 0.5)
+    keep = (np.hypot(c[:, 0], c[:, 1]) <= domain["crop"]) & (c[:, 2] >= domain["poolDepth"] * 0.5)
     # Calm water (at rest height, facing up) is drawn by the site's puddle, and the splash shader
     # makes it transparent anyway: drop it here so the whole budget goes to the crown, jet and crater.
     # The thresholds are the shader's: within 2 mm of rest and tilted less than 1 - 0.97 is invisible.
-    calm_v = (np.abs(v[:, 2] - domain["restHeight"]) < 0.002) & (n[:, 2] > 0.97)
+    calm_v = (np.abs(v[:, 2] - domain["restHeight"]) < domain["calmHeight"]) & (n[:, 2] > domain["calmTilt"])
     keep &= ~calm_v[tris].all(axis=1)
     tris = tris[keep]
     if len(tris) == 0:
@@ -128,13 +147,13 @@ def frame_mesh(path, domain, args):
     used, remap = np.unique(tris, return_inverse=True)
     v, n, tris = v[used], n[used], remap.reshape(-1, 3)
 
-    if len(tris) > args.max_tris:
-        lo, hi = 1e-5, 0.02  # fine cell size bounds, meters
+    if len(tris) > max_tris:
+        lo, hi = 1e-6, 0.02  # fine cell size bounds, meters
         best = None
         for _ in range(18):
             mid = math.sqrt(lo * hi)
             cv, cn, ct = cluster(v, n, tris, mid, mid * args.coarse, domain["restHeight"])
-            if len(ct) > args.max_tris:
+            if len(ct) > max_tris:
                 lo = mid
             else:
                 hi = mid
@@ -143,7 +162,7 @@ def frame_mesh(path, domain, args):
 
     # Vertices in Morton (Z-curve) order of their position, triangles by their lowest index: nearby
     # texels then hold nearby points, which is what the PNG compressor can use.
-    g = np.clip(((v - v.min(axis=0)) / 0.0005).astype(np.int64), 0, 1023)
+    g = np.clip(((v - v.min(axis=0)) / (domain["crop"] / 120)).astype(np.int64), 0, 1023)
     code = np.zeros(len(v), np.int64)
     for bit in range(10):
         for axis in range(3):
@@ -209,31 +228,46 @@ def ramp_frames(ramp, count):
     return keep
 
 
-def export(args):
-    with open(os.path.join(args.cache, "splash_domain.json")) as f:
-        domain = json.load(f)
-    files = sorted(glob.glob(os.path.join(args.cache, "mesh", "fluid_mesh_*.bobj.gz")))
-    if not files:
-        raise SystemExit(f"no meshes in {args.cache}/mesh")
-    if args.frames:
-        files = files[: args.frames]
-    source = ramp_frames(args.ramp, len(files))
-    # Where the water actually rests: the level-set surface sits a little above the nominal pool depth.
-    # Measured on frame 1 (before the impact) over the calm outer ring, so the site can put rest height
-    # exactly on its puddle plane.
-    v0, n0, _ = read_bobj(files[0])
-    v0 = v0 * domain["maxSize"] + np.array(domain["center"], np.float32)
-    r0 = np.hypot(v0[:, 0], v0[:, 1])
-    calm = (n0[:, 2] / np.maximum(np.linalg.norm(n0, axis=1), 1e-8) > 0.99) & (r0 > args.crop * 0.6) & (r0 < args.crop)
-    rest = float(np.median(v0[calm, 2])) if calm.any() else domain["poolDepth"]
-    domain = {**domain, "restHeight": rest}
+def surface_profile(path, domain, bins, reach, cap):
+    """The water's surface height against distance from the impact, averaged round the circle, as a
+    height field can hold it: in each ring, the highest upward-facing point below `cap` above rest
+    (meters). The crown, the jet and flying drops rise above the cap and are the VAT's; air trapped
+    under the surface faces up too, but lies below it."""
+    v, n, _ = read_bobj(path)
+    v = v * domain["maxSize"] + np.array(domain["center"], np.float32)
+    n = n / np.maximum(np.linalg.norm(n, axis=1, keepdims=True), 1e-8)
+    r = np.hypot(v[:, 0], v[:, 1])
+    z = v[:, 2] - domain["restHeight"]
+    ok = (n[:, 2] > 0.5) & (r < reach) & (z < cap)
+    ring = np.minimum((r[ok] / reach * bins).astype(int), bins - 1)
+    out = np.full(bins, np.nan, np.float32)
+    np.fmax.at(out, ring, z[ok])
+    known = ~np.isnan(out)
+    if not known.any():
+        return np.zeros(bins, np.float32)
+    idx = np.arange(bins)
+    return np.interp(idx, idx[known], out[known]).astype(np.float32)
 
-    frames = []
-    for i, f in enumerate(source):
-        frames.append(frame_mesh(files[f - 1], domain, args))
-        print(f"[splash] frame {i + 1}/{len(source)} (cache {f}): {len(frames[-1][2])} tris", flush=True)
 
-    os.makedirs(args.out, exist_ok=True)
+def smooth_profile(p, frames=1.0, rings=1.0):
+    """Gaussian blur over time (frames) and radius (rings): the per-ring maximum is noisy, and the
+    site differentiates it in time."""
+    def blur(a, sigma, axis):
+        if sigma <= 0:
+            return a
+        k = np.arange(-3 * int(math.ceil(sigma)), 3 * int(math.ceil(sigma)) + 1)
+        w = np.exp(-0.5 * (k / sigma) ** 2)
+        w /= w.sum()
+        pad = [(0, 0)] * a.ndim
+        pad[axis] = (len(k) // 2, len(k) // 2)
+        a = np.pad(a, pad, mode="edge")
+        return np.apply_along_axis(lambda x: np.convolve(x, w, mode="valid"), axis, a)
+    return blur(blur(p, frames, 0), rings, 1)
+
+
+def write_vat(frames, out, args, extra):
+    """Pack frames [(positions, normals, triangles)] into the PNGs and splash.json in `out`."""
+    os.makedirs(out, exist_ok=True)
     max_tris = max(1, max(len(t) for _, _, t in frames))
     all_p = np.concatenate([p for p, _, _ in frames if len(p)])
     lo, hi = all_p.min(axis=0), all_p.max(axis=0)
@@ -241,7 +275,10 @@ def export(args):
     levels = (1 << args.bits) - 1
     shift = 16 - args.bits
 
-    width = 2048
+    width = args.width
+    for p, _, _ in frames:
+        if len(p) > 65535:
+            raise SystemExit(f"a frame has {len(p)} vertices; indices are 16-bit")
     vert_rows = [math.ceil(len(p) / width) for p, _, _ in frames]
     idx_rows = [math.ceil(len(t) * 3 / width) for _, _, t in frames]
     first = lambda rows: np.concatenate([[0], np.cumsum(rows)[:-1]]).astype(int)  # noqa: E731
@@ -267,8 +304,8 @@ def export(args):
         iflat[: len(c), 1] = c & 255
 
     for name, tex in zip(("splash_hi.png", "splash_lo.png", "splash_nrm.png"), vtex):
-        write_png(os.path.join(args.out, name), tex)
-    write_png(os.path.join(args.out, "splash_idx.png"), itex)
+        write_png(os.path.join(out, name), tex)
+    write_png(os.path.join(out, "splash_idx.png"), itex)
     meta = {
         "frames": len(frames),
         "maxCorners": max_tris * 3,  # the longest frame, in triangle corners (3 per triangle)
@@ -278,18 +315,90 @@ def export(args):
         "boundsMin": lo.tolist(),
         "boundsMax": hi.tolist(),
         "quantMax": levels << shift,  # decoded position = mix(min, max, (hi * 256 + lo) / quantMax)
-        "surfaceY": domain["restHeight"],  # measured resting water height (Y-up, meters)
-        "dropRadius": domain["dropRadius"],
+        "trisPerFrame": [len(t) for _, _, t in frames],
+        **extra,
+    }
+    with open(os.path.join(out, "splash.json"), "w") as f:
+        json.dump(meta, f, indent=2)
+    print(f"[splash] wrote {len(frames)} frames, {max_tris} tris max, vertex textures {width}x{vtex.shape[1]}, index {width}x{itex.shape[0]} → {out}", flush=True)
+
+
+def export(args):
+    with open(os.path.join(args.cache, "splash_domain.json")) as f:
+        domain = json.load(f)
+    files = sorted(glob.glob(os.path.join(args.cache, "mesh", "fluid_mesh_*.bobj.gz")))
+    if not files:
+        raise SystemExit(f"no meshes in {args.cache}/mesh")
+    if args.frames:
+        files = files[: args.frames]
+    source = ramp_frames(args.ramp, len(files))
+    radius = domain["dropRadius"]
+    if args.rain:
+        # In drop sizes: keep 7 diameters round the impact (the walls are 8 out). Calm water is within a
+        # quarter of the drop's radius of rest and tilted less than 25°: the site's live surface draws
+        # the water and its rings, and the bake's own calm water is lumpy at its particles' scale
+        # (thick particles keep the crown whole), which would take the triangles the crown needs.
+        crop = 7 * 2 * radius
+        calm_height = 0.25 * radius
+    else:
+        crop, calm_height = args.crop, args.calm_height
+    # Where the water actually rests: the level-set surface sits a little above the nominal pool depth.
+    # Measured on frame 1 (before the impact) over the calm outer ring, so the site can put rest height
+    # exactly on its puddle plane.
+    v0, n0, _ = read_bobj(files[0])
+    v0 = v0 * domain["maxSize"] + np.array(domain["center"], np.float32)
+    r0 = np.hypot(v0[:, 0], v0[:, 1])
+    calm = (n0[:, 2] / np.maximum(np.linalg.norm(n0, axis=1), 1e-8) > 0.99) & (r0 > crop * 0.6) & (r0 < crop)
+    rest = float(np.median(v0[calm, 2])) if calm.any() else domain["poolDepth"]
+    calm_tilt = 0.9 if args.rain and args.calm_tilt == 0.97 else args.calm_tilt
+    domain = {**domain, "restHeight": rest, "crop": crop, "calmHeight": calm_height, "calmTilt": calm_tilt}
+
+    extra = {
+        "surfaceY": rest,  # measured resting water height (Y-up, meters)
+        "dropRadius": radius,
         # Drop center above the resting water at frame 1.
-        "dropStartAbove": domain["poolDepth"] + domain["dropStartAbove"] - domain["restHeight"],
+        "dropStartAbove": domain["poolDepth"] + domain["dropStartAbove"] - rest,
         "fps": domain["fps"],
         "timeScale": domain["timeScale"],
-        "trisPerFrame": [len(t) for _, _, t in frames],
         "sourceFrames": source,  # the cached frame each stored frame shows (the speed ramp)
+        "calmHeight": calm_height,
+        "calmTilt": calm_tilt,
+        "crop": crop,
     }
-    with open(os.path.join(args.out, "splash.json"), "w") as f:
-        json.dump(meta, f, indent=2)
-    print(f"[splash] wrote {len(frames)} frames, {max_tris} tris max, vertex textures {width}x{vtex.shape[1]}, index {width}x{itex.shape[0]} → {args.out}", flush=True)
+    if args.rain:
+        vx, _, vz = domain["velocity"]
+        extra.update(
+            frameSeconds=domain["frameSeconds"],  # real time between stored frames
+            # Y-up like the mesh: Blender (x, y, z) → (x, z, -y)
+            velocity=[vx, vz, 0.0],
+            dropStartX=domain["dropStartX"],
+            # The drop's underside meets the water this long after frame 0 (gravity over the gap is
+            # far below a frame).
+            impactSeconds=(domain["dropStartAbove"] - radius) / -vz,
+            slant=domain["slant"],
+            speed=domain["speed"],
+        )
+        bins, reach = 64, crop
+        cap = 0.6 * radius
+        profile = smooth_profile(np.array([surface_profile(files[f - 1], domain, bins, reach, cap) for f in source]))
+        extra["profile"] = {
+            "reach": reach,  # meters from the impact covered by the bins
+            "cap": cap,  # heights above this (the crown, the jet) are left out
+            "bins": bins,
+            # Per frame, per ring: height above rest, in micrometers (rounded).
+            "heights": [[int(round(h * 1e6)) for h in row] for row in profile],
+        }
+
+    budgets = [("", args.max_tris)]
+    if args.rain and args.far_tris:
+        budgets.append(("far", args.far_tris))
+    for sub, budget in budgets:
+        frames = []
+        for i, f in enumerate(source):
+            frames.append(frame_mesh(files[f - 1], domain, args, budget))
+            if i % 20 == 0 or i == len(source) - 1:
+                print(f"[splash] {sub or 'full'} frame {i + 1}/{len(source)} (cache {f}): {len(frames[-1][2])} tris", flush=True)
+        write_vat(frames, os.path.join(args.out, sub), args, extra if not sub else {k: v for k, v in extra.items() if k != "profile"})
 
 
 if __name__ == "__main__":

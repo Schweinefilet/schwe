@@ -13,6 +13,8 @@ uniform float uFogDensity;
 uniform float uFocus;     // 1: the lens is focused on the rain; 0: on the backdrop (the first shot)
 uniform float uAperture;  // defocus: a drop d units away blurs by uAperture / d radians when focused far
 uniform float uMaxBlur;   // cap on that blur, in drawing-buffer px
+uniform float uThinFrom;  // a live tier drop thins the rain out: drops from this instance on are going…
+uniform float uThin;      // …and show this much of themselves (1 → 0), so none simply vanish
 
 attribute vec3 aOffset;   // start position inside one box
 attribute vec4 aParams;   // x: fall speed, y: radius (world), z: streak brightness, w: unused
@@ -98,5 +100,6 @@ void main() {
 
   float fog = exp(-depth * uFogDensity);
   float nearFade = smoothstep(0.6, 3.0, depth); // drops this close would be out of focus
-  vAlpha = edge * fog * nearFade * coverage;
+  float thin = float(gl_InstanceID) < uThinFrom ? 1.0 : uThin;
+  vAlpha = edge * fog * nearFade * coverage * thin;
 }

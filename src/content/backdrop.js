@@ -19,6 +19,7 @@ export const envUniforms = {
   uEnvCodecSharp: { value: codec(BACKDROP_CODEC.max.sharp) },
   uEnvCodecSoft: { value: codec(BACKDROP_CODEC.max.soft) },
   uEnvYaw: { value: THREE.MathUtils.degToRad(BACKDROP.yaw) },
+  uEnvLift: { value: 0 }, // set by CameraRig from the camera's height (BACKDROP.ground)
 }
 
 // The start view (BACKDROP.view), for the backdrop only (Sky.jsx): the window of the square the first

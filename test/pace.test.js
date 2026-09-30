@@ -89,3 +89,29 @@ test('pace table: rounding never raises the limit and removes its corners', () =
   const jump = ({ rate }) => Math.max(...rate.slice(1).map((v, i) => Math.abs(v - rate[i])))
   assert.ok(jump(sharp) > 1.2 && jump(round) < 0.1, `${jump(round)} vs ${jump(sharp)}`)
 })
+
+test('pace table: a drop with `until` stops slowing the camera after that time', () => {
+  // The camera sits beside the drop from 4 to 6; the drop counts only until 5.
+  const beside = (t) => (t >= 4 && t <= 6 ? [0, 0, 5] : [0, 0, t])
+  const table = buildPaceTable(beside, [{ pos: [0, 0, 5], until: 5 }], opts)
+  assert.ok(Math.abs(rateAt(table, 4.5) - 0.45) < 1e-9)
+  assert.ok(rateAt(table, 5.9) > rateAt(table, 4.5))
+  // A plain position still counts throughout.
+  const always = buildPaceTable(beside, [[0, 0, 5]], opts)
+  assert.ok(Math.abs(rateAt(always, 5.9) - 0.45) < 1e-9)
+})
+
+test('pace table: a hold slows to its rate at `at`, and frees the limit soon after', () => {
+  const line = (t) => [0, 0, -t] // no drops near: the limit is max everywhere but the hold
+  const opts = { from: 0, to: 20, near: [0.5, 1], max: 1.5, nearDrop: 0.45, brake: 2.5, round: 0.5 }
+  const table = buildPaceTable(line, [], { ...opts, holds: [{ from: 12.6, at: 13, rate: 0.05 }] })
+  const plain = buildPaceTable(line, [], opts)
+  assert.ok(Math.abs(rateAt(table, 13) - 0.05) < 1e-9, `at the eye ${rateAt(table, 13)}`)
+  assert.ok(rateAt(table, 12.8) < rateAt(plain, 12.8) && rateAt(table, 12.8) > 0.05) // falling
+  assert.ok(rateAt(table, 11) === rateAt(plain, 11)) // untouched well before
+  assert.ok(rateAt(table, 13.3) > 1) // free again within a few tenths after the eye
+  for (let t = 12; t <= 14; t += 0.01) assert.ok(rateAt(table, t) <= rateAt(plain, t) + 1e-9, `never raised at ${t.toFixed(2)}`)
+  // Still braked: never falls or rises faster than the brake allows.
+  const { rate, step } = table
+  for (let i = 1; i < rate.length; i++) assert.ok(Math.abs(rate[i] ** 2 - rate[i - 1] ** 2) <= 2 * 2.5 * step + 1e-9, `step ${i}`)
+})

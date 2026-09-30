@@ -1,7 +1,7 @@
 import gsap from 'gsap'
 import { ScrollTrigger } from 'gsap/ScrollTrigger'
 import Lenis from 'lenis'
-import { CAMERA_KEYS, DEFAULT_DIVE_CITY, DRIFT_PASSES, HERO, PACE, SNAP, SPLASH, TIMELINE_END, TIMELINE_START, heroDropsFor, visibleDrops } from '../config.js'
+import { ALIGN, CAMERA_KEYS, DEFAULT_DIVE_CITY, DIVE, DRIFT_PASSES, HERO, PACE, SNAP, SPLASH, TIMELINE_END, TIMELINE_START, heroDropsFor, visibleDrops } from '../config.js'
 import { setLenis, setStep } from './loop.js'
 import { buildMasterTimeline } from './timeline.js'
 import { createCameraPath } from './cameraPath.js'
@@ -25,7 +25,9 @@ const endingEase = (x) => (x <= EASE_FROM ? 2 * EASE_K * (1 - EASE_FROM) * x : 1
 function paceTable() {
   const path = createCameraPath(CAMERA_KEYS)
   const out = { pos: null, look: null }
-  const drops = visibleDrops(heroDropsFor(DEFAULT_DIVE_CITY), quality.heroDrops).map((d) => d.pos)
+  // The dive drop slows the camera until it starts pulling out: its city has been named by then, and
+  // leaving it at a city drop's pace was dead time before the word.
+  const drops = visibleDrops(heroDropsFor(DEFAULT_DIVE_CITY), quality.heroDrops).map((d) => (d.dive ? { pos: d.pos, until: DIVE.outStart } : d.pos))
   const view = (t) => {
     path.sample(t, out)
     const d = out.look.map((v, i) => v - out.pos[i])
@@ -49,6 +51,8 @@ function paceTable() {
     maxTurn: (PACE.maxTurn * Math.PI) / 180,
     turnWindow: PACE.turnWindow,
     round: PACE.round,
+    // The word: slowing almost to a stop as it forms (and held at the eye, below).
+    holds: [{ from: ALIGN.hold.from, at: ALIGN.arrive, rate: ALIGN.hold.rate }],
   })
 }
 
@@ -59,7 +63,9 @@ function landingPoints() {
   return [...DRIFT_PASSES.slice(0, shown).map((at) => ({ at, capture: SNAP.capture })), SNAP.dive]
 }
 
-export function initScroll() {
+// `onTop`: runs under the black when a cut lands at the top ("back to top", the Home key): the first
+// shot's focus pull plays again.
+export function initScroll({ onTop } = {}) {
   if ('scrollRestoration' in history) history.scrollRestoration = 'manual'
   window.scrollTo(0, 0)
 
@@ -84,21 +90,44 @@ export function initScroll() {
   })
   const pace = { time: TIMELINE_START, velocity: 0, arrived: null, lastTarget: TIMELINE_START, ending: false }
   // The visitor's current gesture: when its last input came, how far the scroll ran ahead of the picture
-  // at most, and whether its landing has been decided.
-  const gesture = { at: 0, lead: 0, landed: true, movedAt: 0, lastScroll: 0 }
+  // at most, whether its landing has been decided, and the time the scroll stood for when it began.
+  const gesture = { at: 0, lead: 0, landed: true, movedAt: 0, lastScroll: 0, from: TIMELINE_START }
+  // The word's hold (ALIGN.hold): reaching the eye going forward, the picture holds on the word until
+  // the visitor, after a rest, scrolls on by ALIGN.hold.push. Armed again once the picture is back
+  // before the word, or after a jump that lands before it.
+  const word = { armed: true, holding: false, since: 0, push: 0 }
+  // Let go (the visitor scrolled on): the ending plays itself from the word, as it does once the picture
+  // passes SPLASH.autoFrom. (Left to the scroll, a push that let go ran out just short of it.)
+  const goOn = () => {
+    word.holding = false
+    word.armed = false
+    if (!lenis.isStopped && !lenis.isLocked && !resize) playEnding(pace.time)
+  }
+  // Forward input while held: counted toward letting go once the rest is over.
+  const pushWord = (units) => {
+    if (performance.now() - word.since < ALIGN.hold.dwell * 1000) return
+    word.push += units
+    if (word.push >= ALIGN.hold.push) goOn()
+  }
   const snap = (t) => {
     pace.time = pace.lastTarget = t
     pace.velocity = 0
     pace.ending = false // a jump interrupts the ending's own scroll (and Lenis drops its lock)
     gesture.landed = true
+    word.holding = false
+    word.armed = t < ALIGN.arrive
     tl.time(t)
   }
 
-  // Past SPLASH.autoFrom the ending plays itself: the page scrolls to the end at SPLASH.autoRate,
-  // locked, and holds there. Only for a visitor's own scroll: not while the scroll is stopped (the
-  // loader, the bench) or already locked by another programmatic scroll.
+  // Once the picture passes SPLASH.autoFrom going down, the ending plays itself: the page scrolls to the
+  // end at SPLASH.autoRate and holds there. Only for a visitor's own scroll: not while the scroll is
+  // stopped (the loader, the bench) or already locked by another programmatic scroll. It starts from the
+  // picture, not from the scroll, which a touch fling can carry screens ahead of it: the scroll is
+  // brought back to the picture first, so the word is always seen before the ending takes over.
+  // Scrolling up takes over again at once (stopEnding); scrolling down while it plays is ignored.
   const playEnding = (from) => {
     pace.ending = true
+    lenis.scrollTo(timeToScroll(from), { immediate: true, force: true })
     lenis.scrollTo(timeToScroll(TIMELINE_END), {
       duration: Math.max((TIMELINE_END - from) / SPLASH.autoRate, 0.5),
       easing: endingEase,
@@ -107,6 +136,11 @@ export function initScroll() {
       onComplete: () => (pace.ending = false),
     })
   }
+  const stopEnding = () => {
+    if (!pace.ending) return
+    pace.ending = false
+    lenis.reset() // stops the scroll where it is and unlocks it
+  }
 
   // A hard wheel or trackpad flick runs at most PACE.bank ahead of the picture; the rest is dropped, so
   // the camera stops soon after the hand does. (Touch scrolling is native, momentum included; it only
@@ -114,9 +148,19 @@ export function initScroll() {
   const lenis = new Lenis({
     autoRaf: false,
     virtualScroll(data) {
+      // Scrolling up while the ending plays itself hands the scroll back to the visitor.
+      if (pace.ending && data.deltaY < 0) stopEnding()
       // Every input counts toward the gesture, even input refused below.
       gesture.at = performance.now()
+      if (gesture.landed) gesture.from = scrollToTime(lenis.scroll)
       gesture.landed = false
+      // Held on the word: forward input (wheel or touch) moves nothing and only counts toward letting go.
+      // Upward input scrolls as usual.
+      if (word.holding && data.deltaY > 0) {
+        pushWord((data.deltaY * span) / (st.end - st.start || 1))
+        if (data.event.cancelable) data.event.preventDefault()
+        return false
+      }
       if (!data.event.type.includes('wheel') || !data.deltaY) return true
       const ahead = scrollToTime(lenis.targetScroll + data.deltaY) - pace.time
       if (Math.abs(ahead) <= PACE.bank) return true
@@ -152,25 +196,108 @@ export function initScroll() {
     gesture.landed = true
     gesture.lead = 0
     if (!swift || lenis.isStopped || lenis.isLocked || pace.ending) return
-    const at = landing({ picture: pace.time, target, points })
+    const at = landing({ picture: pace.time, target, points, from: gesture.from })
     if (at !== null && Math.abs(at - target) > 0.002) lenis.scrollTo(timeToScroll(at), { immediate: true })
   }
 
+  // A resize changes the page's height (the track is measured in viewport heights) but not the scroll
+  // offset in pixels, so the same offset would stand for another moment of the film. On a real resize
+  // (not a phone's address bar coming and going) the moment is kept: the picture holds on it while the
+  // layout settles, then the scroll is moved to where that moment now is.
+  let resize = null // { time, ending, timer }
+  let lastSize = [innerWidth, innerHeight]
+  const onResize = () => {
+    const size = [innerWidth, innerHeight]
+    if (size[0] === lastSize[0] && Math.abs(size[1] - lastSize[1]) < 160) return
+    lastSize = size
+    if (!resize) resize = { time: pace.lastTarget, ending: pace.ending }
+    clearTimeout(resize.timer)
+    resize.timer = setTimeout(() => {
+      const { time, ending } = resize
+      resize = null
+      ScrollTrigger.refresh()
+      lenis.resize()
+      lenis.scrollTo(timeToScroll(time), { immediate: true, force: true })
+      pace.lastTarget = time
+      if (ending) playEnding(time)
+    }, 250)
+  }
+  addEventListener('resize', onResize)
+
   setStep((dt) => {
-    land(performance.now())
-    const target = scrollToTime(lenis.scroll)
-    const crossed = pace.lastTarget < SPLASH.autoFrom && target >= SPLASH.autoFrom
+    const now = performance.now()
+    land(now)
+    let target = resize ? resize.time : scrollToTime(lenis.scroll)
+    if (word.holding) {
+      // A scroll carried a screen past the word by other means (the scrollbar, a fling already under
+      // way) lets go after the rest: nobody is kept there against their will.
+      if (target > ALIGN.arrive + 1 && now - word.since > ALIGN.hold.dwell * 1000) goOn()
+      else target = Math.min(target, ALIGN.arrive)
+    }
     pace.lastTarget = target
-    if (crossed && !pace.ending && !lenis.isStopped && !lenis.isLocked) playEnding(target)
+    const before = pace.time
     if (target !== pace.time || pace.velocity !== 0) {
       ;[pace.time, pace.velocity] = smoothDamp(pace.time, pace.velocity, target, PACE.smooth, rateAt(table, pace.time), dt)
       tl.time(pace.time)
     }
+    // Reaching the word going forward: hold there, and bring the scroll back onto it (the rest of the
+    // gesture's momentum would run on past it). Not while the page scrolls itself (the bench).
+    if (word.armed && !word.holding && before < ALIGN.arrive && pace.time >= ALIGN.arrive && !pace.ending && !resize && !lenis.isStopped && !lenis.isLocked) {
+      pace.time = ALIGN.arrive
+      pace.velocity = 0
+      tl.time(pace.time)
+      Object.assign(word, { holding: true, since: now, push: 0 })
+      gesture.landed = true
+      if (scrollToTime(lenis.targetScroll) > ALIGN.arrive) lenis.scrollTo(timeToScroll(ALIGN.arrive), { immediate: true, force: true })
+    }
+    if (pace.time < ALIGN.hold.from) {
+      word.armed = true
+      word.holding = false
+    }
+    const crossed = before < SPLASH.autoFrom && pace.time >= SPLASH.autoFrom
+    if (crossed && !pace.ending && !resize && !lenis.isStopped && !lenis.isLocked) playEnding(pace.time)
     if (pace.arrived && Math.abs(pace.time - pace.arrived.t) < 0.002) {
       pace.arrived.resolve()
       pace.arrived = null
     }
   })
+
+  // A jump to another moment of the film: a cut through black, since the picture following the scroll
+  // at the pace limit would take up to half a minute. `after` runs there, under the black.
+  const cut = (t, after) =>
+    gsap.to('#fade', {
+      opacity: 1,
+      duration: 0.6,
+      ease: 'power1.in',
+      overwrite: true,
+      onComplete: () => {
+        lenis.scrollTo(timeToScroll(t), { immediate: true, force: true })
+        snap(t)
+        after?.()
+        gsap.to('#fade', { opacity: 0, duration: 1, delay: 0.15, ease: 'power1.out' })
+      },
+    })
+
+  // Keys scroll the page natively, and Lenis follows. Home and End are cuts to the top and to the last
+  // frame, like "back to top"; any key that scrolls up takes over from the ending as it plays itself.
+  const onKey = (e) => {
+    if (e.defaultPrevented || e.altKey || e.ctrlKey || e.metaKey || lenis.isStopped) return
+    if (e.target instanceof Element && e.target.closest('input, textarea, select, [contenteditable]')) return
+    if (['ArrowUp', 'PageUp', 'Home'].includes(e.key) || (e.key === ' ' && e.shiftKey)) stopEnding()
+    // Held on the word, keys that scroll down count toward letting go (a page as much as the whole push,
+    // an arrow a third of it), and scroll nothing themselves.
+    const forward = { ArrowDown: ALIGN.hold.push / 3, PageDown: ALIGN.hold.push, ' ': e.shiftKey ? 0 : ALIGN.hold.push }[e.key]
+    if (word.holding && forward) {
+      e.preventDefault()
+      pushWord(forward)
+    }
+    if (e.key === 'Home' || e.key === 'End') {
+      e.preventDefault()
+      const t = e.key === 'Home' ? TIMELINE_START : TIMELINE_END
+      if (Math.abs(pace.time - t) > 0.01) cut(t, e.key === 'Home' ? onTop : null)
+    }
+  }
+  addEventListener('keydown', onKey)
 
   // Dev hook for scripted checks (scripts/smoke.mjs): __schwe.goto(units) jumps the scroll and the
   // picture to a timeline time; state, uniforms and the live video count are readable.
@@ -183,6 +310,8 @@ export function initScroll() {
       uniforms: globalUniforms,
       liveCount,
       pace,
+      word,
+      splash: SPLASH,
       goto: (t) => {
         lenis.scrollTo(timeToScroll(t), { immediate: true, force: true })
         snap(scrollToTime(lenis.scroll))
@@ -211,22 +340,12 @@ export function initScroll() {
       lenis.start()
     },
     // The final screen's "back to top": a cut through black (the film scrolled back at the pace limit
-    // would take half a minute). `onTop` runs at the top, under the black.
-    toTop(onTop) {
-      gsap.to('#fade', {
-        opacity: 1,
-        duration: 0.6,
-        ease: 'power1.in',
-        overwrite: true,
-        onComplete: () => {
-          lenis.scrollTo(0, { immediate: true, force: true })
-          snap(TIMELINE_START)
-          onTop?.()
-          gsap.to('#fade', { opacity: 0, duration: 1, delay: 0.15, ease: 'power1.out' })
-        },
-      })
-    },
+    // would take half a minute).
+    toTop: () => cut(TIMELINE_START, onTop),
     destroy() {
+      removeEventListener('resize', onResize)
+      removeEventListener('keydown', onKey)
+      clearTimeout(resize?.timer)
       offScroll()
       offTier()
       setStep(null)

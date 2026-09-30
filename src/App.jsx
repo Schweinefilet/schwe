@@ -8,6 +8,9 @@ import WordSketch from './ui/WordSketch.jsx'
 import EndType from './ui/EndType.jsx'
 import BackToTop from './ui/BackToTop.jsx'
 import StillPage from './ui/StillPage.jsx'
+import ScrollHint from './ui/ScrollHint.jsx'
+import Captions from './ui/Captions.jsx'
+import SoundToggle from './ui/SoundToggle.jsx'
 import { initScroll } from './core/scroll.js'
 import { startFocusPull } from './core/focus.js'
 import { state } from './core/state.js'
@@ -18,11 +21,12 @@ import { loadManifest } from './content/manifest.js'
 import { selectClips } from './content/clipSelector.js'
 import { chooseDiveCity } from './content/diveChoice.js'
 import { chooseRainCity } from './content/rainChoice.js'
+import { fetchWeather, unknownWeather } from './content/weather.js'
 import { usesFootage } from './content/contentSource.js'
 import { onSkyReady } from './sky/skyManager.js'
 import { onBackdropReady } from './content/backdrop.js'
 import { now } from './core/clock.js'
-import { CAMERA_FOV, CITIES, CONTENT, DEFAULT_DIVE_CITY, TIMELINE_END, TIMELINE_START, VH_PER_UNIT } from './config.js'
+import { CAMERA_FOV, CITIES, CONTENT, DEFAULT_DIVE_CITY, SPLASH, TIMELINE_END, TIMELINE_START, VH_PER_UNIT } from './config.js'
 
 const NO_CLIPS = { version: 1, clips: [] }
 
@@ -33,10 +37,13 @@ const DevOverlay = import.meta.env.DEV ? lazy(() => import('./dev/DevOverlay.jsx
 const Bench = new URLSearchParams(location.search).has('bench') ? lazy(() => import('./bench/Bench.jsx')) : null
 
 const RESELECT_MS = 10 * 60 * 1000
+// How long "enter" waits for the weather before the site opens without it (content/weather.js).
+const WEATHER_WAIT_MS = 4000
+const delay = (ms) => new Promise((resolve) => setTimeout(() => resolve(null), ms))
 // Dev: ?dive=new-york forces the dive city instead of letting the world choose.
 const FORCE_DIVE = import.meta.env.DEV ? new URLSearchParams(location.search).get('dive') : null
 // Dev: ?rain=mumbai forces the ending to that city, ?rain=london@40 to "rain reaches London in 40 min",
-// ?rain=none to the dry ending.
+// ?rain=none to the dry ending, ?rain=unknown to the ending without a weather reading.
 const FORCE_RAIN = import.meta.env.DEV ? new URLSearchParams(location.search).get('rain') : null
 // Dev: ?weather=tokyo:1:6,mumbai:0.3:0 sets cities' weather (cloud cover 0..1 : rain mm/h) as if read
 // live, for stills and previews: the sky, the type and the rain choice all see it.
@@ -72,39 +79,54 @@ export default function App() {
 
   // Clip selection runs at load and every ten minutes (bible), so light and weather stay current.
   // With the sky as the source there are no clips: the rows carry light and weather only.
+  // At load "enter" waits at most WEATHER_WAIT_MS for the weather; without it the rows say the weather
+  // is unknown (the type shows times only), and the answer, when it comes, still reaches the labels and,
+  // while the fall is ahead, the ending.
   useEffect(() => {
     let cancelled = false
     const manifest = usesFootage(CONTENT.source) ? loadManifest() : Promise.resolve(NO_CLIPS)
-    const select = () =>
-      manifest
-        .then((m) => selectClips(m, CITIES, now()))
-        .then((selection) => (FORCE_WEATHER ? forcedWeather(FORCE_WEATHER, selection) : selection))
-        .then((selection) => {
-          if (cancelled) return
-          state.clips = selection
-          setClips(selection)
-          // Chosen once per visit: the 10-minute reselect refreshes clips but never moves the dive.
-          // The ending's rain city is chosen first so the dive can avoid it.
-          if (!state.diveCity) {
-            const source = CONTENT.source
-            state.rainCity = FORCE_RAIN ? forcedRain(FORCE_RAIN, selection) : chooseRainCity(selection, { source })
-            state.diveCity = FORCE_DIVE ?? chooseDiveCity(selection, DEFAULT_DIVE_CITY, { exclude: state.rainCity.city, source })
-            setRainCity(state.rainCity)
-            setDiveCity(state.diveCity)
-          }
-          if (import.meta.env.DEV) console.table(selection.map(({ urls, ...row }) => row))
-        })
-        .catch((err) => {
-          // Never leave the loader without "enter": fall back to the default dive city.
-          console.warn('[clips] selection failed:', err)
-          if (cancelled || state.diveCity) return
-          state.rainCity = { kind: 'none' }
-          state.diveCity = DEFAULT_DIVE_CITY
-          setRainCity(state.rainCity)
-          setDiveCity(state.diveCity)
-        })
-    select()
-    const timer = setInterval(select, RESELECT_MS)
+    const source = CONTENT.source
+    const apply = (selection) => {
+      if (cancelled) return
+      if (FORCE_WEATHER) selection = forcedWeather(FORCE_WEATHER, selection)
+      // A failed refresh keeps the weather already read rather than blanking it.
+      const read = (rows) => rows?.some((r) => r.weatherKnown !== false)
+      if (state.diveCity && !read(selection) && read(state.clips)) return
+      state.clips = selection
+      setClips(selection)
+      // Chosen once per visit: the 10-minute reselect refreshes clips but never moves the dive.
+      // The ending's rain city is chosen first so the dive can avoid it.
+      if (!state.diveCity) {
+        state.rainCity = FORCE_RAIN ? forcedRain(FORCE_RAIN, selection) : chooseRainCity(selection, { source })
+        state.diveCity = FORCE_DIVE ?? chooseDiveCity(selection, DEFAULT_DIVE_CITY, { exclude: state.rainCity.city, source })
+        setRainCity(state.rainCity)
+        setDiveCity(state.diveCity)
+      } else if (state.rainCity?.kind === 'unknown' && state.time < SPLASH.fallPinFrom) {
+        // The weather came after "enter". The fall is still ahead, so the ending can answer after all
+        // (with its city, even if that is the dive's: the truth over two different cities).
+        state.rainCity = chooseRainCity(selection, { source })
+        setRainCity(state.rainCity)
+      }
+      if (import.meta.env.DEV) console.table(selection.map(({ urls, ...row }) => row))
+    }
+    const select = async (wait) => {
+      const m = await manifest
+      const pending = fetchWeather(CITIES)
+      const wx = wait ? await Promise.race([pending, delay(WEATHER_WAIT_MS)]) : await pending
+      apply(await selectClips(m, CITIES, now(), wx ?? unknownWeather(CITIES)))
+      if (!wx) apply(await selectClips(m, CITIES, now(), await pending))
+    }
+    select(true).catch((err) => {
+      // Never leave the loader without "enter": fall back to the default dive city, and say nothing
+      // about the weather.
+      console.warn('[clips] selection failed:', err)
+      if (cancelled || state.diveCity) return
+      state.rainCity = { kind: 'unknown' }
+      state.diveCity = DEFAULT_DIVE_CITY
+      setRainCity(state.rainCity)
+      setDiveCity(state.diveCity)
+    })
+    const timer = setInterval(() => select(false).catch((err) => console.warn('[clips] refresh failed:', err)), RESELECT_MS)
     return () => {
       cancelled = true
       clearInterval(timer)
@@ -113,7 +135,7 @@ export default function App() {
 
   // prefers-reduced-motion and no-WebGL visitors get the still page: a frame of the frozen rain and
   // the cities as they are right now. No scroll animation.
-  if (still) return <StillPage clips={clips} />
+  if (still) return <StillPage clips={clips} rainCity={rainCity} />
   return <Site clips={clips} device={device} diveCity={diveCity} rainCity={rainCity} />
 }
 
@@ -143,7 +165,7 @@ function Site({ clips, device, diveCity, rainCity }) {
   const scenePrepared = useScenePrepared()
 
   useEffect(() => {
-    scroll.current = initScroll()
+    scroll.current = initScroll({ onTop: startFocusPull })
     return () => scroll.current.destroy()
   }, [])
 
@@ -154,8 +176,8 @@ function Site({ clips, device, diveCity, rainCity }) {
     startFocusPull()
   }, [])
 
-  // Back at the top the first shot plays again.
-  const handleTop = useCallback(() => scroll.current.toTop(startFocusPull), [])
+  // Back at the top the first shot plays again (initScroll's onTop).
+  const handleTop = useCallback(() => scroll.current.toTop(), [])
 
   return (
     <>
@@ -174,9 +196,15 @@ function Site({ clips, device, diveCity, rainCity }) {
       <DropLabels clips={clips} />
       <WordSketch />
       <CityType clips={clips} cityId={diveCity ?? DEFAULT_DIVE_CITY} />
-      <EndType clips={clips} rainCity={rainCity} />
+      {/* The answer and the final screen share one column, so the answer never overlaps the way back. */}
+      <div className="ending-ui">
+        <EndType clips={clips} rainCity={rainCity} />
+        <BackToTop onTop={handleTop} />
+      </div>
+      <Captions />
+      <ScrollHint />
       <div id="fade" />
-      <BackToTop onTop={handleTop} />
+      <SoundToggle />
       <Loader onEnter={handleEnter} ready={diveCity !== null && scenePrepared} />
       {DevOverlay && (
         <Suspense fallback={null}>
@@ -201,13 +229,13 @@ function forcedWeather(param, selection) {
   return selection.map((row) => {
     const w = forced[row.city]
     if (!w) return row
-    return { ...row, cloudCover: w.cloud, mmPerHour: w.rain, weather: w.rain > 0 ? 'rain' : 'clear', weatherLabel: label(w), code: null }
+    return { ...row, cloudCover: w.cloud, mmPerHour: w.rain, weather: w.rain > 0 ? 'rain' : 'clear', weatherLabel: label(w), weatherKnown: true, code: null }
   })
 }
 
 // Dev only: builds a rain choice from ?rain=, using the selection's real data where it has it.
 function forcedRain(param, selection) {
-  if (param === 'none') return { kind: 'none' }
+  if (param === 'none' || param === 'unknown') return { kind: param }
   const [city, minutes] = param.split('@')
   if (minutes != null) return { kind: 'soon', city, minutes: Number(minutes) }
   const row = selection.find((r) => r.city === city)

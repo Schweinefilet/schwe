@@ -18,7 +18,7 @@ const row = (city, weather, extra = {}) => ({
 
 test('heaviest rain wins', () => {
   const r = footage([row('london', 'rain', { mmPerHour: 1.2 }), row('mumbai', 'rain', { mmPerHour: 7 }), row('paris', 'clear')])
-  assert.deepEqual(r, { kind: 'now', city: 'mumbai', mmPerHour: 7, label: 'rain' })
+  assert.deepEqual(r, { kind: 'now', city: 'mumbai', mmPerHour: 7, label: 'rain', of: 2 })
 })
 
 test('equal rain rate falls back to the heavier weather description', () => {
@@ -63,7 +63,7 @@ const skyRow = (city, weather, extra = {}) => ({ city, clip: null, light: 'night
 
 test('sky: a raining city counts without any clip', () => {
   const r = sky([skyRow('tokyo', 'rain', { mmPerHour: 9, weatherLabel: 'heavy rain' }), skyRow('london', 'clear', { rainInMinutes: 40 })])
-  assert.deepEqual(r, { kind: 'now', city: 'tokyo', mmPerHour: 9, label: 'heavy rain' })
+  assert.deepEqual(r, { kind: 'now', city: 'tokyo', mmPerHour: 9, label: 'heavy rain', of: 1 })
 })
 
 test('sky: rain the footage would have hidden (clear clip) still counts', () => {
@@ -80,4 +80,17 @@ test('sky: snow is not rain; heaviest rain wins; dry world falls back to soon, t
 
 test('the site default is the sky', () => {
   assert.equal(chooseRainCity([skyRow('mumbai', 'rain', { mmPerHour: 2 })]).city, 'mumbai')
+})
+
+// Unknown weather (the request failed or timed out): no answer is made up.
+test('no weather read at all: unknown, not "dry everywhere"', () => {
+  const unread = (city) => skyRow(city, 'clear', { weatherLabel: null, weatherKnown: false })
+  assert.deepEqual(sky([unread('a'), unread('b')]), { kind: 'unknown' })
+  assert.deepEqual(footage([{ ...row('a', 'clear'), weatherKnown: false }]), { kind: 'unknown' })
+})
+
+test('cities whose weather was not read are left out of the answer', () => {
+  const r = sky([skyRow('a', 'clear', { weatherKnown: false, rainInMinutes: 5 }), skyRow('b', 'rain', { mmPerHour: 0.4, weatherKnown: true })])
+  assert.deepEqual(r, { kind: 'now', city: 'b', mmPerHour: 0.4, label: 'rain', of: 1 })
+  assert.deepEqual(sky([skyRow('a', 'clear', { weatherKnown: false, rainInMinutes: 5 }), skyRow('b', 'clear', { weatherKnown: true })]), { kind: 'none' })
 })

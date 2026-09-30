@@ -1,46 +1,54 @@
-import { CITIES, SKY } from '../config.js'
-
-// Attribution the atlas license (CC BY-NC 4.0) asks for, shown once its values light the skies.
-const atlas = SKY.cityGlow.atlas
-const ATLAS_CREDIT = Object.keys(atlas.values).length > 0
+import { CITIES } from '../config.js'
+import { answerLines } from './answer.js'
+import Credits from './Credits.jsx'
 
 // For prefers-reduced-motion and for devices without usable WebGL (bible): one still frame of the
-// frozen rain, then the cities as they are right now. Nothing moves.
-export default function StillPage({ clips }) {
+// frozen rain, the question and its answer, then the cities as they are right now. Nothing moves.
+export default function StillPage({ clips, rainCity }) {
   const byCity = Object.fromEntries((clips ?? []).map((c) => [c.city, c]))
+  const answerCity = CITIES.find((c) => c.id === rainCity?.city)
+  const [headline, meta, rate] = answerLines(rainCity, answerCity, answerCity ? byCity[answerCity.id]?.localTime : '', clips)
   return (
     <main className="still">
       <figure className="still__frame">
-        <img src={`${import.meta.env.BASE_URL}still.jpg`} alt="Rain frozen in mid-air at night, each drop holding a small inverted city." />
+        <img src={`${import.meta.env.BASE_URL}still.jpg`} alt="Rain frozen in mid-air over a lit square at night; one drop holds a small inverted city." />
       </figure>
-      <h1 className="still__word">schwe</h1>
+      <header className="still__head">
+        <h1 className="still__word">schwe</h1>
+        <p className="still__question">where is it raining now?</p>
+      </header>
+      <section className="still__answer" aria-live="polite">
+        {headline ? (
+          <>
+            <p className="still__headline">{headline}</p>
+            {meta && (
+              <p className="still__meta">
+                {meta}
+                {rate && (
+                  <>
+                    {' · '}
+                    <span className="still__unit">{rate}</span>
+                  </>
+                )}
+              </p>
+            )}
+          </>
+        ) : (
+          <p className="still__meta">reading the weather…</p>
+        )}
+      </section>
       <ul className="still__cities">
         {CITIES.map((c) => {
           const row = byCity[c.id]
           return (
-            <li key={c.id}>
+            <li key={c.id} className={c.id === rainCity?.city ? 'is-answer' : undefined}>
               <span className="still__city">{c.name}</span>
-              <span className="still__meta">
-                {row ? `${row.localTime} · ${row.weatherLabel}` : ''}
-              </span>
+              <span className="still__cityMeta">{row ? [row.localTime, row.weatherLabel].filter(Boolean).join(' · ') : ''}</span>
             </li>
           )
         })}
       </ul>
-      {ATLAS_CREDIT && (
-        <p className="still__credit">
-          Night sky brightness: Falchi et al. 2016, The New World Atlas of Artificial Night Sky Brightness,{' '}
-          <a href="https://doi.org/10.1126/sciadv.1600377">Science Advances</a> and{' '}
-          <a href="https://doi.org/10.5880/GFZ.1.4.2016.001">GFZ Data Services</a>,{' '}
-          <a href="https://creativecommons.org/licenses/by-nc/4.0/">CC BY-NC 4.0</a>; sampled at each city
-          {atlas.source?.startsWith('lightpollutionmap') ? ', read via Jurij Stare, www.lightpollutionmap.info' : ''}.
-        </p>
-      )}
-      <p className="still__credit">
-        Skylines: building data © <a href="https://www.openstreetmap.org/copyright">OpenStreetMap contributors</a>,{' '}
-        <a href="https://opendatacommons.org/licenses/odbl/">ODbL</a>; terrain data courtesy of the U.S. Geological Survey
-        (3DEP), via Mapzen's terrain tiles.
-      </p>
+      <Credits long className="still__credit" />
     </main>
   )
 }

@@ -31,7 +31,7 @@ export const PACE = { max: 1.5, nearDrop: 0.45, brake: 2.5, smooth: 0.1, bank: 0
 // picture) the picture comes to rest where a city drop can be seen, not wherever its speed ran out:
 // at a drift drop's slow point (DRIFT_PASSES, within `capture` of where the scroll would stop), or
 // inside the dive drop while its name shows (`dive`). Never behind the picture, never after slow
-// scrolling, none at the word (found, not announced). Decided once input has been quiet `idle` ms,
+// scrolling. (The word has its own hold, ALIGN.hold.) Decided once input has been quiet `idle` ms,
 // while the picture still glides: the scroll moves to the point and the picture glides on to rest there.
 export const SNAP = { swift: 0.12, capture: 0.3, dive: { at: 10.1, capture: 0.7 }, idle: 90 }
 
@@ -46,8 +46,18 @@ export const BEATS = [
   { name: 'splash', at: 13.3 }, // SPLASH_AT; the camera passes the word's eye at 13 without stopping
 ]
 const SPLASH_AT = 13.3 // beat 7 timings below are offsets from this
+// Two captions (ui/Captions.jsx) in the stretches where no city is in view: after the freeze, what the
+// drops are (gone before the first drop's label); after the dive, what comes next (never the word,
+// which is found, not announced). `from`, `to`: timeline units; each fades in and out over `fade`.
+export const CAPTIONS = [
+  { id: 'drops', from: 1.2, to: 2.8, fade: 0.25 },
+  { id: 'fall', from: 10.95, to: 12.45, fade: 0.25 },
+]
 export const TIMELINE_START = BEATS[0].at // the top of the page
-export const TIMELINE_END = SPLASH_AT + 6.0 // the jets have fallen back; the last frame holds
+// The hero drop's splash has settled by SPLASH_AT + 6; the rain that follows fills the puddle while the
+// camera draws back, and from the end it goes on falling, a loop that never stops (PUDDLE_RAIN).
+const SPLASH_SETTLED = SPLASH_AT + 6.0
+export const TIMELINE_END = SPLASH_AT + 10.0
 
 // ---- Scene layout (world units, camera travels toward -z) ----------------
 // The world behind the rain: a 360° night photograph, Poly Haven "rathaus" (Hamburg's town hall square,
@@ -70,6 +80,12 @@ export const BACKDROP = {
   yaw: -56,
   bokeh: 1.2,
   view: { full: 'backdrop/rathaus-view.jpg', half: 'backdrop/rathaus-view-half.jpg', lon: [-111.0059, -0.9668], lat: [-38.9795, 30.9814] },
+  // The photograph was taken standing; the ending lies on the puddle. Seen from the ending's camera, the
+  // square's street (where its lamps meet their reflections in the wet pavement) sat `lift` degrees
+  // below the water's horizon, so the water floated at the photographer's eye height. As the camera
+  // comes down below `from` world units toward `to`, the whole square rises by up to `lift` (env.glsl
+  // uEnvLift): at the water, its street meets the horizon, as it would for an eye at its ground.
+  ground: { lift: 2.8, from: 4.0, to: 0.3 },
 }
 
 // The first shot. After "enter" the lens is focused on the square behind the rain; `delay` s later it
@@ -208,7 +224,14 @@ export const ALIGN = {
   fallDepth: 9.4, // distance from the eye of the one drop that falls in beat 7 (puddle is below it)
   arrive: 13, // camera passes the eye
   chimeAt: 13 - 0.02, // the word's shimmer plays crossing this forward, and its sketch starts drawing
-  passSpeed: 0.45, // camera speed at the eye relative to its average: a slow pass, not a stop
+  passSpeed: 0.45, // camera speed at the eye relative to its average (the camera path's own pace)
+  // The word is easy to miss in one scroll, so the scroll holds it (core/scroll.js). As its drops start to
+  // line up (`from`) the picture slows almost to a stop, `rate` units a second at the eye; reaching the
+  // eye going forward, it holds there, the word whole and its sketch drawing, and the rest of the
+  // gesture's momentum is dropped. After `dwell` s, scrolling on by `push` units more (about three
+  // wheel notches, a swipe, a page key) lets it go, and the ending plays itself from there. Jumps (Home,
+  // End, back to top) pass straight through.
+  hold: { from: 12.6, rate: 0.05, dwell: 1.0, push: 0.35 },
   // A pencil sketch around the word's silhouette (ui/pencilSketch.js): it draws in from chimeAt while the
   // camera is within `until` units past the eye, and retracts `retract` times as fast once it leaves
   // (either way). `margin`: how far the outline stands off the letters, px at the 240 px sampling size.
@@ -228,18 +251,22 @@ export const SPLASH = {
   // own speed ramp (vat_from_cache.py --ramp) keeps the crown in full slow motion and speeds up as
   // the water calms: the main jet rises and falls back, a second, smaller one follows, and the last
   // frame holds on what swell is left.
-  splashEnd: TIMELINE_END,
+  splashEnd: SPLASH_SETTLED,
   // The jets fall back into the pool (cache frames 163 and 221, stored frames 127 and 148).
   jetFallAt: SPLASH_AT + 5.16,
   jet2FallAt: SPLASH_AT + 5.6,
   ringStart: SPLASH_AT + 2.8,
   ringEnd: TIMELINE_END,
-  ringSeconds: 7.5, // the ripples' own clock over ringStart → ringEnd (the pace of the original 4 s over 1.7 units)
-  quietAt: SPLASH_AT + 5.0, // the sound fades out over 0.8 units from here, as the water calms
+  // The ripples' own clock over ringStart → ringEnd: the pace of the original 4 s over 1.7 units. They
+  // fade out as the rain's own rings take over the puddle (Puddle.jsx).
+  ringSeconds: 7.5 * (TIMELINE_END - (SPLASH_AT + 2.8)) / 3.2,
+  // The falling city's own rain fades out over 0.8 units from here, as the hero's water calms; the
+  // rain on the puddle carries the sound on from there (audioEngine.js).
+  quietAt: SPLASH_AT + 5.0,
   answerAt: SPLASH_AT + 3.0, // the ending's type fades in as the rings spread, and stays
   // As the drop meets the water the frozen moment ends: the rain around eases to `timeScale` of its
   // speed over `seconds` (real time) and keeps falling slowly on the held last frame.
-  rainAgain: { at: SPLASH_AT + 2.5, timeScale: 0.2, seconds: 3 },
+  rainAgain: { at: SPLASH_AT + 2.5, timeScale: 0.4, seconds: 3 },
   // Once the scroll passes autoFrom going down, the ending plays itself (the scroll moves with it,
   // locked) to the end at about autoRate units per second, then holds on the last frame.
   autoFrom: SPLASH_AT + 0.1, // the drop leaves the word (fallAt)
@@ -247,7 +274,64 @@ export const SPLASH = {
   fallPinFrom: 12.4, // the falling drop's clip starts decoding after the dive drop's pin ends (12)
   groundY: 0,
   puddleSize: 80, // the wet ground, fading into darkness with distance
+  // The baked surface is noisy at its grid's scale (1.25 mm), and a mirror-sharp finish showed every
+  // triangle catching a different lamp (crumpled foil). `rough`: the angle (radians) over which the
+  // splash's reflections and the light through its sheets are blurred, and its highlights spread.
+  rough: 0.06,
 }
+// Beat 7, after the hero drop: rain on the puddle (PuddleRain.jsx, core/puddleRain.js, waves/WaveSim.js).
+// Raindrops from a library of Mantaflow bakes (blender/splash/bake_rain.py: one drop each, of its own
+// size, speed and slant) land all over the puddle, each turned and scaled; a live simulation of the
+// water's surface (capillary-gravity waves, solved spectrally) carries their rings, pinned near each
+// splash to the bake's own surface. The rain runs on its own clock, in the bakes' real seconds:
+// `clock` of them per second of the scene's simulated time (uSimTime), so it freezes and falls with the
+// rest of the rain: at the ending's time scale (SPLASH.rainAgain, 0.4) 0.4 × 0.3 = 0.12 s a second,
+// about 8× slow motion. The impacts repeat every `period` of that clock (about 67 s on screen): the loop.
+export const PUDDLE_RAIN = {
+  url: 'splash/rain/',
+  variants: [
+    { id: 'r15', weight: 1.4 },
+    { id: 'r20', weight: 1.4 },
+    { id: 'r25', weight: 1.1 },
+    { id: 'r30', weight: 0.9 },
+    { id: 'r35', weight: 0.7 },
+    { id: 'r40', weight: 0.5 },
+  ],
+  worldPerMeter: 5, // the hero splash's scale: SPLASH.fallRadius over its bake's 6 mm drop
+  clock: 0.3,
+  period: 8,
+  tile: 8, // world units: the rain and the surface repeat every tile in both directions
+  rate: 40, // impacts per world unit² per second of the rain's clock (a downpour)
+  seed: 20260930,
+  lead: 0.06, // seconds a drop is seen falling before it lands
+  // Camera distance (world units): the full bake within `full`, its light copy out to `far`, fading
+  // from `fade`; beyond, only the rings. A drop is drawn at every repeat of the tile within `far`, as
+  // its rings are. `clear`: no drop is drawn closer to the camera's feet than this many of its own
+  // radii (0.5 units for the smallest, 1.4 for the largest, whose jet stood as a dark wall across a
+  // third of the frame from 0.6), so the nearest splashes all look about the same size.
+  lod: { full: 2.5, far: 7.9, fade: 6.5 },
+  clear: 70,
+  // The surface: `size`² cells over one tile; puddle depth (m); extra damping (1/s of the clock). A
+  // shallow puddle and its surface film kill ripples within centimeters: the water stays a mirror
+  // between clean rings instead of heaping the rings of every drop into a choppy lake.
+  // 1024² over 8 units: cells of 1.6 mm of the bakes' water. The FFT's passes are bound by memory
+  // (a 2048² tile moved about 8 GB a frame), so the tile is kept small rather than the cells coarse.
+  sim: { size: 1024, depth: 0.008, damping: 6 },
+  // Near each splash the surface is the bake's: pinned fully within `inner` of the profile's reach,
+  // released by `outer`, and let go over the bake's last `release` share of frames.
+  pin: { inner: 0.45, outer: 0.75, release: 0.25 },
+  // The splashes' shading blur (SPLASH.rough for the hero). 0: they reflect the square out of focus,
+  // as the puddle does. Rough reads the sharp map at a coarse level, and a splash close to the camera
+  // magnified its texels into blocks round every lamp.
+  rough: 0,
+  // Intensity (rig.rain) over the timeline: the first drops as the hero's rings spread, a downpour by
+  // `full`; around the hero's point the rain holds off until its jets are down.
+  from: SPLASH_AT + 2.9,
+  full: SPLASH_AT + 7.0,
+  heroClear: 0.35,
+  loadAfter: 3.5, // timeline time at which the bakes start downloading (with the hero's)
+}
+
 // Water look shared by the splash and the puddle (water.glsl).
 export const WATER = { reflGain: 1, deep: [0.004, 0.006, 0.009], transGain: 1 }
 
@@ -284,7 +368,12 @@ const AFTER_DIVE = [
   { at: SPLASH_AT + 0.9, pos: inWordFrame(FALL_GROUND, [0.5, 3.1, 3.6]),   look: ALIGN_TARGET },
   { at: SPLASH_AT + 1.8, pos: inWordFrame(FALL_GROUND, [0.4, 0.9, 1.2]),   look: inWordFrame(FALL_GROUND, [0, 0.4, 0]) },
   { at: SPLASH_AT + 2.5, pos: inWordFrame(FALL_GROUND, [0.28, 0.24, 0.8]), look: inWordFrame(FALL_GROUND, [0, 0.05, 0]) }, // impact
-  { at: TIMELINE_END, pos: inWordFrame(FALL_GROUND, [0.2, 0.19, 0.6]),     look: inWordFrame(FALL_GROUND, [0, 0.04, 0]) }, // end
+  { at: SPLASH_SETTLED, pos: inWordFrame(FALL_GROUND, [0.2, 0.19, 0.6]),   look: inWordFrame(FALL_GROUND, [0, 0.04, 0]) }, // the hero's water settles
+  // The rain fills the puddle: the camera eases back and down to lie on the water (1.2 cm at the
+  // bakes' scale), and its gaze leaves the hero's point (rig.lookFree) for the lights across the
+  // puddle, tipped up 2°, the splashes standing against the square (lifted to meet the water's
+  // horizon: BACKDROP.ground).
+  { at: TIMELINE_END, pos: inWordFrame(FALL_GROUND, [0.3, 0.06, 1.1]),    look: inWordFrame(FALL_GROUND, [-0.05, 0.165, -1.5]) }, // end
 ]
 export const CAMERA_KEYS = [
   ...drift.keys, // the rain (1) → the weave between the drops → the approach (8) → the drop fills the frame (9.4)

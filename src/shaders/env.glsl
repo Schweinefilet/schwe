@@ -9,12 +9,17 @@ uniform sampler2D uEnvSoft;
 uniform vec2 uEnvCodecSharp; // x: stops of the log range, y: knee × exposure (decoded = y × (2^(x·e) − 1))
 uniform vec2 uEnvCodecSoft;
 uniform float uEnvYaw;  // radians
+// Radians the square rises by as the eye comes down to its ground (the ending, on the puddle): the
+// photograph was taken standing, and a camera at the level of its pavement sees it all higher, its
+// street meeting the water's horizon. The same shift at every longitude is what lowering the eye does
+// for things at one distance. 0 everywhere else.
+uniform float uEnvLift;
 
 const float ENV_PI = 3.14159265;
 
 vec2 envUv(vec3 d) {
   float lon = atan(d.x, -d.z) + uEnvYaw;
-  return vec2(fract(lon / (2.0 * ENV_PI) + 0.5), 0.5 + asin(clamp(d.y, -1.0, 1.0)) / ENV_PI);
+  return vec2(fract(lon / (2.0 * ENV_PI) + 0.5), 0.5 + (asin(clamp(d.y, -1.0, 1.0)) - uEnvLift) / ENV_PI);
 }
 
 vec3 envDecode(vec3 e, vec2 codec) {

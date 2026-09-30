@@ -27,3 +27,13 @@ test('a picture already on a point does not land on it again', () => {
   assert.equal(landing({ picture: 3.6, target: 3.62, points }), null)
   assert.equal(landing({ picture: 3, target: 3, points }), null)
 })
+
+test('a new gesture can leave the point the last one landed on', () => {
+  // Touch: the scroll already rests on the dive point while the picture is still far behind it. A new
+  // swipe starting there is not pulled back to it.
+  assert.equal(landing({ picture: 7, target: 10.6, points, from: 10.1 }), null)
+  // A gesture that starts before the point still lands on it.
+  assert.equal(landing({ picture: 7, target: 10.6, points, from: 8 }), 10.1)
+  // Up from a point: it no longer counts, the next one above does.
+  assert.equal(landing({ picture: 4.3, target: 3.7, points, from: 4.15 }), 3.6)
+})

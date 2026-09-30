@@ -1,14 +1,18 @@
-// Current weather for every city in one Open-Meteo request (free for non-commercial use, no key).
-// Any failure resolves to clear weather, so the site never waits on or breaks because of the API.
+// Current weather for every city in one Open-Meteo request (free for non-commercial use, no key; the
+// data is CC BY 4.0, credited on the final screen and the still page).
+// Any failure resolves to unknown weather (no label, `known: false`), never to an invented reading, so
+// the site never breaks because of the API and never claims weather it did not read. The page does not
+// wait for the full timeout: App.jsx lets "enter" appear after a few seconds and applies a late answer.
 
 const ENDPOINT = 'https://api.open-meteo.com/v1/forecast'
-const TIMEOUT_MS = 4000
+const TIMEOUT_MS = 20000
 const RAIN_MM = 0.1 // a 15-minute forecast slot with at least this much rain counts as rain arriving
 
 // WMO weather code → clip variant and a short label for the on-screen type.
-// Fog and cloud count as clear for clip choice (bible: launch set).
+// Fog and cloud count as clear for clip choice (bible: launch set). No code: the picture falls back to
+// clear, but there is no label, so nothing on screen claims weather that was not read.
 export function describeWeather(code) {
-  if (code == null) return { variant: 'clear', label: 'clear' }
+  if (code == null) return { variant: 'clear', label: null }
   if (code === 0) return { variant: 'clear', label: 'clear' }
   if (code <= 2) return { variant: 'clear', label: 'partly cloudy' }
   if (code === 3) return { variant: 'clear', label: 'overcast' }
@@ -24,9 +28,9 @@ export function describeWeather(code) {
   return { variant: 'clear', label: 'clear' }
 }
 
-// Returns { [cityId]: { code, variant, label, tempC, mmPerHour, rainInMinutes, cloudCover, windMs, windFromDeg } }.
-// Cities missing from the response get clear. Rain amounts count rain and showers only, never snow.
-// mmPerHour: current rain rate. rainInMinutes: minutes until the first 15-minute slot in the next 6 h
+// Returns { [cityId]: { known, code, variant, label, tempC, mmPerHour, rainInMinutes, cloudCover, windMs, windFromDeg } }.
+// `known`: the response had this city's current weather; cities missing from it are unknown. Rain
+// amounts count rain and showers only, never snow. mmPerHour: current rain rate. rainInMinutes: minutes until the first 15-minute slot in the next 6 h
 // with rain (0 = the current slot), or null. cloudCover: total cloud cover 0..1, or null. windMs: wind at
 // 10 m (m/s), windFromDeg: where it blows from (clockwise from north), each null when missing.
 export async function fetchWeather(cities) {
@@ -53,6 +57,7 @@ export async function fetchWeather(cities) {
           c.id,
           {
             ...describeWeather(cur?.weather_code),
+            known: cur?.weather_code != null,
             code: cur?.weather_code ?? null,
             tempC: cur?.temperature_2m ?? null,
             mmPerHour: rainRate(cur),
@@ -65,13 +70,18 @@ export async function fetchWeather(cities) {
       })
     )
   } catch (err) {
-    console.warn('[weather] unavailable, assuming clear:', err.message)
-    return Object.fromEntries(
-      cities.map((c) => [c.id, { ...describeWeather(null), code: null, tempC: null, mmPerHour: null, rainInMinutes: null, cloudCover: null, windMs: null, windFromDeg: null }])
-    )
+    console.warn('[weather] unavailable:', err.message)
+    return unknownWeather(cities)
   } finally {
     clearTimeout(timer)
   }
+}
+
+// Weather for every city as unknown: what the page shows while the request is out, or after it failed.
+export function unknownWeather(cities) {
+  return Object.fromEntries(
+    cities.map((c) => [c.id, { ...describeWeather(null), known: false, code: null, tempC: null, mmPerHour: null, rainInMinutes: null, cloudCover: null, windMs: null, windFromDeg: null }])
+  )
 }
 
 // `current` values are sums over its interval (900 s), so scale them to an hourly rate.

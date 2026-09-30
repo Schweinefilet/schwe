@@ -12,6 +12,7 @@ import HeroDrops from './HeroDrops.jsx'
 import AlignmentWord from './AlignmentWord.jsx'
 import Puddle from './Puddle.jsx'
 import Splash from './Splash.jsx'
+import PuddleRain from './PuddleRain.jsx'
 import Effects from './Effects.jsx'
 import { isSkyReady, skySettled, skyStats, startSky, updateSky } from '../sky/skyManager.js'
 
@@ -29,6 +30,7 @@ export default function Experience({ clips, diveCity, rainCity }) {
       <AlignmentWord />
       <Puddle />
       <Splash clips={clips} rainCity={rainCity} />
+      <PuddleRain />
       <Effects />
     </>
   )

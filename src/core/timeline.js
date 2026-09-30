@@ -1,5 +1,5 @@
 import gsap from 'gsap'
-import { BEATS, DIVE, SPLASH, TIMELINE_END } from '../config.js'
+import { BEATS, DIVE, PUDDLE_RAIN, SPLASH, TIMELINE_END } from '../config.js'
 import { rig } from './rig.js'
 import { setTimeTarget } from './uniforms.js'
 import { state } from './state.js'
@@ -48,6 +48,12 @@ export function buildMasterTimeline() {
   tl.to(rig, { splash: 1, duration: SPLASH.splashEnd - SPLASH.impactAt }, SPLASH.impactAt)
   tl.to(rig, { ring: 1, duration: SPLASH.ringEnd - SPLASH.ringStart }, SPLASH.ringStart)
   tl.to(rig, { endType: 1, duration: 0.3 }, SPLASH.answerAt)
+  // Then the rain comes down on the puddle, a few drops at first, a downpour by PUDDLE_RAIN.full.
+  tl.to(rig, { rain: 1, duration: PUDDLE_RAIN.full - PUDDLE_RAIN.from, ease: 'sine.in' }, PUDDLE_RAIN.from)
+  // Its water settled, the camera's gaze leaves the hero's point for the rain across the puddle.
+  tl.to(rig, { lookFree: 1, duration: TIMELINE_END - SPLASH.splashEnd, ease: 'sine.inOut' }, SPLASH.splashEnd - 0.4)
+  // The hero's settled swell (its held last frame) gives way to the rain.
+  tl.to(rig, { heroGone: 1, duration: 1.0, ease: 'sine.inOut' }, SPLASH.splashEnd - 0.2)
 
   // Pin total duration so scroll maps 1:1 to units even if the last tween ends early.
   tl.set({}, {}, TIMELINE_END)

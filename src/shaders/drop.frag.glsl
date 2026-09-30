@@ -131,7 +131,9 @@ void main() {
   // through and the drop is a window framed exactly like a fullscreen clip.
   nearMix = 1.0 - smoothstep(uNear.x, uNear.y, length(ro - uCenter));
   float ior = mix(uIor, 1.0, uDive);
-  float disp = uDispersion * (1.0 - uDive);
+  // Dispersion only on the ball lens: once the dive starts, the image's fold sweeps across the drop, and
+  // there the colours' tiny difference in refraction split into wide rainbow rings.
+  float disp = uDispersion * (1.0 - smoothstep(0.0, 0.12, uDive));
   clipTan = mix(uClipTan, uCoverTan, uDive);
   edgeSoft = mix(0.05, 0.002, uDive);
 

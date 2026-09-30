@@ -1,5 +1,6 @@
 import * as THREE from 'three'
 import { SKY } from '../config.js'
+import SKYLINES from '../content/skylines.json'
 import skyChunk from '../shaders/sky/sky.glsl?raw'
 import { loadCloudNoise } from './cloudNoise.js'
 import { createHillaire, lutTarget } from './hillaire.js'
@@ -79,6 +80,7 @@ async function loadSkylineImage(url, anisotropy = 1) {
 // scales, and where the panorama sits in the sky; where the city has water, the same three for its
 // reflection (the mirror render). null when the city has none.
 async function loadSkyline(cityId, anisotropy, month = new Date().getUTCMonth() + 1) {
+  if (!SKYLINES.includes(cityId)) return null // not rendered yet (scripts/build-skyline-index.mjs)
   const base = `${import.meta.env.BASE_URL}${SKY.skyline.url}${cityId}`
   const res = await fetch(`${base}.json`)
   if (!res.ok || !(res.headers.get('content-type') ?? '').includes('json')) return null

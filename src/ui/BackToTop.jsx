@@ -2,10 +2,11 @@ import { useEffect, useRef } from 'react'
 import gsap from 'gsap'
 import { TIMELINE_END } from '../config.js'
 import { state } from '../core/state.js'
+import Credits from './Credits.jsx'
 
-// The final screen's way back, and the credit the skylines' data asks for (ODbL): shown once the
-// picture holds on the last frame (the ending plays itself there). Its visibility is set on the shared
-// ticker, so it never re-renders React.
+// The final screen's way back, and the credits the data asks for (Credits.jsx): shown once the picture
+// holds on the last frame (the ending plays itself there). Its visibility is set on the shared ticker,
+// so it never re-renders React.
 export default function BackToTop({ onTop }) {
   const ref = useRef()
 
@@ -27,13 +28,7 @@ export default function BackToTop({ onTop }) {
       <button type="button" className="back-to-top" onClick={onTop}>
         back to top
       </button>
-      <p className="final-screen__credit">
-        Skylines: ©{' '}
-        <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">
-          OpenStreetMap contributors
-        </a>
-        ; terrain: USGS 3DEP, Mapzen
-      </p>
+      <Credits className="final-screen__credit" />
     </div>
   )
 }

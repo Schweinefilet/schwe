@@ -1,8 +1,20 @@
+/* The UI over the night scene is white and pastel, dreamy and smooth (the drop labels were the first
+   of it): white type with soft glows, lavender for secondary lines, never pure black panels. */
+:root {
+  --ui-white: #fff;
+  --ui-lavender: #e6e3ff;
+  --ui-peach: #ffe4d8;
+  --ui-mist: #dfe8ff;
+  --ui-glow: rgba(230, 227, 255, 0.35);
+  /* A dark halo under white type, so it reads over the brightest bokeh as well as the dark sky. */
+  --ui-halo: 0 0 2px rgba(3, 3, 9, 0.6), 0 0 10px rgba(3, 3, 9, 0.55), 0 0 22px rgba(3, 3, 9, 0.35);
+}
+
 html,
 body {
   margin: 0;
   background: #000;
-  color: #fff;
+  color: var(--ui-white);
 }
 
 body {
@@ -25,6 +37,8 @@ body {
   z-index: 2;
 }
 
+/* The screen before "enter": the name, the question, a faint drop, and "enter" (or, while it loads,
+   what is being waited for) in one place. A dark night with a soft pastel haze, not a black void. */
 .loader {
   position: fixed;
   inset: 0;
@@ -32,36 +46,128 @@ body {
   display: grid;
   place-items: center;
   align-content: center;
-  gap: 2.5rem;
-  background: #000;
+  padding: 24px 16px;
+  background:
+    radial-gradient(55% 40% at 50% 44%, rgba(230, 227, 255, 0.075), transparent 72%),
+    radial-gradient(38% 28% at 58% 58%, rgba(255, 220, 204, 0.045), transparent 70%),
+    radial-gradient(45% 35% at 40% 36%, rgba(214, 228, 255, 0.04), transparent 70%),
+    #030307;
+  text-align: center;
 }
 
-.loader__mark {
-  font-size: 0.8rem;
-  letter-spacing: 0.4em;
+.loader__drop {
+  width: 14px;
+  height: 14px;
+  margin-bottom: 2.4rem;
+  border-radius: 50%;
+  background: radial-gradient(circle at 38% 30%, rgba(255, 255, 255, 0.75) 0 12%, rgba(214, 226, 255, 0.16) 42%, rgba(255, 200, 176, 0.22) 78%, rgba(255, 255, 255, 0.35) 100%);
+  box-shadow: 0 0 22px rgba(230, 227, 255, 0.28), 0 0 60px rgba(230, 227, 255, 0.12);
+  animation: loader-drop 4s ease-in-out infinite;
+}
+
+@keyframes loader-drop {
+  50% {
+    opacity: 0.55;
+    transform: translateY(3px);
+  }
+}
+
+.loader__title {
+  margin: 0;
+  /* The letter spacing trails the last letter; the same padding before the first keeps it centred. */
+  padding-left: 0.34em;
+  font-size: clamp(1.9rem, 1.3rem + 2.2vw, 2.9rem);
+  font-weight: 200;
+  letter-spacing: 0.34em;
+  text-shadow: 0 0 28px var(--ui-glow);
+}
+
+.loader__question {
+  margin: 0.9rem 0 0;
+  color: var(--ui-lavender);
+  font-size: clamp(0.9rem, 0.82rem + 0.35vw, 1.05rem);
+  font-weight: 300;
+  letter-spacing: 0.05em;
+  opacity: 0.85;
+}
+
+.loader__action {
+  display: grid;
+  place-items: center;
+  margin-top: 2.8rem;
+  min-height: 48px;
+}
+
+.loader__action > * {
+  grid-area: 1 / 1;
+}
+
+.loader__status {
+  margin: 0;
+  pointer-events: none; /* shares its cell with "enter", and paints above it while fading */
+  color: var(--ui-lavender);
+  font-size: 0.68rem;
+  letter-spacing: 0.24em;
+  opacity: 0;
+  transition: opacity 0.8s ease;
+}
+
+.loader__status.is-shown {
   opacity: 0.6;
+  animation: loader-status 2.4s ease-in-out 0.8s infinite;
+}
+
+@keyframes loader-status {
+  50% {
+    opacity: 0.3;
+  }
 }
 
 .loader__enter {
+  position: relative;
+  z-index: 1;
   min-height: 44px;
-  padding: 0.9rem 2.2rem;
-  border: 1px solid rgba(255, 255, 255, 0.3);
+  padding: 0.9rem 2.4rem;
+  border: 1px solid rgba(255, 255, 255, 0.45);
   border-radius: 999px;
-  background: none;
-  color: #fff;
+  background: rgba(230, 227, 255, 0.06);
+  box-shadow: 0 0 18px rgba(230, 227, 255, 0.22), inset 0 0 10px rgba(230, 227, 255, 0.08);
+  color: var(--ui-white);
   font: inherit;
   font-size: 0.75rem;
   letter-spacing: 0.3em;
+  text-shadow: 0 0 10px rgba(255, 255, 255, 0.35);
   cursor: pointer;
   opacity: 0;
   visibility: hidden;
-  transition: opacity 0.8s ease, visibility 0s 0.8s;
+  transition: opacity 0.8s ease, visibility 0s 0.8s, border-color 0.4s ease, box-shadow 0.4s ease;
 }
 
 .loader__enter.is-ready {
   opacity: 1;
   visibility: visible;
-  transition: opacity 0.8s ease;
+  transition: opacity 0.8s ease, border-color 0.4s ease, box-shadow 0.4s ease;
+}
+
+.loader__enter:hover,
+.loader__enter:focus-visible,
+.back-to-top:hover,
+.back-to-top:focus-visible {
+  border-color: rgba(255, 255, 255, 0.85);
+  box-shadow: 0 0 24px rgba(230, 227, 255, 0.4), inset 0 0 12px rgba(230, 227, 255, 0.14);
+  outline: none;
+}
+
+.loader__note {
+  position: absolute;
+  left: 16px;
+  right: 16px;
+  bottom: max(28px, calc(env(safe-area-inset-bottom) + 16px));
+  margin: 0;
+  color: var(--ui-lavender);
+  font-size: 0.62rem;
+  letter-spacing: 0.18em;
+  opacity: 0.5;
 }
 
 .dev-overlay {
@@ -78,6 +184,7 @@ body {
   pointer-events: none;
 }
 
+/* Beat 5: the city inside the dive drop, in the corner, set like a drop's label. */
 .city-type {
   position: fixed;
   left: max(24px, env(safe-area-inset-left));
@@ -86,20 +193,27 @@ body {
   opacity: 0;
   visibility: hidden;
   pointer-events: none;
-  font-size: 0.7rem;
-  line-height: 1.6;
-  letter-spacing: 0.22em;
-  text-transform: uppercase;
-  text-shadow: 0 0 12px rgba(0, 0, 0, 0.6);
+  text-shadow: var(--ui-halo), 0 0 16px rgba(255, 255, 255, 0.2);
+}
+
+.city-type__name {
+  font-size: 1.15rem;
+  font-weight: 300;
+  letter-spacing: 0.04em;
 }
 
 .city-type__meta {
-  opacity: 0.7;
-  letter-spacing: 0.16em;
+  margin-top: 0.35em;
+  color: var(--ui-lavender);
+  font-size: 0.64rem;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  opacity: 0.9;
 }
 
-/* City drop labels, the first of the white UI (dreamy, smooth, white and pastel). Placed beside each
-   drop from the render loop (DropLabelAnchors.jsx), which sets transform, opacity and alignment. */
+/* City drop labels. Placed beside each drop from the render loop (DropLabelAnchors.jsx), which sets
+   transform, opacity and alignment. A dark halo and a soft scrim behind keep them legible when a drop
+   passes in front of the square's brightest lamps. */
 .drop-label {
   position: fixed;
   left: 0;
@@ -109,9 +223,18 @@ body {
   visibility: hidden;
   pointer-events: none;
   white-space: nowrap;
-  color: #fff;
-  text-shadow: 0 0 16px rgba(255, 255, 255, 0.35), 0 0 3px rgba(0, 0, 0, 0.45);
+  color: var(--ui-white);
+  text-shadow: var(--ui-halo), 0 0 16px rgba(255, 255, 255, 0.2);
   will-change: transform, opacity;
+}
+
+.drop-label::before {
+  content: '';
+  position: absolute;
+  inset: -1.1em -1.6em;
+  z-index: -1;
+  border-radius: 50%;
+  background: radial-gradient(closest-side, rgba(3, 3, 9, 0.62), rgba(3, 3, 9, 0.4) 55%, rgba(3, 3, 9, 0) 100%);
 }
 
 .drop-label__name {
@@ -122,11 +245,11 @@ body {
 
 .drop-label__meta {
   margin-top: 0.35em;
-  color: #e6e3ff; /* pastel lavender */
+  color: var(--ui-lavender);
   font-size: 0.64rem;
   letter-spacing: 0.2em;
   text-transform: uppercase;
-  opacity: 0.85;
+  opacity: 0.9;
 }
 
 /* The word's pencil sketch: a canvas the size of the word's area, moved and drawn from the render loop
@@ -144,44 +267,65 @@ body {
   filter: drop-shadow(0 0 4px rgba(230, 227, 255, 0.55));
 }
 
-/* Beat 7's answer: same type as the city, centred under the rings. It stays on the last frame. */
-.end-type {
+/* Beat 7 and the final screen in one column at the bottom: the answer (EndType.jsx), which comes in as
+   the rings spread and stays, above the way back and the credits (BackToTop.jsx), which come once the
+   picture holds. The final screen's space is kept from the start, so the answer never moves. Under
+   #fade, so "back to top" takes it all into the black. */
+.ending-ui {
   position: fixed;
-  left: 16px;
-  right: 16px;
-  bottom: max(14vh, env(safe-area-inset-bottom));
+  left: 0;
+  right: 0;
+  bottom: max(3.5vh, calc(env(safe-area-inset-bottom) + 10px));
   z-index: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: clamp(1.1rem, 3vh, 2rem);
+  padding: 0 16px;
+  pointer-events: none;
+}
+
+.end-type {
+  max-width: 38rem;
   opacity: 0;
   visibility: hidden;
-  pointer-events: none;
   text-align: center;
-  font-size: 0.7rem;
-  line-height: 1.8;
-  letter-spacing: 0.22em;
-  text-transform: uppercase;
-  text-shadow: 0 0 12px rgba(0, 0, 0, 0.6);
+  text-shadow: var(--ui-halo), 0 0 18px rgba(255, 255, 255, 0.22);
+}
+
+.end-type__headline {
+  font-size: clamp(1.15rem, 0.95rem + 1vw, 1.65rem);
+  font-weight: 300;
+  line-height: 1.35;
+  letter-spacing: 0.02em;
+  text-wrap: balance;
 }
 
 .end-type__meta {
-  opacity: 0.7;
-  letter-spacing: 0.16em;
+  margin-top: 0.8rem;
+  color: var(--ui-lavender);
+  font-size: 0.66rem;
+  line-height: 1.7;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  opacity: 0.9;
 }
 
-/* The final screen: the way back to the top and the skylines' data credit, white and pastel like the
-   drop labels. Shown once the picture holds on the last frame (BackToTop.jsx); above #fade, which it
-   fades through. */
+.end-type__unit,
+.still__unit {
+  text-transform: none;
+  letter-spacing: 0.1em;
+}
+
 .final-screen {
-  position: fixed;
-  left: 50%;
-  bottom: max(3.5vh, calc(env(safe-area-inset-bottom) + 10px));
-  z-index: 3;
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 0.85rem;
-  transform: translateX(-50%);
+  width: 100%;
   opacity: 0;
   visibility: hidden;
+  pointer-events: auto;
   transition: opacity 0.6s ease, visibility 0s 0.6s;
 }
 
@@ -192,12 +336,16 @@ body {
 }
 
 .final-screen__credit {
+  max-width: 40rem;
   margin: 0;
-  color: #e6e3ff; /* pastel lavender */
-  font-size: 0.56rem;
-  letter-spacing: 0.12em;
-  white-space: nowrap;
-  opacity: 0.55;
+  color: var(--ui-lavender);
+  font-size: 0.6rem;
+  line-height: 1.6;
+  letter-spacing: 0.08em;
+  text-align: center;
+  text-wrap: balance;
+  text-shadow: var(--ui-halo);
+  opacity: 0.72;
 }
 
 .final-screen__credit a {
@@ -212,7 +360,7 @@ body {
   border-radius: 999px;
   background: rgba(230, 227, 255, 0.06);
   box-shadow: 0 0 18px rgba(230, 227, 255, 0.22), inset 0 0 10px rgba(230, 227, 255, 0.08);
-  color: #fff;
+  color: var(--ui-white);
   font: inherit;
   font-size: 0.7rem;
   letter-spacing: 0.3em;
@@ -221,16 +369,138 @@ body {
   transition: border-color 0.4s ease, box-shadow 0.4s ease;
 }
 
-.back-to-top:hover,
-.back-to-top:focus-visible {
-  border-color: rgba(255, 255, 255, 0.8);
-  box-shadow: 0 0 24px rgba(230, 227, 255, 0.4), inset 0 0 12px rgba(230, 227, 255, 0.14);
-  outline: none;
+/* The captions where no city is in view (Captions.jsx), set like the answer. */
+.caption {
+  position: fixed;
+  left: 16px;
+  right: 16px;
+  bottom: max(15vh, calc(env(safe-area-inset-bottom) + 72px));
+  z-index: 1;
+  max-width: 34rem;
+  margin: 0 auto;
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  text-align: center;
+  text-shadow: var(--ui-halo), 0 0 18px rgba(255, 255, 255, 0.2);
 }
 
+.caption__headline {
+  margin: 0;
+  font-size: clamp(1.1rem, 0.95rem + 0.8vw, 1.5rem);
+  font-weight: 300;
+  line-height: 1.35;
+  letter-spacing: 0.02em;
+  text-wrap: balance;
+}
+
+.caption__sub {
+  margin: 0.6rem 0 0;
+  color: var(--ui-lavender);
+  font-size: clamp(0.8rem, 0.75rem + 0.25vw, 0.92rem);
+  font-weight: 300;
+  line-height: 1.5;
+  letter-spacing: 0.03em;
+  text-wrap: balance;
+  opacity: 0.9;
+}
+
+/* After "enter", until the first scroll: a drop falling down a thin line, and the word. */
+.scroll-hint {
+  position: fixed;
+  left: 50%;
+  bottom: max(5vh, calc(env(safe-area-inset-bottom) + 16px));
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.7rem;
+  transform: translateX(-50%);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.6s ease;
+}
+
+.scroll-hint.is-shown {
+  opacity: 1;
+  transition: opacity 1.4s ease;
+}
+
+.scroll-hint__line {
+  position: relative;
+  width: 1px;
+  height: 42px;
+  overflow: hidden;
+  background: linear-gradient(rgba(230, 227, 255, 0), rgba(230, 227, 255, 0.35));
+}
+
+.scroll-hint__drop {
+  position: absolute;
+  left: -2px;
+  top: -6px;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 0 8px rgba(230, 227, 255, 0.9);
+  animation: scroll-hint-drop 2.2s cubic-bezier(0.5, 0, 0.75, 0) infinite;
+}
+
+@keyframes scroll-hint-drop {
+  to {
+    transform: translateY(52px);
+  }
+}
+
+.scroll-hint__label {
+  color: var(--ui-lavender);
+  font-size: 0.62rem;
+  letter-spacing: 0.3em;
+  text-shadow: var(--ui-halo);
+  opacity: 0.8;
+}
+
+/* Sound on and off, top right, from "enter" on. */
+.sound-toggle {
+  position: fixed;
+  top: max(14px, env(safe-area-inset-top));
+  right: max(14px, env(safe-area-inset-right));
+  z-index: 4;
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: 1px solid rgba(255, 255, 255, 0);
+  border-radius: 50%;
+  background: none;
+  color: var(--ui-white);
+  cursor: pointer;
+  opacity: 0;
+  visibility: hidden;
+  filter: drop-shadow(0 0 6px rgba(230, 227, 255, 0.5)) drop-shadow(0 0 2px rgba(3, 3, 9, 0.6));
+  transition: opacity 0.6s ease, border-color 0.4s ease, visibility 0s 0.6s;
+}
+
+.sound-toggle.is-shown {
+  opacity: 0.6;
+  visibility: visible;
+  transition: opacity 1.2s ease 0.6s, border-color 0.4s ease;
+}
+
+.sound-toggle.is-shown:hover,
+.sound-toggle.is-shown:focus-visible {
+  border-color: rgba(255, 255, 255, 0.4);
+  opacity: 1;
+  outline: none;
+  transition: opacity 0.3s ease, border-color 0.4s ease;
+}
+
+/* The still page (prefers-reduced-motion, no WebGL): the frame, the question and its answer, the cities. */
 .still {
   min-height: 100vh;
   padding-bottom: 12vh;
+  background: radial-gradient(70% 40% at 50% 78vh, rgba(230, 227, 255, 0.06), transparent 70%), #030307;
 }
 
 .still__frame {
@@ -242,15 +512,52 @@ body {
   width: 100%;
   height: 72vh;
   object-fit: cover;
+  object-position: 50% 30%; /* the drop sits in the upper third: keep it clear of the top edge */
+}
+
+.still__head {
+  margin: 8vh 16px 0;
+  text-align: center;
 }
 
 .still__word {
-  margin: 8vh 0 5vh;
-  font-weight: 600;
-  font-size: 0.8rem;
-  letter-spacing: 0.4em;
+  margin: 0;
+  padding-left: 0.34em;
+  font-size: clamp(1.6rem, 1.2rem + 1.6vw, 2.3rem);
+  font-weight: 200;
+  letter-spacing: 0.34em;
+  text-shadow: 0 0 28px var(--ui-glow);
+}
+
+.still__question {
+  margin: 0.8rem 0 0;
+  color: var(--ui-lavender);
+  font-weight: 300;
+  letter-spacing: 0.05em;
+  opacity: 0.85;
+}
+
+.still__answer {
+  width: min(34rem, calc(100% - 32px));
+  margin: 5vh auto 6vh;
   text-align: center;
-  opacity: 0.7;
+}
+
+.still__headline {
+  margin: 0;
+  font-size: clamp(1.1rem, 0.95rem + 0.8vw, 1.45rem);
+  font-weight: 300;
+  line-height: 1.35;
+  text-wrap: balance;
+}
+
+.still__meta {
+  margin: 0.8rem 0 0;
+  color: var(--ui-lavender);
+  font-size: 0.66rem;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  opacity: 0.9;
 }
 
 .still__cities {
@@ -271,8 +578,14 @@ body {
   gap: 1rem;
 }
 
-.still__meta {
-  opacity: 0.6;
+.still__cities li.is-answer {
+  color: var(--ui-peach);
+  text-shadow: 0 0 14px rgba(255, 228, 216, 0.45);
+}
+
+.still__cityMeta {
+  color: var(--ui-lavender);
+  opacity: 0.75;
   letter-spacing: 0.14em;
   white-space: nowrap;
 }
@@ -280,33 +593,25 @@ body {
 .still__credit {
   width: min(420px, calc(100% - 32px));
   margin: 8vh auto 0;
+  color: var(--ui-lavender);
   font-size: 0.6rem;
   line-height: 1.6;
   letter-spacing: 0.06em;
-  opacity: 0.45;
+  opacity: 0.6;
+}
+
+.still__credit p {
+  margin: 0 0 1.2em;
 }
 
 .still__credit a {
   color: inherit;
 }
 
-.loader__drop {
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
-  background: radial-gradient(circle at 38% 30%, rgba(255, 255, 255, 0.55) 0 12%, rgba(190, 205, 220, 0.12) 40%, rgba(255, 180, 120, 0.18) 78%, rgba(255, 255, 255, 0.25) 100%);
-  box-shadow: 0 0 18px rgba(200, 215, 230, 0.12);
-  animation: loader-drop 4s ease-in-out infinite;
-}
-
-@keyframes loader-drop {
-  50% {
-    opacity: 0.55;
-  }
-}
-
 @media (prefers-reduced-motion: reduce) {
-  .loader__drop {
+  .loader__drop,
+  .loader__status.is-shown,
+  .scroll-hint__drop {
     animation: none;
   }
 }

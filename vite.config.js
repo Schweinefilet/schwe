@@ -1,4 +1,6 @@
 import { execSync } from 'node:child_process'
+import fs from 'node:fs'
+import path from 'node:path'
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 
@@ -27,8 +29,21 @@ const reloadOnSharedChange = {
   },
 }
 
+// Build: with the sky as the content source (CONTENT in src/config.js) the site never loads footage,
+// so the 30 MB of clips in public/clips stay out of the deploy. They remain in public/ for the dev
+// server (the drop lab's ?clip=) and for a switch back to footage.
+const dropUnusedClips = {
+  name: 'schwe-drop-unused-clips',
+  apply: 'build',
+  closeBundle() {
+    const source = fs.readFileSync('src/config.js', 'utf8').match(/export const CONTENT = \{ source: '(\w+)' \}/)?.[1]
+    if (source !== 'sky') return
+    fs.rmSync(path.resolve('dist/clips'), { recursive: true, force: true })
+  },
+}
+
 export default defineConfig({
-  plugins: [react(), reloadOnSharedChange],
+  plugins: [react(), reloadOnSharedChange, dropUnusedClips],
   define: { __BUILD__: JSON.stringify(buildId()) },
   server: { host: true }, // expose on LAN for phone testing
   preview: { host: true },

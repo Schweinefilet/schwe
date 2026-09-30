@@ -7,6 +7,9 @@ const INITIAL = {
   splash: 0, // baked splash progress 0..1 (first to last frame)
   ring: 0, // ripple progress 0..1
   endType: 0, // opacity of the ending's answer (where it is raining hardest now)
+  rain: 0, // rain on the puddle: 0 none, 1 the downpour (PuddleRain.jsx)
+  lookFree: 0, // 0: the camera looks at the falling drop (rig.follow); 1: along its own keys again
+  heroGone: 0, // the hero splash's settled last frame fading out under the rain: 0 shown, 1 gone
 }
 
 export const rig = { ...INITIAL }

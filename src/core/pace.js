@@ -55,7 +55,8 @@ function envelope(a, r, pick = null) {
 
 // Speed limit (timeline units per second) every `step` units from `from` to `to`.
 //   cameraAt(t): the camera's position [x, y, z] at timeline time t
-//   drops: positions of the city drops on screen
+//   drops: positions of the city drops on screen, [x, y, z], or { pos, until }: a drop that stops
+//     slowing the camera after timeline time `until` (the dive drop, once its city has been seen)
 //   near: [full, none], camera distance within which a drop's pace applies in full, and beyond which
 //     not at all (the distances at which its city shows)
 //   max, nearDrop: the limit away from drops and at them
@@ -67,15 +68,23 @@ function envelope(a, r, pick = null) {
 //     the drops' limit by a smooth minimum
 //   round (optional): units of time over which the result's corners are rounded off (never raising
 //     it), so the picture never has to change its acceleration abruptly to follow it
-export function buildPaceTable(cameraAt, drops, { from, to, step = 0.01, near, max, nearDrop, brake, turnAt = null, maxTurn = Infinity, turnWindow = 0, round = 0 }) {
+//   holds (optional): [{ from, at, rate }]: stretches where the limit falls, geometrically, from what
+//     it would be at `from` to `rate` at `at` (a near stop), and is free again after `at` (the brake
+//     brings it back up)
+export function buildPaceTable(cameraAt, drops, { from, to, step = 0.01, near, max, nearDrop, brake, turnAt = null, maxTurn = Infinity, turnWindow = 0, round = 0, holds = [] }) {
   const n = Math.round((to - from) / step) + 1
   let turn = turnAt ? Float64Array.from({ length: n }, (_, i) => turnAt(from + i * step)) : null
   if (turn && turnWindow > 0) turn = envelope(turn, Math.max(1, Math.round(turnWindow / step)))
   const rate = new Float64Array(n)
   for (let i = 0; i < n; i++) {
-    const p = cameraAt(from + i * step)
+    const t = from + i * step
+    const p = cameraAt(t)
     let closest = Infinity
-    for (const d of drops) closest = Math.min(closest, Math.hypot(p[0] - d[0], p[1] - d[1], p[2] - d[2]))
+    for (const drop of drops) {
+      if (drop.until != null && t > drop.until) continue
+      const d = drop.pos ?? drop
+      closest = Math.min(closest, Math.hypot(p[0] - d[0], p[1] - d[1], p[2] - d[2]))
+    }
     rate[i] = max + (nearDrop - max) * (1 - smoothstep(near[0], near[1], closest))
     if (turn) {
       const byTurn = maxTurn / Math.max(turn[i], 1e-6)
@@ -85,9 +94,26 @@ export function buildPaceTable(cameraAt, drops, { from, to, step = 0.01, near, m
   }
   // A speed v can come down to u within (v² − u²) / 2·brake: cap each entry by what its neighbours
   // allow, forward (for scrolling down) and backward (for scrolling up).
-  for (let i = n - 2; i >= 0; i--) rate[i] = Math.min(rate[i], Math.sqrt(rate[i + 1] ** 2 + 2 * brake * step))
-  for (let i = 1; i < n; i++) rate[i] = Math.min(rate[i], Math.sqrt(rate[i - 1] ** 2 + 2 * brake * step))
+  const braked = () => {
+    for (let i = n - 2; i >= 0; i--) rate[i] = Math.min(rate[i], Math.sqrt(rate[i + 1] ** 2 + 2 * brake * step))
+    for (let i = 1; i < n; i++) rate[i] = Math.min(rate[i], Math.sqrt(rate[i - 1] ** 2 + 2 * brake * step))
+  }
+  braked()
   if (round > 0) rate.set(envelope(rate, Math.max(1, Math.round(round / step)), Math.min))
+  // Holds last, after the rounding (which takes the least value within its span, and would spread the
+  // near stop to both sides of it), and braked again so the limit comes back up without a jump.
+  if (holds.length) {
+    for (const hold of holds) {
+      const i0 = Math.max(0, Math.round((hold.from - from) / step))
+      const i1 = Math.min(n - 1, Math.round((hold.at - from) / step))
+      const top = rate[i0]
+      for (let i = i0; i <= i1; i++) {
+        const x = smoothstep(hold.from, hold.at, from + i * step)
+        rate[i] = Math.min(rate[i], top * (hold.rate / top) ** x)
+      }
+    }
+    braked()
+  }
   return { from, step, rate }
 }
 

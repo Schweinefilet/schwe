@@ -4,9 +4,9 @@
   "version": "0.1.0",
   "type": "module",
   "scripts": {
-    "predev": "node scripts/copy-benchmarks.mjs && node scripts/build-manifest.mjs",
+    "predev": "node scripts/copy-benchmarks.mjs && node scripts/build-manifest.mjs && node scripts/build-skyline-index.mjs",
     "dev": "vite",
-    "prebuild": "node scripts/copy-benchmarks.mjs && node scripts/build-manifest.mjs",
+    "prebuild": "node scripts/copy-benchmarks.mjs && node scripts/build-manifest.mjs && node scripts/build-skyline-index.mjs",
     "build": "vite build",
     "preview": "vite preview",
     "test": "node --test",
@@ -19,6 +19,7 @@
     "sky:glow": "node scripts/build-city-glow.mjs",
     "sky:stills": "node scripts/sky-stills.mjs",
     "backdrop": "node scripts/build-backdrop.mjs",
+    "ending:capture": "node scripts/ending-capture.mjs",
     "deploy": "npm run build && npx wrangler pages deploy dist --project-name schwe",
     "skyline": "node scripts/skyline/build.mjs"
   },

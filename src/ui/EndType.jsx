@@ -4,6 +4,7 @@ import { CITIES } from '../config.js'
 import { localTimeString } from '../content/clipSelector.js'
 import { now } from '../core/clock.js'
 import { rig } from '../core/rig.js'
+import { answerLines } from './answer.js'
 
 // Beat 7: the answer, as the rings spread. Opacity follows rig.endType on the shared ticker.
 export default function EndType({ clips, rainCity }) {
@@ -29,31 +30,21 @@ export default function EndType({ clips, rainCity }) {
     return () => gsap.ticker.remove(update)
   }, [])
 
-  const [headline, meta] = lines(rainCity, city, time, clips)
+  const [headline, meta, rate] = answerLines(rainCity, city, time, clips)
   return (
     <div ref={ref} className="end-type" aria-live="polite">
       <div className="end-type__headline">{headline}</div>
-      {meta && <div className="end-type__meta">{meta}</div>}
+      {meta && (
+        <div className="end-type__meta">
+          {meta}
+          {rate && (
+            <>
+              {' · '}
+              <span className="end-type__unit">{rate}</span>
+            </>
+          )}
+        </div>
+      )}
     </div>
   )
-}
-
-function lines(rain, city, time, clips) {
-  if (!rain) return ['', null]
-  if (rain.kind === 'now' && city) {
-    const mm = rain.mmPerHour > 0 ? ` · ${rain.mmPerHour < 1 ? rain.mmPerHour.toFixed(1) : Math.round(rain.mmPerHour)} mm/h` : ''
-    return ['Raining hardest now', `${city.name} · ${time} · ${rain.label}${mm}`]
-  }
-  if (rain.kind === 'soon' && city) {
-    const weather = clips?.find((c) => c.city === city.id)?.weatherLabel
-    return [arrival(city.name, rain.minutes), `${city.name} · ${time}${weather ? ` · ${weather}` : ''}`]
-  }
-  return ['Nowhere else is it raining right now.', null]
-}
-
-function arrival(name, minutes) {
-  if (minutes < 10) return `Rain is about to reach ${name}`
-  if (minutes < 60) return `Rain reaches ${name} in about ${Math.round(minutes / 5) * 5} min`
-  const hours = Math.round(minutes / 30) / 2
-  return `Rain reaches ${name} in about ${hours} ${hours === 1 ? 'hour' : 'hours'}`
 }

@@ -20,6 +20,8 @@ ${envChunk}
 ${waterChunk}
 uniform float uCrop;     // radius (sim units) where the baked mesh ends and the puddle takes over
 uniform float uSurface;  // resting water height (sim units)
+uniform float uRough;    // SPLASH.rough
+uniform float uFade;     // 1 → 0 once its water has settled and the rain takes the puddle
 varying vec3 vWorld;
 varying vec3 vNormal;
 varying vec2 vLocalXZ;
@@ -27,12 +29,19 @@ varying float vLocalY;
 void main() {
   vec3 v = normalize(vWorld - cameraPosition);
   vec3 n = normalize(vNormal);
-  if (!gl_FrontFacing) n = -n; // the crown is a thin sheet: both sides are seen
+  // The crown is a thin sheet, both sides seen: shade the side facing the camera. (By the triangles'
+  // winding, which the sim's mesh does not keep consistent, stray triangles turned dark.)
+  if (dot(n, v) > 0.0) n = -n;
   // Calm water at rest height is left to the puddle underneath (which carries the rings), so only
   // what the drop disturbed is drawn: the crater, crown, jet. The crop edge fades out too.
   float disturbed = max(smoothstep(0.002, 0.004, abs(vLocalY - uSurface)), smoothstep(0.03, 0.1, 1.0 - abs(n.y)));
   float edge = 1.0 - smoothstep(0.55 * uCrop, 0.85 * uCrop, length(vLocalXZ));
-  gl_FragColor = vec4(shadeWater(v, n), disturbed * edge);
+  // A thin sheet seen face-on lets some of what is behind it through; at a glancing angle it is a mirror.
+  float facing = pow(1.0 - clamp(dot(-v, n), 0.0, 1.0), 5.0);
+  float alpha = disturbed * edge * mix(0.85, 1.0, facing) * uFade;
+  // Invisible calm water would still write depth and hide the rain's splashes drawn after it.
+  if (alpha < 0.01) discard;
+  gl_FragColor = vec4(shadeWaterRough(v, n, uRough), alpha);
 }`
 
 function loadData(base) {
@@ -112,6 +121,8 @@ export default function Splash({ clips, rainCity }) {
         uBoundsMin: { value: new THREE.Vector3(...meta.boundsMin) },
         uBoundsMax: { value: new THREE.Vector3(...meta.boundsMax) },
         uQuantMax: { value: meta.quantMax ?? 65535 },
+        uRough: { value: SPLASH.rough },
+        uFade: { value: 1 },
         uCrop: { value: Math.min(-meta.boundsMin[0], meta.boundsMax[0]) },
         uSurface: { value: meta.surfaceY },
         uReflGain: { value: WATER.reflGain },
@@ -189,6 +200,9 @@ export default function Splash({ clips, rainCity }) {
     // The sim's resting surface sits at surfaceY; put it on the ground under the impact point.
     m.position.set(fall.impact.x, fall.impact.y - vat.surfaceY * vat.scale, fall.impact.z)
     showFrame(vat, Math.round(rig.splash * (vat.meta.frames - 1)))
+    // Its last frame holds a swell: still water among the moving rain, so it goes as the rain comes.
+    vat.material.uniforms.uFade.value = 1 - rig.heroGone
+    m.visible = handedOff && rig.heroGone < 1
   })
 
   return (

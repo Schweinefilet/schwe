@@ -1,4 +1,5 @@
-import { useMemo } from 'react'
+import { useEffect, useMemo, useRef } from 'react'
+import gsap from 'gsap'
 import { useFrame } from '@react-three/fiber'
 import * as THREE from 'three'
 import { FOCUS, RAIN } from '../config.js'
@@ -10,6 +11,7 @@ import vertexShader from '../shaders/rain.vert.glsl?raw'
 import rainFrag from '../shaders/rain.frag.glsl?raw'
 
 const fragmentShader = `${envChunk}\n${rainFrag}`
+const THIN_SECONDS = 1.5
 const _forward = new THREE.Vector3()
 const _size = new THREE.Vector2()
 
@@ -62,6 +64,8 @@ export default function Rain() {
       uReflGain: { value: RAIN.reflGain },
       uSpec: { value: RAIN.spec },
       uStreakColor: { value: new THREE.Color(...RAIN.streakColor) },
+      uThinFrom: { value: 1e9 },
+      uThin: { value: 1 },
     }
     return new THREE.ShaderMaterial({
       vertexShader,
@@ -73,6 +77,7 @@ export default function Rain() {
     })
   }, [])
   const { uniforms } = material
+  const thinning = useRef(null)
 
   useFrame(({ camera, gl }) => {
     // Center the repeating box ahead of the camera so few drops are wasted behind it.
@@ -81,8 +86,26 @@ export default function Rain() {
     gl.getDrawingBufferSize(_size)
     uniforms.uResolution.value.copy(_size)
     uniforms.uMaxBlur.value = FOCUS.maxBlur * gl.getPixelRatio()
-    geometry.instanceCount = Math.min(geometry.userData.maxCount, quality.rainCount) // follows a live tier drop
+    // A live tier drop: the drops beyond the new count fade out over THIN_SECONDS, then stop drawing.
+    // Frozen rain would otherwise lose half its drops from one frame to the next.
+    const want = Math.min(geometry.userData.maxCount, quality.rainCount)
+    if (want > geometry.instanceCount) geometry.instanceCount = want
+    else if (want < geometry.instanceCount && !thinning.current) {
+      uniforms.uThinFrom.value = want
+      thinning.current = gsap.to(uniforms.uThin, {
+        value: 0,
+        duration: THIN_SECONDS,
+        ease: 'sine.inOut',
+        onComplete: () => {
+          geometry.instanceCount = want
+          uniforms.uThinFrom.value = 1e9
+          uniforms.uThin.value = 1
+          thinning.current = null
+        },
+      })
+    }
   })
+  useEffect(() => () => thinning.current?.kill(), [])
 
   return (
     <mesh geometry={geometry} material={material} frustumCulled={false} />

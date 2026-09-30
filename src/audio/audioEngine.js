@@ -13,6 +13,16 @@ import { globalUniforms } from '../core/uniforms.js'
 
 let ctx = null
 let master = null
+// The visitor's sound switch (ui/SoundToggle.jsx), remembered in this browser. Storage can be
+// unavailable (private windows, blocked site data), in which case the switch lasts for the visit.
+const MUTE_KEY = 'schwe:muted'
+let muted = (() => {
+  try {
+    return localStorage.getItem(MUTE_KEY) === '1'
+  } catch {
+    return false
+  }
+})()
 let layers = null
 let building = false
 let lastTime = 0
@@ -37,6 +47,20 @@ export function unlockAudio() {
 }
 
 export const getAudioContext = () => ctx
+
+export const isMuted = () => muted
+
+// Mutes or unmutes everything (every layer and one-shot goes through the master gain), with a short
+// fade so it never clicks.
+export function setMuted(on) {
+  muted = on
+  try {
+    localStorage.setItem(MUTE_KEY, on ? '1' : '0')
+  } catch {
+    // the switch still works for this visit
+  }
+  if (master) master.gain.setTargetAtTime(on ? 0 : AUDIO.master, ctx.currentTime, 0.08)
+}
 
 // ---- Building blocks -----------------------------------------------------------------------------
 
@@ -99,7 +123,7 @@ const setSmooth = (param, value, seconds = 0.08) => param.setTargetAtTime(value,
 
 function build() {
   master = ctx.createGain()
-  master.gain.value = AUDIO.master
+  master.gain.value = muted ? 0 : AUDIO.master
   const comp = ctx.createDynamicsCompressor()
   master.connect(comp).connect(ctx.destination)
 
@@ -250,6 +274,49 @@ const CUES = [
   { at: SPLASH.jet2FallAt, dir: 1, play: () => bloop(380, 0.035) },
 ]
 
+// One raindrop landing on the puddle (PuddleRain.jsx calls this as a nearby drop lands). In the
+// ending's slow motion a drop's plink, the ring of the bubble it traps, drops an octave or four: a soft,
+// low bloop, lower for a bigger drop, quieter and duller with distance, placed left or right where it
+// lands. `size`: drop radius in mm; `distance`: world units from the camera; `pan`: -1 left … 1 right.
+let plinks = 0
+let plinkWindow = 0
+export function plink(size, distance, pan) {
+  if (!ctx || !master || ctx.state !== 'running') return
+  // At most seven a second: a downpour close by is a texture, not a drum roll.
+  const now = ctx.currentTime
+  if (now - plinkWindow > 1) {
+    plinkWindow = now
+    plinks = 0
+  }
+  if (++plinks > 7) return
+  const near = 1 / (1 + distance * distance * 0.6)
+  const freq = (420 / size) * (0.85 + Math.random() * 0.3)
+  const o = ctx.createOscillator()
+  o.frequency.setValueAtTime(freq * 0.8, now)
+  o.frequency.linearRampToValueAtTime(freq, now + 0.05)
+  o.frequency.exponentialRampToValueAtTime(freq * 1.6, now + 0.6)
+  const g = envGain(0.05 * near, 0.012, 0.9, now)
+  const lp = ctx.createBiquadFilter()
+  lp.type = 'lowpass'
+  lp.frequency.value = 400 + 2600 * near
+  const p = ctx.createStereoPanner()
+  p.pan.value = Math.max(-1, Math.min(1, pan))
+  o.connect(g).connect(lp).connect(p).connect(master)
+  o.start(now)
+  o.stop(now + 1.1)
+  // The impact itself: a soft tick of filtered noise.
+  const n = ctx.createBufferSource()
+  n.buffer = tickBuffer ??= noiseBuffer(0.2)
+  const bp = ctx.createBiquadFilter()
+  bp.type = 'bandpass'
+  bp.frequency.value = 900 + 1500 * near
+  bp.Q.value = 0.8
+  const gn = envGain(0.02 * near, 0.003, 0.12, now)
+  n.connect(bp).connect(gn).connect(p)
+  n.start(now)
+}
+let tickBuffer = null
+
 // ---- Per frame -----------------------------------------------------------------------------------
 
 function update() {
@@ -257,17 +324,18 @@ function update() {
   const t = state.time
   const ts = globalUniforms.uTimeScale.value
 
-  // Rain → hum. Level also dips while inside the city (it gives way to the ambience) and fades out
-  // with the ending.
+  // Rain → hum. Level also dips while inside the city (it gives way to the ambience), and swells a
+  // little as the rain comes down on the puddle at the end, where it goes on for as long as the page
+  // is open.
   const fadeOut = 1 - Math.min(1, Math.max(0, (t - SPLASH.quietAt) / 0.8))
   const started = state.unlocked ? 1 : 0
   const inCity = rig.dive
-  setSmooth(layers.rainGain.gain, started * fadeOut * (1 - 0.85 * inCity) * (0.18 + 0.22 * ts))
+  setSmooth(layers.rainGain.gain, started * (1 - 0.85 * inCity) * (0.18 + 0.22 * ts) * (1 + 0.5 * rig.rain))
   setSmooth(layers.rain.playbackRate, 0.12 + 0.88 * ts)
   setSmooth(layers.rainFilter.frequency, 180 + 11800 * ts * ts)
 
   // City: only while the drop fills the screen.
-  setSmooth(layers.cityGain.gain, fadeOut * inCity * AUDIO.cityLevel)
+  setSmooth(layers.cityGain.gain, inCity * AUDIO.cityLevel)
 
   // Ending: the rain city's rain rises with the fall and gives way to the splash.
   const raining = state.rainCity?.kind === 'now' ? 1 : 0

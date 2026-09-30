@@ -15,10 +15,11 @@ const CHROME = process.env.CHROME || '/Applications/Google Chrome.app/Contents/M
 
 const CASES = [
   { name: 'natural (live weather)', query: '' },
-  { name: 'raining now', query: '?rain=mumbai', kind: 'now', city: 'mumbai', text: ['Raining hardest now', 'Mumbai'] },
+  { name: 'raining now', query: '?rain=mumbai', kind: 'now', city: 'mumbai', text: ['it’s raining hardest in Mumbai'] },
   { name: 'rain soon', query: '?rain=london@40', kind: 'soon', city: 'london', text: ['Rain reaches London in about 40 min'] },
   { name: 'rain imminent', query: '?rain=london@5', kind: 'soon', city: 'london', text: ['Rain is about to reach London'] },
-  { name: 'nowhere', query: '?rain=none', kind: 'none', text: ['Nowhere else is it raining right now.'] },
+  { name: 'nowhere', query: '?rain=none', kind: 'none', text: ['Dry in all ten cities'] },
+  { name: 'weather not read', query: '?rain=unknown', kind: 'unknown', text: ['The weather couldn’t be read just now'] },
 ]
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
@@ -84,7 +85,8 @@ async function runCase(browser, base, c) {
   // The ending: the rain falls again, slowly (SPLASH.rainAgain eases over 3 s).
   await goto(end - 1.1, 3500)
   const e = await read()
-  check(e.timeScale > 0.15 && e.timeScale < 0.25, `rain not falling slowly at the end (time scale ${e.timeScale.toFixed(2)})`)
+  const slow = await page.evaluate(() => window.__schwe.splash.rainAgain.timeScale)
+  check(Math.abs(e.timeScale - slow) < 0.25 * slow, `rain not falling slowly at the end (time scale ${e.timeScale.toFixed(2)}, expected ${slow})`)
   check(e.endOpacity > 0.99, `ending text not shown (opacity ${e.endOpacity})`)
   if (c.kind) check(e.rain?.kind === c.kind, `ending kind: expected ${c.kind}, got ${e.rain?.kind}`)
   if (c.city) check(e.rain?.city === c.city, `ending city: expected ${c.city}, got ${e.rain?.city}`)

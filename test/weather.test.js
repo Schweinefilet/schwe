@@ -25,6 +25,7 @@ test('current rain per 15 min is reported per hour, rain and showers together', 
   const wx = await fetchWeather(cities)
   assert.equal(wx.a.mmPerHour, 3)
   assert.equal(wx.a.variant, 'rain')
+  assert.equal(wx.a.known, true)
   assert.equal(wx.b.mmPerHour, 0)
 })
 
@@ -42,10 +43,12 @@ test('no rain in the forecast: null', async () => {
   assert.equal(wx.b.rainInMinutes, null)
 })
 
-test('request failure: everything clear, no rain data invented', async () => {
+test('request failure: weather unknown, no label or rain data invented', async () => {
   mockOnce({}, false)
   const wx = await fetchWeather(cities)
   for (const id of ['a', 'b']) {
+    assert.equal(wx[id].known, false)
+    assert.equal(wx[id].label, null) // nothing on screen claims "clear"
     assert.equal(wx[id].variant, 'clear')
     assert.equal(wx[id].mmPerHour, null)
     assert.equal(wx[id].rainInMinutes, null)
