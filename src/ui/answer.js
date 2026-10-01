@@ -12,20 +12,20 @@ export function answerLines(rain, city, time, clips) {
   if (!rain) return ['', null, null]
   if (rain.kind === 'now' && city) {
     const rate = rain.mmPerHour > 0 ? `${rain.mmPerHour < 1 ? rain.mmPerHour.toFixed(1) : Math.round(rain.mmPerHour)} mm/h` : null
-    const headline = rain.of === 1 ? `Of the ${COUNT} cities, only ${city.name} has rain right now` : `Of the ${COUNT} cities, it’s raining hardest in ${city.name}`
+    const headline = rain.of === 1 ? `of the ${COUNT} cities, only ${city.name} has rain right now` : `of the ${COUNT} cities, it’s raining hardest in ${city.name}`
     return [headline, [time, rain.label].filter(Boolean).join(' · '), rate]
   }
   if (rain.kind === 'soon' && city) {
     const weather = clips?.find((c) => c.city === city.id)?.weatherLabel
     return [arrival(city.name, rain.minutes), [`${time} in ${city.name}`, weather].filter(Boolean).join(' · '), null]
   }
-  if (rain.kind === 'none') return [`Dry in all ${COUNT} cities`, 'no rain due in the next six hours', null]
-  return ['The weather couldn’t be read just now', `so there is no answer for the ${COUNT} cities this time`, null]
+  if (rain.kind === 'none') return [`dry in all ${COUNT} cities`, 'no rain due in the next six hours', null]
+  return ['the weather couldn’t be read just now', `so there is no answer for the ${COUNT} cities this time`, null]
 }
 
 function arrival(name, minutes) {
-  if (minutes < 10) return `Rain is about to reach ${name}`
-  if (minutes < 60) return `Rain reaches ${name} in about ${Math.round(minutes / 5) * 5} min`
+  if (minutes < 10) return `rain is about to reach ${name}`
+  if (minutes < 60) return `rain reaches ${name} in about ${Math.round(minutes / 5) * 5} min`
   const hours = Math.round(minutes / 30) / 2
-  return `Rain reaches ${name} in about ${hours} ${hours === 1 ? 'hour' : 'hours'}`
+  return `rain reaches ${name} in about ${hours} ${hours === 1 ? 'hour' : 'hours'}`
 }

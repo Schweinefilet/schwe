@@ -4,12 +4,12 @@ import { CAPTIONS } from '../config.js'
 import { quality } from '../core/quality.js'
 import { state } from '../core/state.js'
 
-const WORDS = ['No', 'One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine', 'Ten', 'Eleven', 'Twelve']
+const WORDS = ['no', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten', 'eleven', 'twelve']
 
 // What each caption says. The count is the drops this tier shows, which can change during a visit.
 const TEXT = {
-  drops: () => ['Rain, stopped mid-air.', `${WORDS[quality.heroDrops] ?? quality.heroDrops} of the drops each hold a city, as it is right now.`],
-  fall: () => ['One of these drops is about to fall.', null],
+  drops: () => ['rain, stopped mid-air.', `${WORDS[quality.heroDrops] ?? quality.heroDrops} of the drops each hold a city, as it is right now.`],
+  fall: () => ['one of these drops is about to fall.', null],
 }
 
 const smoothstep = (a, b, x) => {

@@ -26,7 +26,7 @@ export default function SoundToggle() {
   }
 
   return (
-    <button ref={ref} type="button" className="sound-toggle" onClick={toggle} aria-pressed={muted} aria-label={muted ? 'Turn sound on' : 'Mute sound'} title={muted ? 'Sound on' : 'Mute'}>
+    <button ref={ref} type="button" className="sound-toggle" onClick={toggle} aria-pressed={!muted} aria-label="Sound" title={muted ? 'Sound off' : 'Sound on'}>
       <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
         <path d="M4 9.5h3.2L11.5 6v12l-4.3-3.5H4z" />
         {muted ? (

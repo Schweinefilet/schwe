@@ -35,7 +35,7 @@ export default function Loader({ onEnter, ready }) {
         <p className={`loader__status${slow && !ready ? ' is-shown' : ''}`} role="status">
           reading the weather in {COUNT} cities
         </p>
-        <button className={`loader__enter${ready ? ' is-ready' : ''}`} onClick={handleEnter} disabled={!ready}>
+        <button className={`pill pill--lg loader__enter${ready ? ' is-ready' : ''}`} onClick={handleEnter} disabled={!ready}>
           enter
         </button>
       </div>

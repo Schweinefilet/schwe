@@ -9,6 +9,7 @@ import EndType from './ui/EndType.jsx'
 import BackToTop from './ui/BackToTop.jsx'
 import StillPage from './ui/StillPage.jsx'
 import ScrollHint from './ui/ScrollHint.jsx'
+import ProgressRail from './ui/ProgressRail.jsx'
 import Captions from './ui/Captions.jsx'
 import SoundToggle from './ui/SoundToggle.jsx'
 import { initScroll } from './core/scroll.js'
@@ -199,10 +200,11 @@ function Site({ clips, device, diveCity, rainCity }) {
       {/* The answer and the final screen share one column, so the answer never overlaps the way back. */}
       <div className="ending-ui">
         <EndType clips={clips} rainCity={rainCity} />
-        <BackToTop onTop={handleTop} />
+        <BackToTop onTop={handleTop} clips={clips} rainCity={rainCity} />
       </div>
       <Captions />
       <ScrollHint />
+      <ProgressRail />
       <div id="fade" />
       <SoundToggle />
       <Loader onEnter={handleEnter} ready={diveCity !== null && scenePrepared} />

@@ -5,6 +5,7 @@ import { localTimeString } from '../content/clipSelector.js'
 import { now } from '../core/clock.js'
 import { rig } from '../core/rig.js'
 import { answerLines } from './answer.js'
+import AnswerHeadline from './AnswerHeadline.jsx'
 
 // Beat 7: the answer, as the rings spread. Opacity follows rig.endType on the shared ticker.
 export default function EndType({ clips, rainCity }) {
@@ -33,7 +34,9 @@ export default function EndType({ clips, rainCity }) {
   const [headline, meta, rate] = answerLines(rainCity, city, time, clips)
   return (
     <div ref={ref} className="end-type" aria-live="polite">
-      <div className="end-type__headline">{headline}</div>
+      <div className="end-type__headline">
+        <AnswerHeadline text={headline} name={city?.name} />
+      </div>
       {meta && (
         <div className="end-type__meta">
           {meta}
