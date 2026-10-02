@@ -4,7 +4,8 @@ import { TIMELINE_END, TIMELINE_START } from '../config.js'
 import { state } from '../core/state.js'
 
 // The way through, on the right edge: a thin line that fills as the page is scrolled, a drop at its
-// head. Shown from "enter" on. Its position is set on the shared ticker, so it never re-renders React.
+// head. Shown from "enter" until the final screen. Its position is set on the shared ticker, so it
+// never re-renders React.
 export default function ProgressRail() {
   const ref = useRef()
   const fill = useRef()
@@ -15,9 +16,11 @@ export default function ProgressRail() {
     let shown = false
     let last = -1
     const update = () => {
-      if (!shown && state.unlocked) {
-        shown = true
-        el.classList.add('is-shown')
+      // Gone again once the final screen holds (BackToTop.jsx): there it would only crowd the answer.
+      const show = state.unlocked && state.time < TIMELINE_END - 0.02
+      if (show !== shown) {
+        shown = show
+        el.classList.toggle('is-shown', show)
       }
       const p = Math.min(Math.max((state.time - TIMELINE_START) / (TIMELINE_END - TIMELINE_START), 0), 1)
       if (Math.abs(p - last) < 0.0005) return

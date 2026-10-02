@@ -4,6 +4,7 @@ import cityGlowAtlas from './content/cityGlow.json'
 import vantages from './content/vantages.json'
 import { buildDrift } from './core/drift.js'
 import { smoothKeys } from './core/cameraPath.js'
+import { visibleDrops } from './core/visibleDrops.js'
 
 export const CITIES = cities
 
@@ -14,8 +15,10 @@ export const CITIES = cities
 export const CONTENT = { source: 'sky' }
 
 // ---- Scroll ----------------------------------------------------------------
-// Timeline time is measured in "units". One unit = VH_PER_UNIT of scroll distance.
-export const VH_PER_UNIT = 100
+// Timeline time is measured in "units". One unit = VH_PER_UNIT of scroll distance. 80 (was 100): the
+// whole film took about 140 wheel notches or 38 swipes; this takes a fifth off, and the pace limit
+// (PACE) still slows the picture at each drop however fast the scroll.
+export const VH_PER_UNIT = 80
 export const FREEZE_SECONDS = 1.5 // real time for uTimeScale to ease 1 → 0 (and back on rewind)
 // How fast the picture follows the scroll (core/pace.js). It eases toward the scroll position over about
 // `smooth` seconds, never faster than `max` units (100vh each) per second, and at `nearDrop` while a
@@ -183,8 +186,8 @@ export function heroDropsFor(diveCity) {
   if (from >= 0) [order[from], order[DIVE_DROP_INDEX]] = [order[DIVE_DROP_INDEX], order[from]]
   return HERO_POSITIONS.map((pos, i) => ({ pos, city: order[i % order.length], dive: i === DIVE_DROP_INDEX }))
 }
-// The drops a tier shows (quality.heroDrops of them): the dive drop always, then the first of the rest.
-export const visibleDrops = (drops, count) => [...drops.filter((d) => d.dive), ...drops.filter((d) => !d.dive).slice(0, count - 1)]
+// The drops a tier shows (core/visibleDrops.js).
+export { visibleDrops }
 const D = HERO_POSITIONS[DIVE_DROP_INDEX]
 
 export const CAMERA_FOV = 50 // vertical, degrees

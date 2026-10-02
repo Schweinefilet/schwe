@@ -1,14 +1,12 @@
 import { useEffect, useRef } from 'react'
 import gsap from 'gsap'
 import { CAPTIONS } from '../config.js'
-import { quality } from '../core/quality.js'
 import { state } from '../core/state.js'
 
-const WORDS = ['no', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten', 'eleven', 'twelve']
-
-// What each caption says. The count is the drops this tier shows, which can change during a visit.
+// What each caption says. No count of the drops: lower tiers show fewer, and the answer counts the cities
+// whose weather was read, so a number here would contradict it. It asks the visitor to look into them.
 const TEXT = {
-  drops: () => ['rain, stopped mid-air.', `${WORDS[quality.heroDrops] ?? quality.heroDrops} of the drops each hold a city, as it is right now.`],
+  drops: () => ['rain, stopped mid-air.', 'look closely: some drops hold a city, as it is right now.'],
   fall: () => ['one of these drops is about to fall.', null],
 }
 
@@ -25,14 +23,13 @@ export default function Captions() {
   useEffect(() => {
     const el = ref.current
     const [headline, sub] = el.children
-    let current = null // which caption's text is in place, and for how many drops
+    let current = null // which caption's text is in place
     const update = () => {
       const t = state.time
       const c = CAPTIONS.find((c) => t > c.from && t < c.to)
       const a = c ? Math.min(smoothstep(c.from, c.from + c.fade, t), 1 - smoothstep(c.to - c.fade, c.to, t)) : 0
-      const key = c && `${c.id}:${quality.heroDrops}`
-      if (c && key !== current) {
-        current = key
+      if (c && c.id !== current) {
+        current = c.id
         const [h, s] = TEXT[c.id]()
         headline.textContent = h
         sub.textContent = s ?? ''

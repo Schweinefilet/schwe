@@ -1,7 +1,15 @@
-/* The UI over the night scene is white and pastel, dreamy and smooth: Inter Tight in thin weights,
+/* The UI over the night scene is white and pastel, dreamy and smooth: Playwrite AU VIC (a cursive hand) in thin weights,
    lowercase, white type with soft glows, lavender for secondary lines, peach for the answer, indigo
    (never neutral black) for every shadow. Text colours are solid tokens, not opacities, so contrast
    does not depend on what is behind them. */
+@font-face {
+  font-family: 'Playwrite AU VIC';
+  src: url('./assets/playwrite-au-vic-latin.woff2') format('woff2');
+  font-weight: 100 400;
+  font-style: normal;
+  font-display: swap;
+}
+
 :root {
   --ui-white: #fff;
   --ui-lavender: #e6e3ff;
@@ -14,7 +22,7 @@
   /* Shadows are a deep indigo, so the halo under white type feels like dusk, not a black smudge. */
   --ui-ink: 8, 7, 28;
   --ui-halo: 0 0 2px rgba(var(--ui-ink), 0.6), 0 0 10px rgba(var(--ui-ink), 0.5), 0 0 22px rgba(var(--ui-ink), 0.32);
-  --ui-font: 'Inter Tight', ui-sans-serif, system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif;
+  --ui-font: 'Playwrite AU VIC', 'Snell Roundhand', 'Segoe Script', cursive, ui-sans-serif, system-ui, sans-serif;
   /* One type scale. Nothing on screen is set below --t-fine (12 px). */
   --t-name: 1.1rem;
   --t-meta: 0.8rem;
@@ -177,7 +185,16 @@ button {
   border-radius: 50%;
   background: radial-gradient(circle at 38% 30%, rgba(255, 255, 255, 0.75) 0 12%, rgba(214, 226, 255, 0.16) 42%, rgba(255, 200, 176, 0.22) 78%, rgba(255, 255, 255, 0.35) 100%);
   box-shadow: 0 0 22px rgba(230, 227, 255, 0.28), 0 0 60px rgba(230, 227, 255, 0.12);
-  animation: loader-drop 4s ease-in-out infinite;
+  animation: loader-in 1.4s ease both, loader-drop 4s ease-in-out 1.4s infinite;
+}
+
+/* The type settles in over the haze index.html has already painted: up a few pixels, out of a blur. */
+@keyframes loader-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+    filter: blur(6px);
+  }
 }
 
 @keyframes loader-drop {
@@ -195,10 +212,12 @@ button {
   font-weight: 200;
   letter-spacing: 0.34em;
   text-shadow: 0 0 28px var(--ui-glow);
+  animation: loader-in 1.4s cubic-bezier(0.22, 1, 0.36, 1) 0.1s both;
 }
 
 .loader__question {
   margin: 0.9rem 0 0;
+  animation: loader-in 1.4s cubic-bezier(0.22, 1, 0.36, 1) 0.3s both;
   color: var(--ui-text-2);
   font-size: clamp(0.95rem, 0.86rem + 0.35vw, 1.1rem);
   font-weight: 300;
@@ -273,6 +292,7 @@ button {
   color: var(--ui-text-3);
   font-size: var(--t-meta);
   letter-spacing: 0.1em;
+  animation: loader-in 1.4s ease 0.7s both;
 }
 
 .dev-overlay {
@@ -318,14 +338,20 @@ button {
   will-change: transform, opacity;
 }
 
-/* An indigo haze, lighter than the neutral near-black it was: just enough to hold the type. */
+/* An indigo haze, deep at the type and gone at its edge: drops pass in front of the square's brightest
+   lamps, and the meta line has to hold up over a cream-white bokeh disc, not only over the dark. */
 .drop-label::before {
   content: '';
   position: absolute;
-  inset: -1.1em -1.6em;
+  inset: -1.5em -2.2em;
   z-index: -1;
   border-radius: 50%;
-  background: radial-gradient(closest-side, rgba(var(--ui-ink), 0.46), rgba(var(--ui-ink), 0.28) 55%, rgba(var(--ui-ink), 0) 100%);
+  background: radial-gradient(closest-side, rgba(var(--ui-ink), 0.66), rgba(var(--ui-ink), 0.5) 45%, rgba(var(--ui-ink), 0.2) 75%, rgba(var(--ui-ink), 0) 100%);
+}
+
+.drop-label__meta {
+  color: var(--ui-lavender);
+  text-shadow: 0 0 3px rgba(var(--ui-ink), 0.9), var(--ui-halo);
 }
 
 /* The word's pencil sketch: a canvas the size of the word's area, moved and drawn from the render loop
@@ -409,6 +435,12 @@ button {
   text-shadow: var(--ui-halo);
 }
 
+/* "share" turns peach for a moment when the link has been copied. */
+.final-screen__share.is-copied {
+  color: var(--ui-peach);
+  text-shadow: var(--ui-halo), 0 0 14px rgba(255, 210, 189, 0.5);
+}
+
 /* The captions where no city is in view (Captions.jsx), set like the answer. */
 .caption {
   position: fixed;
@@ -444,33 +476,55 @@ button {
   text-wrap: balance;
 }
 
-/* After "enter", until the first scroll: a drop falling down a thin line, and the word. */
+/* After "enter", until the first scroll, and again while the picture holds on the word: a drop falling
+   down a thin line, and the words. A soft lavender haze behind keeps it legible on any frame. While held,
+   the line fills from the top as the visitor's push counts toward letting go. */
 .scroll-hint {
   position: fixed;
   left: 50%;
-  bottom: max(5vh, calc(env(safe-area-inset-bottom) + 16px));
+  bottom: max(5vh, calc(env(safe-area-inset-bottom) + 18px));
   z-index: 1;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 0.7rem;
-  transform: translateX(-50%);
+  gap: 0.8rem;
+  transform: translate(-50%, 6px);
   opacity: 0;
   pointer-events: none;
-  transition: opacity 0.6s ease;
+  transition: opacity 0.6s ease, transform 0.6s ease;
+}
+
+.scroll-hint::before {
+  content: '';
+  position: absolute;
+  inset: -1.4em -2.6em;
+  z-index: -1;
+  border-radius: 50%;
+  background: radial-gradient(closest-side, rgba(var(--ui-ink), 0.42), rgba(var(--ui-ink), 0) 100%);
 }
 
 .scroll-hint.is-shown {
   opacity: 1;
-  transition: opacity 1.4s ease;
+  transform: translate(-50%, 0);
+  transition: opacity 1.4s ease, transform 1.4s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 .scroll-hint__line {
   position: relative;
   width: 1px;
-  height: 42px;
+  height: 48px;
   overflow: hidden;
-  background: linear-gradient(rgba(230, 227, 255, 0), rgba(230, 227, 255, 0.35));
+  background: linear-gradient(rgba(230, 227, 255, 0), rgba(230, 227, 255, 0.45));
+}
+
+.scroll-hint__fill {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(rgba(255, 210, 189, 0.4), var(--ui-peach));
+  box-shadow: 0 0 6px rgba(255, 210, 189, 0.8);
+  transform: scaleY(0);
+  transform-origin: top;
+  transition: transform 0.25s ease-out;
 }
 
 .scroll-hint__drop {
@@ -487,15 +541,22 @@ button {
 
 @keyframes scroll-hint-drop {
   to {
-    transform: translateY(52px);
+    transform: translateY(58px);
   }
 }
 
 .scroll-hint__label {
-  color: var(--ui-text-2);
-  font-size: var(--t-fine);
+  padding-left: var(--track-chrome); /* the tracking trails the last letter: keep the word centred */
+  color: var(--ui-lavender);
+  font-size: var(--t-meta);
   letter-spacing: var(--track-chrome);
-  text-shadow: var(--ui-halo);
+  text-shadow: var(--ui-halo), 0 0 14px rgba(230, 227, 255, 0.45);
+  white-space: nowrap;
+}
+
+/* Held on the word: the drop falls a little faster, like a nudge. */
+.scroll-hint.is-hold .scroll-hint__drop {
+  animation-duration: 1.6s;
 }
 
 /* The way through, on the right edge under the sound switch: a thin line that fills as the page is
@@ -583,12 +644,13 @@ button {
   z-index: 5;
   overflow-y: auto;
   overscroll-behavior: contain;
-  padding: max(56px, env(safe-area-inset-top)) 16px max(48px, env(safe-area-inset-bottom));
+  padding: 0 16px max(48px, env(safe-area-inset-bottom));
   background:
     radial-gradient(60% 40% at 50% 20%, rgba(230, 227, 255, 0.12), transparent 72%),
     radial-gradient(46% 34% at 66% 70%, rgba(255, 220, 204, 0.07), transparent 70%),
-    rgba(var(--ui-ink), 0.98);
+    rgb(var(--ui-ink)); /* opaque: the answer and the links under it must not show through */
   color: var(--ui-white);
+  scroll-padding-top: 72px; /* a section opened from a link clears the close button */
   animation: sheet-in 0.5s ease both;
 }
 
@@ -607,10 +669,22 @@ button {
   margin: 0 auto;
 }
 
+/* "close", on a bar that stays at the top as the sheet scrolls; the night fades in under it, so the
+   list never runs beneath the word. */
+.sheet__bar {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  display: flex;
+  justify-content: flex-end;
+  margin: 0 -16px;
+  padding: max(10px, env(safe-area-inset-top)) max(10px, env(safe-area-inset-right)) 12px;
+  background: linear-gradient(rgb(var(--ui-ink)) 62%, rgba(var(--ui-ink), 0));
+  pointer-events: none;
+}
+
 .sheet__close {
-  position: fixed;
-  top: max(10px, env(safe-area-inset-top));
-  right: max(10px, env(safe-area-inset-right));
+  pointer-events: auto;
 }
 
 .sheet__title {
@@ -625,6 +699,20 @@ button {
 
 .sheet__title:not(:first-child) {
   margin-top: 3.4rem;
+}
+
+/* What this is: set like the answer's meta, larger, in a comfortable measure. */
+.sheet__about {
+  color: var(--ui-text-2);
+  font-size: 0.95rem;
+  font-weight: 300;
+  line-height: 1.75;
+  letter-spacing: 0.02em;
+  text-wrap: pretty;
+}
+
+.sheet__about p {
+  margin: 0 0 1.1em;
 }
 
 .sheet__credit {

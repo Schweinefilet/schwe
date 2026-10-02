@@ -26,7 +26,7 @@ export default function Experience({ clips, diveCity, rainCity }) {
       <CameraRig />
       <Sky view />
       <Rain />
-      <HeroDrops clips={clips} diveCity={diveCity} />
+      <HeroDrops clips={clips} diveCity={diveCity} rainCity={rainCity?.city} />
       <AlignmentWord />
       <Puddle />
       <Splash clips={clips} rainCity={rainCity} />

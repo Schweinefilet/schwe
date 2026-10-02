@@ -96,6 +96,7 @@ export function initScroll({ onTop } = {}) {
   // the visitor, after a rest, scrolls on by ALIGN.hold.push. Armed again once the picture is back
   // before the word, or after a jump that lands before it.
   const word = { armed: true, holding: false, since: 0, push: 0 }
+  state.word = word // read by the scroll hint, which comes back during the hold (ui/ScrollHint.jsx)
   // Let go (the visitor scrolled on): the ending plays itself from the word, as it does once the picture
   // passes SPLASH.autoFrom. (Left to the scroll, a push that let go ran out just short of it.)
   const goOn = () => {

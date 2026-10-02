@@ -1,8 +1,5 @@
 import { StrictMode, Suspense, lazy } from 'react'
 import { createRoot } from 'react-dom/client'
-import '@fontsource/inter-tight/latin-200.css'
-import '@fontsource/inter-tight/latin-300.css'
-import '@fontsource/inter-tight/latin-400.css'
 import 'lenis/dist/lenis.css'
 import './styles.css'
 import App from './App.jsx'

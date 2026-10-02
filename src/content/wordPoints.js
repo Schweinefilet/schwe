@@ -1,4 +1,4 @@
-import fontUrl from '@fontsource/inter-tight/files/inter-tight-latin-600-normal.woff2?url'
+import fontUrl from '../assets/playwrite-au-vic-latin.woff2?url'
 
 // Samples points evenly over a word's glyphs. The word is drawn into an offscreen canvas with a
 // self-hosted font, then a jittered grid picks roughly `count` filled pixels.
@@ -10,7 +10,7 @@ let fontReady = null
 
 function loadFont() {
   if (!fontReady) {
-    const face = new FontFace(FAMILY, `url(${fontUrl})`, { weight: '600' })
+    const face = new FontFace(FAMILY, `url(${fontUrl})`, { weight: '100 400' })
     fontReady = face.load().then((f) => document.fonts.add(f))
   }
   return fontReady
@@ -21,13 +21,13 @@ export async function sampleWord(text, count, seed = 1) {
   const size = 240
   const canvas = document.createElement('canvas')
   const ctx = canvas.getContext('2d', { willReadFrequently: true })
-  ctx.font = `600 ${size}px "${FAMILY}"`
+  ctx.font = `400 ${size}px "${FAMILY}"`
   const m = ctx.measureText(text)
   const w = Math.ceil(m.actualBoundingBoxLeft + m.actualBoundingBoxRight) + 8
   const h = Math.ceil(m.actualBoundingBoxAscent + m.actualBoundingBoxDescent) + 8
   canvas.width = w
   canvas.height = h
-  ctx.font = `600 ${size}px "${FAMILY}"`
+  ctx.font = `400 ${size}px "${FAMILY}"`
   ctx.fillStyle = '#fff'
   ctx.fillText(text, m.actualBoundingBoxLeft + 4, m.actualBoundingBoxAscent + 4)
   const data = ctx.getImageData(0, 0, w, h).data
@@ -70,7 +70,7 @@ export async function wordContours(text, margin = 14, spacing = 5, inner = null)
   await loadFont()
   const size = 240
   const probe = document.createElement('canvas').getContext('2d')
-  probe.font = `600 ${size}px "${FAMILY}"`
+  probe.font = `400 ${size}px "${FAMILY}"`
   const m = probe.measureText(text)
   // sampleWord's canvas is the ink plus 4 px all round; these add room around it.
   const w = Math.ceil(m.actualBoundingBoxLeft + m.actualBoundingBoxRight) + 8
@@ -80,7 +80,7 @@ export async function wordContours(text, margin = 14, spacing = 5, inner = null)
     const H = h + 2 * pad
     const canvas = Object.assign(document.createElement('canvas'), { width: W, height: H })
     const ctx = canvas.getContext('2d', { willReadFrequently: true })
-    ctx.font = `600 ${size}px "${FAMILY}"`
+    ctx.font = `400 ${size}px "${FAMILY}"`
     ctx.fillStyle = ctx.strokeStyle = '#fff'
     ctx.lineWidth = 2 * stroke
     ctx.lineJoin = 'round'

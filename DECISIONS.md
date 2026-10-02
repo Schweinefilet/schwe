@@ -32,7 +32,7 @@
 - Poster atlas: 4×3 cells of 512×288 drawn into one canvas texture, mipmapped. Video budget: quality.decoders live videos, scored radius/distance, 25% hysteresis, 0.4 s poster↔video crossfade. Drops use 720p; dive drop uses full size.
 - Dive: camera stops 1.28 R from the dive drop (covers all screen corners). rig.dive eases IOR 1.333 → 1.0 and clip framing → cover-fit; at 1 the drop is the fullscreen clip from the same decoder. No separate fullscreen plane.
 - Camera keys: per-segment eases; identical consecutive keys are exact holds.
-- Alignment: Inter Tight 600 (OFL, @fontsource, self-hosted), seeded jittered-grid sampling; drops at random depth 3.5–18 from the eye; radius ∝ depth. Word width 62% of screen width, capped at 40% height; beads scale with it. Eye [0, 4.8, −41] → target [0, 4.8, −60]. Side swing-in from 12.3; arrive 13; hold to 14.5.
+- Alignment: Playwrite AU VIC 400 (OFL, self-hosted, src/assets), seeded jittered-grid sampling; drops at random depth 3.5–18 from the eye; radius ∝ depth. Word width 62% of screen width, capped at 40% height; beads scale with it. Eye [0, 4.8, −41] → target [0, 4.8, −60]. Side swing-in from 12.3; arrive 13; hold to 14.5.
 - Alignment drops are hidden until the dive is over (rig.wordReveal, 11.9 → 12.5): the drift flies close to the word's sight line, where it would already read in the distance. Pull-out swings 1.6 units off-axis.
 - Beats now: loader 0, rain 1, freeze 1.08, drift 2.5, dive 8, align 11.5, splash 14.5, end 19.
 - Splash: Blender 4.2 LTS Mantaflow (the pip bpy wheel's Mantaflow is broken), res 160, pool + 6 mm drop at 4 m/s, time scale 0.05, 72 frames. Bake ≈ 20 min on 4 CPU cores.
@@ -446,9 +446,22 @@ Drawing (src/scenes/PuddleRain.jsx, Puddle.jsx)
 - Checked in headless Chrome on the M5's GPU: a hard wheel scroll from 12.2 crawls through the forming word and holds at 13.0 (the scroll pulled back); two notches after the rest hold, three let go into the ending; arrow keys likewise; a hard touch swipe (CDP synthesizeScrollGesture) holds, a short one during the rest is ignored. `npm run ending:capture -- --auto N` scrolls into the word, waits, and scrolls on (review/ending-rain/ending-autoplay.mp4). npm test 96/96, smoke 6/6, build fine (bundle 1,589.7 kB).
 
 ## 2026-10-01 — UI critique pass (branch ui-critique-pass)
-- Type: Inter Tight (200/300/400, self-hosted) for the whole UI; nothing below 12 px; meta lines lowercase with 0.08em tracking (no more tracked capitals). Shared tokens in styles.css (--t-*, --ui-text-2/3, --ui-ink); text colours are solid, not opacities.
+- Type: Playwrite AU VIC (variable, wght 100–400, latin subset woff2 in src/assets, self-hosted; replaced Inter Tight) for the whole UI and the alignment word; nothing below 12 px; meta lines lowercase with 0.08em tracking (no more tracked capitals). Shared tokens in styles.css (--t-*, --ui-text-2/3, --ui-ink); text colours are solid, not opacities.
 - Voice: lowercase throughout (chrome, captions, the answer); city names keep their capitals. The answer's city is peach (AnswerHeadline.jsx) in the film, the sheet and the still page.
 - Shadows and the drop-label scrim are indigo (--ui-ink), not neutral black, and the scrim is lighter. Loader haze raised to a visible lavender/peach/mist drift; theme-color now #030307.
 - ProgressRail: thin line on the right edge that fills with scroll, a drop at its head, from "enter" on.
 - Final screen: "back to top" plus "cities" and "credits" links that open CitySheet (cities as they are now, full credits). The one-line credit under the button is gone; the full credits are one click away. Revert by restoring the compact Credits form if a licence wants the line on screen.
 - Focus: one 2 px lavender ring (.pill, .text-link, sound toggle, sheet links). Sound toggle: fixed label "Sound" with aria-pressed (pressed = sound on); faint ring so it reads as a button.
+
+## 2026-10-01 — UI/UX audit fixes (items 4–8 and the small things)
+- The word's hold says so: once its rest is over, the scroll hint comes back as "keep scrolling" / "keep swiping", and its line fills peach as the push counts toward letting go (state.word, shared from core/scroll.js).
+- The intro hint comes at 3 s (was 4.5 s), larger, lavender, on a soft indigo haze. Touch devices are told to swipe, not scroll (ui/input.js), in the hint and the loader's note.
+- The ending's rain city is always among the drops a tier shows (core/visibleDrops.js `keep`): it takes the last shown slot; positions never change. Fixed at "enter": a late answer never moves a city into a drop.
+- The first caption no longer counts drops ("look closely: some drops hold a city, as it is right now."): lower tiers show fewer, and "eight of the drops" contradicted "of the ten cities".
+- Light rain (under 2.5 mm/h) is not called the hardest: "of the ten cities, X is the wettest right now".
+- VH_PER_UNIT 100 → 80: about a fifth fewer wheel notches and swipes for the whole film; the pace limit still slows the picture at each drop.
+- Drop labels: a deeper, wider indigo haze, and the meta line in lavender with a tight dark halo, so they hold over bright bokeh.
+- Final screen: "cities · about · share". The sheet opens at the section asked for; it gains an "about" section; it is opaque (the answer showed through); "close" sits on a sticky bar that fades into the night. "share" uses the system share sheet, or copies the answer and the link ("link copied", in peach).
+- The progress rail leaves when the final screen arrives.
+- The word's sketch also fades with the camera's timeline distance from where it draws (0.3 units), so a camera rushing past never carries a full-size sketch off the screen's edge.
+- index.html paints the loader's night and pastel haze before any script arrives; the loader's type settles in over it (up a few pixels, out of a blur).

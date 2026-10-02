@@ -3,6 +3,8 @@ import { CITIES } from '../config.js'
 const WORDS = ['no', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten', 'eleven', 'twelve']
 // How many cities the site reads, in words ("ten"), for the copy that names the count.
 export const COUNT = WORDS[CITIES.length] ?? String(CITIES.length)
+// Below this rate (mm/h) rain is light (the usual class boundary).
+const LIGHT_RAIN_MM = 2.5
 
 // The ending's answer (content/rainChoice.js) in words, for the final screen and the still page:
 // [headline, meta, rate]. The headline names the city and says what the answer is measured against
@@ -12,7 +14,14 @@ export function answerLines(rain, city, time, clips) {
   if (!rain) return ['', null, null]
   if (rain.kind === 'now' && city) {
     const rate = rain.mmPerHour > 0 ? `${rain.mmPerHour < 1 ? rain.mmPerHour.toFixed(1) : Math.round(rain.mmPerHour)} mm/h` : null
-    const headline = rain.of === 1 ? `of the ${COUNT} cities, only ${city.name} has rain right now` : `of the ${COUNT} cities, it’s raining hardest in ${city.name}`
+    // "Hardest" over a drizzle reads as a claim the meta line takes back: light rain is named for what it is.
+    const light = rain.mmPerHour > 0 && rain.mmPerHour < LIGHT_RAIN_MM
+    const headline =
+      rain.of === 1
+        ? `of the ${COUNT} cities, only ${city.name} has rain right now`
+        : light
+          ? `of the ${COUNT} cities, ${city.name} is the wettest right now`
+          : `of the ${COUNT} cities, it’s raining hardest in ${city.name}`
     return [headline, [time, rain.label].filter(Boolean).join(' · '), rate]
   }
   if (rain.kind === 'soon' && city) {
