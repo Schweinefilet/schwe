@@ -1,5 +1,7 @@
 import { CITIES } from '../config.js'
 import { answerLines } from './answer.js'
+import AnswerHeadline from './AnswerHeadline.jsx'
+import CityList from './CityList.jsx'
 import Credits from './Credits.jsx'
 
 // For prefers-reduced-motion and for devices without usable WebGL (bible): one still frame of the
@@ -20,7 +22,9 @@ export default function StillPage({ clips, rainCity }) {
       <section className="still__answer" aria-live="polite">
         {headline ? (
           <>
-            <p className="still__headline">{headline}</p>
+            <p className="still__headline">
+              <AnswerHeadline text={headline} name={answerCity?.name} />
+            </p>
             {meta && (
               <p className="still__meta">
                 {meta}
@@ -37,18 +41,8 @@ export default function StillPage({ clips, rainCity }) {
           <p className="still__meta">reading the weather…</p>
         )}
       </section>
-      <ul className="still__cities">
-        {CITIES.map((c) => {
-          const row = byCity[c.id]
-          return (
-            <li key={c.id} className={c.id === rainCity?.city ? 'is-answer' : undefined}>
-              <span className="still__city">{c.name}</span>
-              <span className="still__cityMeta">{row ? [row.localTime, row.weatherLabel].filter(Boolean).join(' · ') : ''}</span>
-            </li>
-          )
-        })}
-      </ul>
-      <Credits long className="still__credit" />
+      <CityList clips={clips} rainCity={rainCity} />
+      <Credits className="still__credit" />
     </main>
   )
 }

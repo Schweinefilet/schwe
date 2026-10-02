@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import gsap from 'gsap'
 import { COUNT } from './answer.js'
+import { VERB } from './input.js'
 
 // The screen over the rain before it starts: the name, the question the site answers, a faint drop and
 // "enter". The click is the user gesture that unlocks audio and scrolling; the screen fades and the
@@ -35,11 +36,11 @@ export default function Loader({ onEnter, ready }) {
         <p className={`loader__status${slow && !ready ? ' is-shown' : ''}`} role="status">
           reading the weather in {COUNT} cities
         </p>
-        <button className={`loader__enter${ready ? ' is-ready' : ''}`} onClick={handleEnter} disabled={!ready}>
+        <button className={`pill pill--lg loader__enter${ready ? ' is-ready' : ''}`} onClick={handleEnter} disabled={!ready}>
           enter
         </button>
       </div>
-      <p className="loader__note">best with sound · scroll to move through the rain</p>
+      <p className="loader__note">best with sound · {VERB} to move through the rain</p>
     </div>
   )
 }

@@ -7,5 +7,6 @@ export const state = {
   unlocked: false,
   clips: null, // result of selectClips()
   diveCity: null, // chosen once per visit from the first selection
+  word: null, // the word's hold, from core/scroll.js: { holding, since (performance.now ms), push (units) }
   rainCity: null, // the ending's answer, chosen with it: { kind: 'now' | 'soon' | 'none' | 'unknown', city?, … }
 }

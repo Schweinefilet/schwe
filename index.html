@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-    <meta name="theme-color" content="#000000" />
+    <meta name="theme-color" content="#030307" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <!-- The star catalogue the city skies need before "enter": fetched alongside the app, not after it. -->
     <link rel="preload" href="/sky/stars.bin" as="fetch" type="application/octet-stream" crossorigin />
@@ -26,9 +26,23 @@
     <!-- Night sky brightness: Falchi F, Cinzano P, Duriscoe D, Kyba CCM, Elvidge CD, Baugh K, Portnov B, Rybnikova NA, Furgoni R (2016), The New World Atlas of Artificial Night Sky Brightness, GFZ Data Services, doi:10.5880/GFZ.1.4.2016.001, CC BY-NC 4.0; values sampled at each city. -->
     <!-- City skylines (public/skyline/): building data © OpenStreetMap contributors, ODbL (openstreetmap.org/copyright); terrain data courtesy of the U.S. Geological Survey (3DEP), via Mapzen terrain tiles. -->
     <!-- The paper describing the data (the atlas README asks every use to cite both): Falchi F et al. (2016), The new world atlas of artificial night sky brightness, Science Advances 2(6):e1600377, doi:10.1126/sciadv.1600377. -->
+    <!-- The loader's night and pastel haze, painted before any script or stylesheet arrives (a slow
+         connection otherwise sits on a blank screen). The app's loader (src/ui/Loader.jsx) draws the same
+         haze in the same place, then its type fades in over it. -->
+    <style>
+      html, body { margin: 0; background: #030307; }
+      .prepaint { position: fixed; inset: 0; overflow: hidden; background: #030307; }
+      .prepaint::before {
+        content: ''; position: absolute; inset: -12%;
+        background:
+          radial-gradient(48% 38% at 50% 44%, rgba(190, 178, 255, 0.22), transparent 72%),
+          radial-gradient(36% 30% at 62% 62%, rgba(255, 196, 172, 0.15), transparent 70%),
+          radial-gradient(42% 34% at 36% 34%, rgba(164, 202, 255, 0.14), transparent 70%);
+      }
+    </style>
   </head>
   <body>
-    <div id="root"></div>
+    <div id="root"><div class="prepaint" aria-hidden="true"></div></div>
     <script type="module" src="/src/main.jsx"></script>
   </body>
 </html>

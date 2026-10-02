@@ -19,6 +19,12 @@ const _size = new THREE.Vector2()
 const _o = new THREE.Vector3()
 const _x = new THREE.Vector3()
 const _y = new THREE.Vector3()
+// Timeline units over which the sketch fades as the camera moves away from where it draws.
+const SKETCH_FADE = 0.3
+const smoothstep = (a, b, x) => {
+  const t = Math.min(Math.max((x - a) / (b - a), 0), 1)
+  return t * t * (3 - 2 * t)
+}
 // Mean distance of the word's drops from the eye (density along each sight line ∝ depth^depthPower).
 const MEAN_DEPTH = (() => {
   const [a, b] = ALIGN.depth
@@ -189,8 +195,13 @@ function placeSketch(run, frame, camera, size, dt) {
   const S = ALIGN.sketch
   const on = state.time >= ALIGN.chimeAt && state.time <= ALIGN.arrive + S.until
   run.clock = Math.min(Math.max(run.clock + (on ? dt : -dt * S.retract), 0), run.total)
+  // The retraction runs in real time, so a camera rushing past (the ending playing itself) would carry
+  // a full-size sketch, swelling and cut off at the screen's edge. It also fades out with the camera's
+  // distance along the timeline from where it draws.
+  const away = Math.max(ALIGN.chimeAt - state.time, state.time - (ALIGN.arrive + S.until), 0)
+  const fade = 1 - smoothstep(0, SKETCH_FADE, away)
   const { canvas, ctx, grain } = el
-  if (run.clock <= 0) {
+  if (run.clock <= 0 || fade <= 0.001) {
     if (canvas.style.visibility !== 'hidden') canvas.style.visibility = 'hidden'
     run.key = ''
     return
@@ -206,6 +217,8 @@ function placeSketch(run, frame, camera, size, dt) {
   toScreen(_x, 1, 0)
   toScreen(_y, 0, 1)
   const m = [_x.x - _o.x, _x.y - _o.y, _y.x - _o.x, _y.y - _o.y, _o.x, _o.y]
+  const opacity = fade.toFixed(3)
+  if (run.opacity !== opacity) canvas.style.opacity = run.opacity = opacity
   const key = `${run.clock.toFixed(3)} ${m.map((v) => v.toFixed(1)).join(' ')}`
   if (key === run.key) return // nothing moved and nothing drew since the last frame
   run.key = key

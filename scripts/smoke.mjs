@@ -16,10 +16,10 @@ const CHROME = process.env.CHROME || '/Applications/Google Chrome.app/Contents/M
 const CASES = [
   { name: 'natural (live weather)', query: '' },
   { name: 'raining now', query: '?rain=mumbai', kind: 'now', city: 'mumbai', text: ['it’s raining hardest in Mumbai'] },
-  { name: 'rain soon', query: '?rain=london@40', kind: 'soon', city: 'london', text: ['Rain reaches London in about 40 min'] },
-  { name: 'rain imminent', query: '?rain=london@5', kind: 'soon', city: 'london', text: ['Rain is about to reach London'] },
-  { name: 'nowhere', query: '?rain=none', kind: 'none', text: ['Dry in all ten cities'] },
-  { name: 'weather not read', query: '?rain=unknown', kind: 'unknown', text: ['The weather couldn’t be read just now'] },
+  { name: 'rain soon', query: '?rain=london@40', kind: 'soon', city: 'london', text: ['rain reaches London in about 40 min'] },
+  { name: 'rain imminent', query: '?rain=london@5', kind: 'soon', city: 'london', text: ['rain is about to reach London'] },
+  { name: 'nowhere', query: '?rain=none', kind: 'none', text: ['dry in all ten cities'] },
+  { name: 'weather not read', query: '?rain=unknown', kind: 'unknown', text: ['the weather couldn’t be read just now'] },
 ]
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
