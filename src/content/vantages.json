@@ -140,7 +140,9 @@
         "at": [40.7129992, -74.0131894],
         "osm": "way/713565776"
       }
-    ]
+    ],
+    "span": [-60, 68],
+    "spanNote": "The skyline panorama's azimuths, degrees either side of the bearing (default -60 to 60): to 22 degrees, so Midtown's Empire State Building (11.3), 432 Park Avenue (18.3) and the Chrysler Building (18.9) stand in it, under the Brooklyn Bridge's deck as the photos from Pier 1 show them."
   },
   "mexico-city": {
     "from": {

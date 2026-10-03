@@ -29,18 +29,28 @@ void main() {
   b /= b.w;
   vec3 dir = normalize(b.xyz - a.xyz);
   vec3 o = cameraPosition;
-  vec2 xz;
+  // Where the ray meets the surface, not the flat ground: a vertex lifted straight up would leave its
+  // ray, and near the camera (a hand above the ground at the ending) a swell lifts the grid's lower
+  // edge clear of the screen's, showing the rain behind it. So the lift is found along the ray (a few
+  // fixed-point steps), bounded below the camera's height so the water never reaches the lens.
+  float hMax = max(0.7 * (o.y - uGroundY), 1e-3);
+  float t = ${FAR.toFixed(1)};
+  float h = 0.0;
   if (dir.y < -1e-5) {
-    float t = min((uGroundY - o.y) / dir.y, ${FAR.toFixed(1)});
-    xz = o.xz + dir.xz * t;
+    t = min((uGroundY - o.y) / dir.y, ${FAR.toFixed(1)});
+    for (int k = 0; k < 3; k++) {
+      vec2 xz = o.xz + dir.xz * t;
+      float dist = length(xz - o.xz);
+      // The surface lifts the grid near the camera; far away it would only alias, and only the normals
+      // (below) carry it.
+      h = surfaceAt(xz).x * uFieldWorld * (1.0 - smoothstep(5.0, 10.0, dist));
+      h = h > 0.0 ? hMax * h / (h + hMax) : h;
+      t = min((uGroundY + h - o.y) / dir.y, ${FAR.toFixed(1)});
+    }
+    vWorld = o + dir * t;
   } else {
-    xz = o.xz + normalize(dir.xz + vec2(1e-6)) * ${FAR.toFixed(1)};
+    vWorld = vec3(o.x, uGroundY, o.z) + normalize(vec3(dir.x, 0.0, dir.z) + vec3(1e-6, 0.0, 0.0)) * ${FAR.toFixed(1)};
   }
-  float dist = length(xz - o.xz);
-  // The surface lifts the grid near the camera; far away it would only alias, and only the normals
-  // (below) carry it.
-  float h = surfaceAt(xz).x * uFieldWorld * (1.0 - smoothstep(5.0, 10.0, dist));
-  vWorld = vec3(xz.x, uGroundY + h, xz.y);
   gl_Position = projectionMatrix * viewMatrix * vec4(vWorld, 1.0);
 }`
 

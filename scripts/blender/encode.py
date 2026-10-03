@@ -18,6 +18,8 @@ the renders' true, unclipped values, the river's streaks included as they averag
 
   <variant>-glow.png     RGB the tight part (half resolution), / scale; A the windows' share of it
   <variant>-halo.png     RGB the wide part (quarter resolution), / scale; A the windows' share of it
+  <variant>-star.png     RGB the lens's starbursts round the city's fixed lights (full resolution), / scale;
+                         A 0 (the windows are too dim for them); where the city sets STAR
 
 both over the panorama's azimuths and from its bottom to GLOW_TOP degrees above its top (a halo reaches
 past the tallest light), and the city's meta (public/skyline/<city>.json), which lists the variants and when each shows. Every
@@ -56,6 +58,12 @@ HAZE_PER_KM = 0.12  # SKY.skyline.hazePerKm (config.js): the clear air's haze th
 GLOW_TIGHT = ((0.12, 0.715), (0.4, 0.285))
 GLOW_WIDE = ((1.2, 0.38), (4.0, 0.62))
 GLOW_TOP = 10.0  # degrees of sky above the panorama the glow is kept for
+# The starbursts a stopped-down lens puts on bright point lights: the diffraction of its aperture's blades,
+# 2n spikes for an odd n. Set against set2/w0 at Pier 1 (the bridge's necklace and the waterfront's lamps):
+# 18 spikes, a nine-blade aperture, fading over about 0.3 degrees and gone by 1.2; the kernel sums to 1 and
+# the site gives it its strength (SKY.glow.star). Of the city's fixed lights only (lamps, the necklace,
+# beacons, floodlights): a lit window is far too dim to show a spike. Per city; London has none yet.
+STAR = {'new-york': {'spikes': 18, 'turn': 7.0, 'fade': 0.3, 'reach': 1.2, 'core': 0.05}}.get(CITY)
 # The river's streaks, for their glow: the mirror blurred up and down as waves of this slope spread it
 # (sigma of the along-view slope at 4 m/s with SKY.water.slopeScale 0.15: about 0.042; the reflected ray
 # tilts twice the slope).
@@ -121,7 +129,7 @@ def encode_set(prefix, tag):
         scales[name] = scale_for(rgb, cover)
         write(os.path.join(out_dir, f'{VARIANT}{tag}-{name}.png'), rgb / scales[name], a)
     clear = np.exp(-np.where(cover > 1e-3, d, 0.0) / 1000.0 * HAZE_PER_KM)[..., None]
-    return scales, cover, city[..., :3] * clear, win[..., :3] * clear, late[..., :3] * clear
+    return scales, cover, city[..., :3] * clear, win[..., :3] * clear, late[..., :3] * clear, np.where(cover > 0.5, d, np.inf)
 
 
 def blur(img, sigma, axis):
@@ -147,26 +155,51 @@ def shrink(img, k):
     return img[:h, :w].reshape(h // k, k, w // k, k, -1).mean(axis=(1, 3))
 
 
-scales, cover, lights, windows, late_windows = encode_set(SRC, '')
+scales, cover, lights, windows, late_windows, _ = encode_set(SRC, '')
+city_lights = lights  # before the river's streaks are added (a smeared streak makes no star)
 geometry = json.load(open(SRC + '.json'))  # written by skyline.py beside its renders
 mirror = geometry.get('mirror')
 el0, el1 = geometry['elevation']
 H, W = cover.shape
 ppd = H / (el1 - el0)
 if mirror:
-    scales['mirror'], _, m_lights, m_windows, _ = encode_set(SRC + '-mirror', '-mirror')
-    # The river's lights as they average over the waves: the mirror blurred up and down, read at the
-    # water's pixels (a pixel at -e reflects +e), times the water's reflectance there.
-    mppd = m_lights.shape[0] / (mirror['elevation'][1] - mirror['elevation'][0])
+    scales['mirror'], _, m_lights, m_windows, _, m_dist = encode_set(SRC + '-mirror', '-mirror')
+    # The river's lights as they average over the waves, read at the water's pixels, times the water's
+    # reflectance there: each facet's reflected ray (Gaussian taps over the slopes, STREAK_SIGMA) traced
+    # from where it leaves the water through the mirror's distances to the first surface it meets, as the
+    # site's water does (sky.glsl mirrorHit): a far light's streak stops at a pontoon, a pier or the
+    # embankment in front of it, instead of running through it (the mirror blurred up and down did).
+    m_top = mirror['elevation'][1]
+    hE = mirror['eyeAboveWater']
+    mppd = m_lights.shape[0] / (m_top - mirror['elevation'][0])
     m = np.concatenate([m_lights, m_windows], axis=-1)
-    m = blur(m, STREAK_SIGMA * mppd, 0)
     rows_el = el1 - (np.arange(H) + 0.5) / ppd  # each main row's elevation
+    water = np.nonzero(rows_el < -0.05)[0]
+    e = -rows_el[water]
+    dw = hE / np.tan(np.radians(e))  # metres out to the water, per row
+    cols = np.arange(W)[None, :]
+    streaks = np.zeros((H, W, 6))
+    taps = np.linspace(-2.5, 2.5, 11)
+    weights = np.exp(-0.5 * taps ** 2)
+    weights /= weights.sum()
+    for tj, wj in zip(taps, weights):
+        er_deg = e + tj * STREAK_SIGMA
+        ok = er_deg > 0  # tilted into the water: another wave's back, no light from the city
+        ter = np.tan(np.radians(np.maximum(er_deg, 0.0)))
+        hit = np.full((len(water), W), -1, dtype=np.int64)
+        # Through every mirror row between the water's own (e) and the tilted ray's (er), as the site's
+        # mirrorHit: the ray's distance at each, R = (hE - dw tan er) / (tan em - tan er).
+        steps = int(np.ceil(abs(tj) * STREAK_SIGMA * mppd)) + 1
+        for k in range(1, steps + 1):
+            em = e + (np.maximum(er_deg, 0.0) - e) * k / (steps + 1)
+            R = (hE - dw * ter) / (np.tan(np.radians(em)) - ter + 1e-12)
+            ri = np.clip(((m_top - em) * mppd).astype(np.int64), 0, m.shape[0] - 1)
+            meets = (m_dist[ri] * np.cos(np.radians(em))[:, None] <= np.abs(R)[:, None]) & (hit < 0)
+            hit = np.where(meets, ri[:, None], hit)
+        far = np.clip(((m_top - np.maximum(er_deg, 0.0)) * mppd).astype(np.int64), 0, m.shape[0] - 1)
+        ri = np.where(hit >= 0, hit, far[:, None])
+        streaks[water] += wj * m[ri, cols] * ok[:, None, None]
     e = np.clip(-rows_el, 0, None)
-    mrow = np.clip((mirror['elevation'][1] - e) * mppd - 0.5, 0, m.shape[0] - 1)  # mirror rows run top down too
-    lo = np.floor(mrow).astype(int)
-    hi = np.minimum(lo + 1, m.shape[0] - 1)
-    t = (mrow - lo)[:, None, None]
-    streaks = m[lo] * (1 - t) + m[hi] * t
     fresnel = 0.02 + 0.98 * (1 - np.sin(np.radians(e))) ** 5
     wet = ((1 - cover) * (rows_el < 0)[:, None] * fresnel[:, None])[..., None]
     lights = lights + streaks[..., :3] * wet
@@ -190,6 +223,45 @@ for name, parts, k in (('glow', GLOW_TIGHT, 2), ('halo', GLOW_WIDE, 4)):
     scales[name] = scale
     glow_meta[f'{name}Size'] = [g.shape[1], g.shape[0]]
 
+
+def star_kernel(spikes, turn, fade, reach, core):
+    """The starburst's point spread in pixels: `spikes` thin rays, the first `turn` degrees off vertical,
+    each fading as exp(-r / fade) / (1 + r / core) (degrees), cut at `reach`; splatted bilinearly from fine
+    steps along each ray, summing to 1."""
+    R = int(math.ceil(reach * ppd))
+    k = np.zeros((2 * R + 1, 2 * R + 1))
+    r = np.arange(1.0, R, 0.25)
+    w = np.exp(-r / (fade * ppd)) / (1 + r / (core * ppd))
+    for i in range(spikes):
+        a = math.radians(turn + 360.0 * i / spikes)
+        x, y = R + r * math.sin(a), R - r * math.cos(a)
+        x0, y0 = np.floor(x).astype(int), np.floor(y).astype(int)
+        fx, fy = x - x0, y - y0
+        for dx, dy, ww in ((0, 0, (1 - fx) * (1 - fy)), (1, 0, fx * (1 - fy)), (0, 1, (1 - fx) * fy), (1, 1, fx * fy)):
+            np.add.at(k, (y0 + dy, x0 + dx), w * ww)
+    return k / k.sum()
+
+
+if STAR:
+    # The starbursts: the city's point lights convolved with the kernel (by FFT), over the glow's rows. Only
+    # what stands well above its surroundings (the light less twice its 1.5 px blur): a lamp, a beacon, a
+    # necklace bulb; a floodlit wall, its ribs and pools included, cancels out (convolved whole it washed
+    # the bridge's tower and the Woolworth crown orange).
+    points = np.maximum(city_lights - 2.0 * gauss(city_lights, 1.5), 0.0)
+    src = np.concatenate([np.zeros((pad, W, 3)), points], axis=0)
+    kern = star_kernel(**STAR)
+    R = kern.shape[0] // 2
+    Hs, Ws = src.shape[0] + 2 * R, src.shape[1] + 2 * R
+    K = np.fft.rfft2(kern, s=(Hs, Ws))
+    star = np.stack([np.fft.irfft2(np.fft.rfft2(src[..., c], s=(Hs, Ws)) * K, s=(Hs, Ws))[R:R + src.shape[0], R:R + src.shape[1]]
+                     for c in range(3)], axis=-1)
+    star = np.maximum(star, 0.0)
+    top = float(np.percentile(star.max(axis=-1), 99.99))
+    scale = float(2 ** math.ceil(math.log2(max(top, 1e-6))))
+    write(os.path.join(out_dir, f'{VARIANT}-star.png'), star / scale, np.zeros(star.shape[:2]))
+    scales['star'] = scale
+    glow_meta['starSize'] = [star.shape[1], star.shape[0]]
+
 # The meta: the panorama's place in the sky (as skyline.py rendered it) and the variants.
 scene = json.load(open(os.path.join(ROOT, 'data', 'skyline', CITY, 'scene.json')))
 meta_path = os.path.join(ROOT, 'public', 'skyline', f'{CITY}.json')
@@ -204,7 +276,7 @@ meta.update({
     'city': CITY,
     'from': scene['vantage']['name'],
     'bearing': scene['vantage']['bearing'],
-    'azimuth': [round((scene['vantage']['bearing'] - span / 2) % 360, 3), span],  # where it starts (clockwise from north), width
+    'azimuth': [round((geometry.get('centre', scene['vantage']['bearing']) - span / 2) % 360, 3), span],  # where it starts (clockwise from north), width
     'elevation': el,  # degrees, bottom and top rows
     'distance': [NEAR, FAR],
     'size': [w, h],

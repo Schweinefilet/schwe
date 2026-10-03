@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import gsap from 'gsap'
-import { Bloom, EffectComposer, LUT, Noise, Vignette } from '@react-three/postprocessing'
+import { Bloom, EffectComposer, LUT, Noise, SMAA, Vignette } from '@react-three/postprocessing'
 import { BlendFunction, LUTCubeLoader } from 'postprocessing'
 import { GRADE } from '../config.js'
 import { quality } from '../core/quality.js'
@@ -9,8 +9,9 @@ import { useTier } from '../core/useTier.js'
 // How long an effect a tier drop removes takes to fade out before its pass goes.
 const LEAVE_SECONDS = 1.2
 
-// The final pass, identical for every frame of the site, footage included: the master LUT (the same
-// .cube used in Resolve), film grain and a light vignette. Bloom only catches the brightest values,
+// The final pass, identical for every frame of the site, footage included: edge antialiasing (SMAA: the
+// canvas has none of its own), the master LUT (the same .cube used in Resolve), film grain and a light
+// vignette. Bloom only catches the brightest values,
 // which in this scene are drop highlights. Which effects run depends on the quality tier; when a live
 // tier drop removes one, it fades out first instead of switching off between two frames.
 export default function Effects() {
@@ -51,6 +52,7 @@ export default function Effects() {
 
   return (
     <EffectComposer multisampling={0}>
+      {has('smaa') && <SMAA />}
       {has('bloom') && <Bloom ref={bloom} mipmapBlur luminanceThreshold={GRADE.bloomThreshold} luminanceSmoothing={0.1} intensity={GRADE.bloomIntensity} />}
       {lut && <LUT lut={lut} />}
       {has('grain') && <Noise ref={grain} premultiply blendFunction={BlendFunction.SCREEN} opacity={GRADE.grain} />}

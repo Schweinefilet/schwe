@@ -31,6 +31,10 @@ from mathutils import Vector, geometry
 
 sys.path.insert(0, os.path.dirname(__file__))
 import trees  # noqa: E402
+import facade  # noqa: E402
+import filler  # noqa: E402
+from filler import FACADE_ATTRS, facade_runs  # noqa: E402
+from nodekit import add_shaders, attr, grey_of, math_node, mix_colour, node, nodes_of, output  # noqa: E402
 
 ARGS = sys.argv[sys.argv.index('--') + 1:] if '--' in sys.argv else []
 
@@ -44,6 +48,11 @@ VIEW = arg('view', 'pano')
 SCALE = float(arg('scale', '0.25'))
 SAMPLES = int(arg('samples', '128'))
 SEASON = arg('season', 'leaf')  # leaf or bare
+# --only heroes: the city's landmarks alone (the silhouette check: is the city known by them?), nothing else.
+ONLY = arg('only')
+# --upto N: the 2026-10-02 geometry pass's steps up to N only, to compare them (1 landmarks, 2 filler
+# archetypes, 3 roof detail, 4 facade styles); everything by default.
+UPTO = int(arg('upto', '9'))
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
 OUT = arg('out', os.path.join(ROOT, 'data', 'skyline', CITY, 'render' if VIEW == 'pano' else 'ref-' + VIEW))
 
@@ -51,7 +60,8 @@ OUT = arg('out', os.path.join(ROOT, 'data', 'skyline', CITY, 'render' if VIEW ==
 SITE = {
     # Waterloo Bridge's deck about 12.5 m above mid tide; nothing in the view rises above 16 degrees
     # (the Eye's top, 136 m at 570 m, is at 13).
-    'london': {'eye': 8.5, 'water': -4.0, 'deck': 5.5, 'el': (-20.0, 16.0)},
+    # Curtain walls' glass coated as office glass is (n 1.8 to 2.4: 8 to 17% at normal incidence), not clear.
+    'london': {'eye': 8.5, 'water': -4.0, 'deck': 5.5, 'el': (-20.0, 16.0), 'facade': {'glass_ior': (1.8, 2.4)}},
     # z = 0 is the Lower Manhattan waterfront, 2.5 m above NAVD88 (extract.mjs TERRAIN; buildings stand on
     # the ground under them). The eye 1.6 m above the lowest Granite Prospect step at Pier 1's edge (about
     # 1.95 m NAVD88, USGS 3DEP lidar); the water at mean sea level, 0.063 m below NAVD88 (NOAA tide
@@ -64,12 +74,25 @@ SITE = {
     # photos read as sheets of sky and rows of lit floors, not scattered windows. And a building OSM gives a
     # colour but no material: light and warm is stone, darker red-brown brick, the rest glass (Lower
     # Manhattan's pre-war towers are masonry).
-    'new-york': {'eye': 1.05, 'water': -2.56, 'deck': 6.0, 'el': (-20.0, 22.0), 'busy': (0.08, 0.5),
-                 # Lit offices LED and fluorescent white, 3200 to 5200 K (the photos' windows warm white, not
-                 # London's homelier 2600 to 4800); each window 30% either way within its lit run; curtain
+    # Its own archetypes, palettes and roofs (filler.py, roofs.py: setback towers, lofts under cornices, water
+    # tanks; flat-tagged roofs no reason to keep OSM's plain massing).
+    'new-york': {'eye': 1.05, 'water': -2.56, 'deck': 6.0, 'el': (-20.0, 22.0), 'busy': (0.08, 0.5), 'archetypes': 'new-york',
+                 # Lit offices from warm 2800 K to LED and fluorescent white 5600 K (set2's night photos: mostly
+                 # warm yellow, some white, a few green-white tubes; London's homelier 2600 to 4800); curtain
                  # walls' panes 84% of the bay, so the mullions show.
                  'facade': {'lit_run': (4, 14), 'blind_run': (2, 6), 'glass_ior': (1.9, 2.6), 'colour_material': True, 'blinds': 0.18,
-                            'kelvin': (3200, 5200), 'each': 0.6, 'curtain_w': 0.42},
+                            'kelvin': (2800, 5600), 'each': 0.6, 'curtain_w': 0.42,
+                            # Art deco window strips on half the masonry setback towers, ribbon windows on a
+                            # third of the plain offices (facade.py style 5; filler.py).
+                            'deco': True, 'ribbon': 0.33,
+                            # Curtain walls' panes and reflections tinted by their glass's hue (facade.py).
+                            'glass_tint': 0.7,
+                            # Lit windows as dotted lines, not slabs (facade.py window_light): light at the
+                            # ceiling, 18% of a lit run's windows dark, a long-tailed brightness, 12% of runs
+                            # fluorescent (each window's own brightness replaces 'each' here).
+                            'window_light': {'dropout': 0.18, 'fluorescent': 0.12, 'gain': 4.9}},
+                 # Red aviation lights on every roof 150 m up or more (filler.py beacons).
+                 'beacons': True,
                  # Trees OSM gives no height: 7 to 14 m (chosen; the mapped ones here are young, median 7 m, and the
                  # waterfront's are small in the photos), not London's 14 to 26 m planes.
                  'tree_h': (7, 14),
@@ -101,11 +124,19 @@ REFS = {
         # parapet, 8 Spruce, Woolworth's crown, 30 Park Place, 60 Wall Street's crown, 55 Water and One New
         # York Plaza (25 px rms at 3840).
         'ref2': {'pos': (84, 135), 'eye': 2.63, 'heading': 288.75, 'hfov': 64.87, 'pitch': 7.44, 'size': (1920, 1280)},
+        # Not a photo: an inspection view 160 m over the East River onto Lower Manhattan's roofs (the roofs and
+        # facades are seen nearly edge-on from the vantage).
+        'aerial': {'pos': (-250, 330), 'eye': 160.0, 'heading': 300.0, 'hfov': 38.0, 'pitch': -11.0, 'size': (1920, 1080)},
     },
 }
 
 scene_data = json.load(open(os.path.join(ROOT, 'data', 'skyline', CITY, 'scene.json')))
 BEARING = scene_data['vantage']['bearing']
+# The panorama's azimuths either side of the bearing (the vantage's `span`, src/content/vantages.json): it
+# is rendered about their middle, CENTRE, PANO['span'] wide.
+VIEW_SPAN = scene_data['vantage'].get('span', [-60, 60])
+CENTRE = (BEARING + (VIEW_SPAN[0] + VIEW_SPAN[1]) / 2) % 360
+PANO['span'] = float(VIEW_SPAN[1] - VIEW_SPAN[0])
 rng = random.Random(7)
 
 bpy.ops.wm.read_factory_settings(use_empty=True)
@@ -113,213 +144,6 @@ scene = bpy.context.scene
 
 
 # ---- Materials ------------------------------------------------------------------------------------
-
-def nodes_of(mat):
-    mat.use_nodes = True
-    nt = mat.node_tree
-    for n in list(nt.nodes):
-        nt.nodes.remove(n)
-    return nt
-
-
-def node(nt, kind, **inputs):
-    n = nt.nodes.new(kind)
-    for k, v in inputs.items():
-        if k in n.inputs:
-            n.inputs[k].default_value = v
-        else:
-            setattr(n, k, v)
-    return n
-
-
-def math_node(nt, op, a, b=None, c=None, clamp=False):
-    n = nt.nodes.new('ShaderNodeMath')
-    n.operation = op
-    n.use_clamp = clamp
-    for i, v in enumerate((a, b, c)):
-        if v is None:
-            continue
-        if isinstance(v, (int, float)):
-            n.inputs[i].default_value = v
-        else:
-            nt.links.new(v, n.inputs[i])
-    return n.outputs[0]
-
-
-def attr(nt, name, kind='Fac'):
-    n = nt.nodes.new('ShaderNodeAttribute')
-    n.attribute_name = name
-    return n.outputs[kind]
-
-
-def grey_of(nt, value):
-    c = nt.nodes.new('ShaderNodeCombineColor')
-    for ch in ('Red', 'Green', 'Blue'):
-        nt.links.new(value, c.inputs[ch])
-    return c.outputs[0]
-
-
-def mix_colour(nt, fac, a, b, blend='MIX'):
-    m = nt.nodes.new('ShaderNodeMix')
-    m.data_type = 'RGBA'
-    m.blend_type = blend
-    for sock, v in (('Factor', fac), ('A', a), ('B', b)):
-        if isinstance(v, (int, float)):
-            m.inputs[sock].default_value = v
-        elif isinstance(v, tuple):
-            m.inputs[sock].default_value = (*v, 1.0) if len(v) == 3 else v
-        else:
-            nt.links.new(v, m.inputs[sock])
-    return m.outputs['Result']
-
-
-def facade_material():
-    """Walls with windows in their own metres (UV u along the wall, v up it). Per building face
-    attributes: wall colour, style (0 curtain wall, 1 punched windows, 2 masonry with tall narrow
-    windows, 3 none: turrets, pinnacles, roofs mapped as parts), bay width, floor height, the window's
-    half width and height (fractions of its cell), frame lightness, how busy it is at night, a seed.
-    Each window its own: dark rooms, blinds and curtains by day; lit or not, and how, by night."""
-    mat = bpy.data.materials.new('facade')
-    nt = nodes_of(mat)
-    L = nt.links
-    uv = node(nt, 'ShaderNodeUVMap', uv_map='walls')
-    sep = node(nt, 'ShaderNodeSeparateXYZ')
-    L.new(uv.outputs['UV'], sep.inputs[0])
-    u, v = sep.outputs['X'], sep.outputs['Y']
-    bay, floorh, busy, seed = attr(nt, 'bay'), attr(nt, 'floorh'), attr(nt, 'busy'), attr(nt, 'seed')
-    style, win_w, win_h, frame = attr(nt, 'style'), attr(nt, 'win_w'), attr(nt, 'win_h'), attr(nt, 'frame')
-    cu = math_node(nt, 'DIVIDE', u, bay)
-    cv = math_node(nt, 'DIVIDE', v, floorh)
-    ix, iy = math_node(nt, 'FLOOR', cu), math_node(nt, 'FLOOR', cv)
-    fx, fy = math_node(nt, 'FRACT', cu), math_node(nt, 'FRACT', cv)
-    dx = math_node(nt, 'ABSOLUTE', math_node(nt, 'SUBTRACT', fx, 0.5))
-    dy = math_node(nt, 'ABSOLUTE', math_node(nt, 'SUBTRACT', fy, 0.52))
-    has = math_node(nt, 'LESS_THAN', style, 2.5)
-    outer = math_node(nt, 'MULTIPLY', math_node(nt, 'MULTIPLY', math_node(nt, 'LESS_THAN', dx, win_w), math_node(nt, 'LESS_THAN', dy, win_h)), has)
-    # The frame: 9 cm all round.
-    fw = math_node(nt, 'DIVIDE', 0.09, bay)
-    fh = math_node(nt, 'DIVIDE', 0.09, floorh)
-    inner = math_node(nt, 'MULTIPLY', math_node(nt, 'MULTIPLY', math_node(nt, 'LESS_THAN', dx, math_node(nt, 'SUBTRACT', win_w, fw)),
-                                                math_node(nt, 'LESS_THAN', dy, math_node(nt, 'SUBTRACT', win_h, fh))), has)
-    frame_mask = math_node(nt, 'SUBTRACT', outer, inner)
-    # Two random draws per window: the first (lit or not at night, and how) shared along a run of `run_l`
-    # bays of the floor, the second (blind or curtain by day) along `run_b` bays: an office floor is lit or
-    # dark as a whole, its blinds drawn along a stretch. A run of 1 (a city that sets none) is each window
-    # its own.
-    run_l = math_node(nt, 'MAXIMUM', attr(nt, 'run_l'), 1.0)
-    run_b = math_node(nt, 'MAXIMUM', attr(nt, 'run_b'), 1.0)
-    draws = []
-    for k, run in ((0.0, run_l), (31.7, run_b)):
-        comb = node(nt, 'ShaderNodeCombineXYZ')
-        L.new(math_node(nt, 'FLOOR', math_node(nt, 'DIVIDE', ix, run)), comb.inputs['X'])
-        L.new(iy, comb.inputs['Y'])
-        L.new(math_node(nt, 'ADD', seed, k), comb.inputs['Z'])
-        wn = node(nt, 'ShaderNodeTexWhiteNoise', noise_dimensions='3D')
-        L.new(comb.outputs[0], wn.inputs['Vector'])
-        sc = node(nt, 'ShaderNodeSeparateColor')
-        L.new(wn.outputs['Color'], sc.inputs[0])
-        draws.append((wn.outputs['Value'], wn.outputs['Color'], sc.outputs))
-    (r1, c1, s1), (r2, c2, s2) = draws
-    # By day: a dark room behind the glass, or blinds or curtains (about a third), lighter and varied.
-    room = grey_of(nt, math_node(nt, 'MULTIPLY_ADD', r2, 0.05, 0.012))
-    # Blinds and curtains: white, cream and grey, lighter and darker; no colours at this range.
-    blind_col = mix_colour(nt, s2[0], (0.46, 0.42, 0.35), (0.5, 0.5, 0.5))
-    blind_col = mix_colour(nt, math_node(nt, 'MULTIPLY_ADD', s2[2], 0.55, 0.05), blind_col, (0.05, 0.05, 0.05))
-    # About a third of windows with blinds or curtains drawn; a city's own share where SITE gives one. Behind a
-    # curtain wall's tinted glass (style 0) they read darker.
-    blind = math_node(nt, 'GREATER_THAN', r2, 1.0 - SITE.get('facade', {}).get('blinds', 0.36))
-    blind_col = mix_colour(nt, math_node(nt, 'LESS_THAN', style, 0.5), blind_col, (0.5, 0.5, 0.5), 'MULTIPLY')
-    interior = mix_colour(nt, blind, room, blind_col)
-    glass = node(nt, 'ShaderNodeBsdfPrincipled', Roughness=0.6)
-    L.new(interior, glass.inputs['Base Color'])
-    glass.inputs['Coat Weight'].default_value = 1.0
-    # Clear glass (n 1.52, 4% at normal incidence), or a building's reflective coating where the city gives
-    # one ('glass_ior': an office tower's low-e glass reflects several times more).
-    L.new(math_node(nt, 'MAXIMUM', attr(nt, 'glass_ior'), 1.52), glass.inputs['Coat IOR'])
-    L.new(math_node(nt, 'MULTIPLY_ADD', s2[1], 0.05, 0.01), glass.inputs['Coat Roughness'])  # panes not quite flat
-    # By night: lit rooms, warm homes to cool offices, each its own brightness.
-    # The evening's lit windows, or (window_late 1) the few of them still lit late at night.
-    late = node(nt, 'ShaderNodeValue', name='window_late', label='window_late')
-    late.outputs[0].default_value = 0.0
-    share = math_node(nt, 'SUBTRACT', 1.0, math_node(nt, 'MULTIPLY', late.outputs[0], 1.0 - LATE_SHARE))
-    lit = math_node(nt, 'MULTIPLY', math_node(nt, 'LESS_THAN', r1, math_node(nt, 'MULTIPLY', busy, share)), inner)
-    k0, k1 = SITE.get('facade', {}).get('kelvin', (2600, 4800))  # warm homes to cool offices
-    temp = math_node(nt, 'MULTIPLY_ADD', s1[0], k1 - k0, k0)
-    bb = node(nt, 'ShaderNodeBlackbody')
-    L.new(temp, bb.inputs['Temperature'])
-    gain = node(nt, 'ShaderNodeValue', name='city_gain', label='city_gain')
-    gain.outputs[0].default_value = 1.0
-    win_gain = node(nt, 'ShaderNodeValue', name='window_gain', label='window_gain')
-    win_gain.outputs[0].default_value = 1.0
-    # A drawn curtain or blind glows dimmer than a bare window.
-    dim = math_node(nt, 'SUBTRACT', 1.0, math_node(nt, 'MULTIPLY', blind, 0.6))
-    # Each window a little its own within its lit run.
-    comb = node(nt, 'ShaderNodeCombineXYZ')
-    L.new(ix, comb.inputs['X'])
-    L.new(iy, comb.inputs['Y'])
-    L.new(math_node(nt, 'ADD', seed, 57.1), comb.inputs['Z'])
-    own = node(nt, 'ShaderNodeTexWhiteNoise', noise_dimensions='3D')
-    L.new(comb.outputs[0], own.inputs['Vector'])
-    spread = SITE.get('facade', {}).get('each', 0.5)
-    each = math_node(nt, 'MULTIPLY_ADD', own.outputs['Value'], spread, 1.0 - spread / 2)
-    strength = math_node(nt, 'MULTIPLY', math_node(nt, 'MULTIPLY', math_node(nt, 'MULTIPLY', math_node(nt, 'MULTIPLY', math_node(nt, 'MULTIPLY_ADD', s1[1], 5.0, 1.5), lit), dim), win_gain.outputs[0]), each)
-    emit = node(nt, 'ShaderNodeEmission')
-    L.new(bb.outputs[0], emit.inputs['Color'])
-    L.new(strength, emit.inputs['Strength'])
-    glass_lit = node(nt, 'ShaderNodeAddShader')
-    L.new(glass.outputs[0], glass_lit.inputs[0])
-    L.new(emit.outputs[0], glass_lit.inputs[1])
-    # Wall: its colour with grime at two scales, rain streaks down it, darker at street level, and on
-    # masonry a lighter string course at each floor.
-    tc = node(nt, 'ShaderNodeTexCoord')
-    grime = node(nt, 'ShaderNodeTexNoise', noise_dimensions='3D')
-    grime.inputs['Scale'].default_value = 0.35
-    grime.inputs['Detail'].default_value = 6.0
-    L.new(tc.outputs['Object'], grime.inputs['Vector'])
-    streak_map = node(nt, 'ShaderNodeMapping')
-    streak_map.inputs['Scale'].default_value = (2.2, 2.2, 0.06)
-    L.new(tc.outputs['Object'], streak_map.inputs['Vector'])
-    streak = node(nt, 'ShaderNodeTexNoise', noise_dimensions='3D')
-    streak.inputs['Scale'].default_value = 1.0
-    streak.inputs['Detail'].default_value = 3.0
-    L.new(streak_map.outputs[0], streak.inputs['Vector'])
-    k = math_node(nt, 'MULTIPLY', math_node(nt, 'MULTIPLY_ADD', grime.outputs['Fac'], 0.4, 0.8), math_node(nt, 'MULTIPLY_ADD', streak.outputs['Fac'], 0.35, 0.83))
-    k = math_node(nt, 'MULTIPLY', k, math_node(nt, 'MULTIPLY_ADD', math_node(nt, 'LESS_THAN', v, 3.5), -0.18, 1.0))
-    course = math_node(nt, 'MULTIPLY', math_node(nt, 'LESS_THAN', fy, 0.05), math_node(nt, 'GREATER_THAN', style, 1.5))
-    k = math_node(nt, 'MULTIPLY', k, math_node(nt, 'MULTIPLY_ADD', course, 0.12, 1.0))
-    wall_col = mix_colour(nt, 1.0, attr(nt, 'wall', 'Color'), grey_of(nt, k), 'MULTIPLY')
-    wall = node(nt, 'ShaderNodeBsdfPrincipled', Roughness=0.86)
-    L.new(wall_col, wall.inputs['Base Color'])
-    # Floodlit at night (the 'flood' attribute, per building): stone lit warm, as bright as its colour
-    # is light (radiance = albedo x irradiance / pi), in pools from the fittings; windows stay dark.
-    pools = node(nt, 'ShaderNodeTexNoise', noise_dimensions='3D')
-    pools.inputs['Scale'].default_value = 0.12
-    pools.inputs['Detail'].default_value = 2.0
-    L.new(tc.outputs['Object'], pools.inputs['Vector'])
-    flood_bb = node(nt, 'ShaderNodeBlackbody')
-    flood_bb.inputs['Temperature'].default_value = 2600.0  # sodium-warm, as the Palace is lit
-    flood_col = mix_colour(nt, 1.0, wall_col, flood_bb.outputs[0], 'MULTIPLY')
-    flood_k = math_node(nt, 'MULTIPLY', math_node(nt, 'MULTIPLY', attr(nt, 'flood'), math_node(nt, 'MULTIPLY_ADD', pools.outputs['Fac'], 1.2, 0.4)), gain.outputs[0])
-    flood_emit = node(nt, 'ShaderNodeEmission')
-    L.new(flood_col, flood_emit.inputs['Color'])
-    L.new(math_node(nt, 'MULTIPLY', flood_k, FLOOD_GAIN), flood_emit.inputs['Strength'])
-    wall_lit = node(nt, 'ShaderNodeAddShader')
-    L.new(wall.outputs[0], wall_lit.inputs[0])
-    L.new(flood_emit.outputs[0], wall_lit.inputs[1])
-    frames = node(nt, 'ShaderNodeBsdfPrincipled', Roughness=0.5)
-    L.new(grey_of(nt, frame), frames.inputs['Base Color'])
-    wf = node(nt, 'ShaderNodeMixShader')
-    L.new(frame_mask, wf.inputs['Fac'])
-    L.new(wall_lit.outputs[0], wf.inputs[1])
-    L.new(frames.outputs[0], wf.inputs[2])
-    mix = node(nt, 'ShaderNodeMixShader')
-    L.new(inner, mix.inputs['Fac'])
-    L.new(wf.outputs[0], mix.inputs[1])
-    L.new(glass_lit.outputs[0], mix.inputs[2])
-    out = node(nt, 'ShaderNodeOutputMaterial')
-    L.new(mix.outputs[0], out.inputs['Surface'])
-    return mat
-
 
 def simple_material(name, colour, roughness=0.8, **extra):
     mat = bpy.data.materials.new(name)
@@ -329,28 +153,6 @@ def simple_material(name, colour, roughness=0.8, **extra):
         b.inputs[k].default_value = v
     out = node(nt, 'ShaderNodeOutputMaterial')
     nt.links.new(b.outputs[0], out.inputs['Surface'])
-    return mat
-
-
-def roof_material():
-    """Roofs; floodlit ones (a crown's pyramid, a spire: the 'flood' attribute) lit as the walls are."""
-    mat = bpy.data.materials.new('roof')
-    nt = nodes_of(mat)
-    col = attr(nt, 'roofc', 'Color')
-    b = node(nt, 'ShaderNodeBsdfPrincipled', Roughness=0.7)
-    nt.links.new(col, b.inputs['Base Color'])
-    gain = node(nt, 'ShaderNodeValue', name='city_gain', label='city_gain')
-    gain.outputs[0].default_value = 1.0
-    bb = node(nt, 'ShaderNodeBlackbody')
-    bb.inputs['Temperature'].default_value = 2600.0
-    e = node(nt, 'ShaderNodeEmission')
-    nt.links.new(mix_colour(nt, 1.0, col, bb.outputs[0], 'MULTIPLY'), e.inputs['Color'])
-    nt.links.new(math_node(nt, 'MULTIPLY', math_node(nt, 'MULTIPLY', attr(nt, 'flood'), gain.outputs[0]), FLOOD_GAIN), e.inputs['Strength'])
-    add = node(nt, 'ShaderNodeAddShader')
-    nt.links.new(b.outputs[0], add.inputs[0])
-    nt.links.new(e.outputs[0], add.inputs[1])
-    out = node(nt, 'ShaderNodeOutputMaterial')
-    nt.links.new(add.outputs[0], out.inputs['Surface'])
     return mat
 
 
@@ -388,12 +190,16 @@ def water_material():
     return mat
 
 
-def emission_material(name, colour, strength):
+def emission_material(name, colour, strength, base=None):
+    """A light's glowing part. With `base`, the housing or glass seen by day when the light is off (an
+    Emission alone renders black in the daylight pass)."""
     mat = bpy.data.materials.new(name)
     nt = nodes_of(mat)
     e = node(nt, 'ShaderNodeEmission', Strength=strength, Color=(*colour, 1))
-    out = node(nt, 'ShaderNodeOutputMaterial')
-    nt.links.new(e.outputs[0], out.inputs['Surface'])
+    shader = e.outputs[0]
+    if base:
+        shader = add_shaders(nt, node(nt, 'ShaderNodeBsdfPrincipled', Roughness=0.4, **{'Base Color': (*base, 1)}).outputs[0], shader)
+    output(nt, shader)
     return mat
 
 
@@ -425,8 +231,8 @@ def leaf_material():
 
 
 MAT = {
-    'facade': facade_material(),
-    'roof': roof_material(),
+    'facade': facade.facade_material(SITE, LATE_SHARE, FLOOD_GAIN),
+    'roof': facade.roof_material(FLOOD_GAIN),
     'ground': simple_material('ground', (0.05, 0.05, 0.048), 0.75),
     'embankment': simple_material('embankment', (0.22, 0.2, 0.17), 0.85),
     'water': water_material(),
@@ -434,127 +240,8 @@ MAT = {
     'bark': simple_material('bark', (0.11, 0.1, 0.085), 0.9),  # a plane's mottled grey-olive bark, twigs grey-brown
     'iron': simple_material('iron', (0.02, 0.022, 0.025), 0.45, Metallic=0.8),
     'bridge': simple_material('bridge', (0.16, 0.16, 0.15), 0.8),
-    'bulb': emission_material('bulb', (1.0, 0.78, 0.52), 60.0),
+    'bulb': emission_material('bulb', (1.0, 0.78, 0.52), 60.0, base=(0.5, 0.48, 0.42)),
 }
-
-
-# ---- OSM colours and materials → linear albedo -------------------------------------------------------
-
-NAMED = {
-    'brown': (0.20, 0.11, 0.07), 'light_brown': (0.36, 0.25, 0.16), 'white': (0.62, 0.61, 0.57), 'gray': (0.30, 0.30, 0.29),
-    'grey': (0.30, 0.30, 0.29), 'lightgrey': (0.45, 0.45, 0.43), 'darkgrey': (0.12, 0.12, 0.12), 'red': (0.30, 0.09, 0.06),
-    'beige': (0.52, 0.45, 0.34), 'black': (0.03, 0.03, 0.03), 'yellow': (0.55, 0.45, 0.2), 'cream': (0.62, 0.56, 0.44),
-}
-MATERIAL_ALBEDO = {
-    # Weathered, not quarried: Portland stone greys and blackens in London's air.
-    'brick': (0.21, 0.13, 0.09), 'stone': (0.40, 0.37, 0.31), 'sandstone': (0.38, 0.30, 0.20), 'plaster': (0.50, 0.48, 0.44),
-    'concrete': (0.30, 0.29, 0.27), 'glass': (0.10, 0.11, 0.12), 'metal': (0.28, 0.29, 0.30), 'wood': (0.2, 0.13, 0.08),
-}
-
-
-def srgb_to_linear(c):
-    return c / 12.92 if c <= 0.04045 else ((c + 0.055) / 1.055) ** 2.4
-
-
-def desaturate(c, k=0.55):
-    # OSM colours are picked from a palette, far more saturated than weathered stone or brick.
-    grey = 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2]
-    return tuple(grey + (x - grey) * k for x in c)
-
-
-LONDON_BRICK = [(0.24, 0.19, 0.13), (0.21, 0.17, 0.12), (0.19, 0.09, 0.06), (0.16, 0.08, 0.055)]  # yellow stock, red
-
-
-def albedo(b):
-    """Weathered wall colour (linear). OSM colours are picked from a palette, lighter and purer than
-    stone or brick after a century of London air: scaled down and desaturated."""
-    col = b.get('colour')
-    if col and col.startswith('#') and len(col) == 7:
-        return desaturate(tuple(min(srgb_to_linear(int(col[i:i + 2], 16) / 255) * 0.6, 0.45) for i in (1, 3, 5)), 0.5)
-    if col in NAMED:
-        return desaturate(tuple(c * 0.8 for c in NAMED[col]), 0.7)
-    if b.get('material') == 'brick':
-        return rng.choice(LONDON_BRICK)
-    if b.get('material') in MATERIAL_ALBEDO:
-        return MATERIAL_ALBEDO[b['material']]
-    # London's defaults: brick houses, Portland stone for the grand and civic, concrete otherwise.
-    kind = b.get('kind', 'yes')
-    if kind in ('house', 'residential', 'apartments', 'terrace'):
-        return rng.choice(LONDON_BRICK)
-    if kind in ('government', 'civic', 'public', 'church', 'cathedral', 'museum', 'hotel') or b.get('listed'):
-        return MATERIAL_ALBEDO['stone']
-    return (0.3, 0.29, 0.27)
-
-
-def material_from_colour(colour):
-    """A wall material guessed from OSM's colour where no material is mapped: light and warm (sandy, beige,
-    cream, pale grey-tan) stone; darker, red-brown brick; anything else None (glass and metal)."""
-    named = {'beige': 'stone', 'cream': 'stone', 'brown': 'brick', 'red': 'brick', 'white': 'stone', 'tan': 'stone'}
-    if not colour:
-        return None
-    if colour in named:
-        return named[colour]
-    if not (colour.startswith('#') and len(colour) == 7):
-        return None
-    r, g, bl = (int(colour[i:i + 2], 16) / 255 for i in (1, 3, 5))
-    lum = 0.2126 * r + 0.7152 * g + 0.0722 * bl
-    if r - bl > 0.04 and max(r, g, bl) - min(r, g, bl) < 0.3 and lum > 0.45:
-        return 'stone'
-    if r - bl > 0.08 and r > g and lum <= 0.45:
-        return 'brick'
-    return None
-
-
-HOMES = ('house', 'residential', 'apartments', 'terrace', 'dormitory', 'flats')
-GRAND = ('government', 'civic', 'public', 'church', 'cathedral', 'chapel', 'museum', 'palace', 'castle', 'hotel', 'university')
-
-
-def facade_params(b, area):
-    """Style, bay width, floor height, window half width and height (fractions of the cell), frame
-    lightness, night busyness: from what OSM says of the building."""
-    kind = b.get('kind', 'yes')
-    within = (b.get('within') or {}).get('kind')
-    mat = b.get('material')
-    if mat in ('limestone', 'marble', 'granite', 'masonry'):
-        mat = 'stone'
-    if mat is None and SITE.get('facade', {}).get('colour_material'):
-        mat = material_from_colour(b.get('colour'))
-    span = b['height'] - b['min']
-    homes = kind in HOMES or within in HOMES
-    # The evening's lit share, about 18% across the city (the user's choice, 2026-09-29), homes more; a
-    # city's own where SITE gives one (offices; homes alike).
-    if 'busy' in SITE:
-        busy = rng.uniform(*SITE['busy'])
-    else:
-        busy = rng.uniform(0.06, 0.34) if homes else rng.uniform(0.03, 0.3)
-    # Turrets, pinnacles, spires, chimneys, and roofs mapped as parts: no windows.
-    if area < 30 or kind in ('roof', 'chimney', 'spire', 'pinnacle') or (b['min'] > 0 and span < 5):
-        return 3, 3.0, 3.0, 0, 0, 0.3, 0.0
-    grand = kind in GRAND or within in GRAND or b.get('listed')
-    if mat == 'glass' or (b['height'] >= 60 and mat not in ('brick', 'stone', 'sandstone') and not grand):
-        # Curtain wall: glass floor to ceiling between thin mullions, a dark spandrel at each floor.
-        return 0, rng.uniform(1.35, 1.8), rng.uniform(3.6, 4.2), SITE.get('facade', {}).get('curtain_w', 0.47), rng.uniform(0.36, 0.42), 0.06, busy
-    if grand and mat not in ('glass', 'concrete'):
-        # Masonry: tall narrow windows in wide bays, high floors; gothic and classical alike at this range.
-        return 2, rng.uniform(2.4, 3.4), rng.uniform(4.2, 5.4), rng.uniform(0.15, 0.21), rng.uniform(0.3, 0.36), 0.28, busy * 0.6
-    if homes or mat == 'brick':
-        # Sash windows, white-painted frames.
-        return 1, rng.uniform(2.6, 3.3), rng.uniform(2.9, 3.3), rng.uniform(0.2, 0.26), rng.uniform(0.27, 0.33), rng.uniform(0.5, 0.7), busy
-    # Offices and shops: wider windows, dark frames.
-    return 1, rng.uniform(2.2, 3.0), rng.uniform(3.5, 4.0), rng.uniform(0.28, 0.38), rng.uniform(0.28, 0.34), rng.uniform(0.04, 0.12), busy
-
-
-FACADE_ATTRS = ('wall', 'style', 'bay', 'floorh', 'win_w', 'win_h', 'frame', 'busy', 'seed', 'roofc', 'flood', 'run_l', 'run_b', 'glass_ior')
-
-
-def facade_runs(style):
-    """How a building's windows go together (SITE['facade'], where the city gives it): lit floors in runs of
-    bays, blinds in runs, curtain-wall glass's coating. A city without it: each window its own, clear glass."""
-    f = SITE.get('facade')
-    if not f or style > 1:
-        return dict(run_l=1.0, run_b=1.0, glass_ior=0.0)
-    return dict(run_l=float(rng.randint(*f['lit_run'])), run_b=float(rng.randint(*f['blind_run'])),
-                glass_ior=rng.uniform(*f['glass_ior']) if style == 0 else 0.0)
 
 
 # ---- Geometry ---------------------------------------------------------------------------------------
@@ -629,6 +316,42 @@ class MeshBuilder:
         return ob
 
 
+def facade_object(name, bm, wall, roofc, style=2, bay=2.8, floorh=4.5, win_w=0.18, win_h=0.33, frame=0.28, busy=0.0, flood=0.0,
+                  roof_nz=0.02, lightgroup='city'):
+    """A modelled mesh (bmesh) given the city's facade: walls (faces within roof_nz of vertical) take the
+    facade material with these window parameters, their UVs in metres along and up each face; the rest
+    take the roof material in `roofc`. Floodlit by `flood` as OSM's buildings are."""
+    me = bpy.data.meshes.new(name)
+    bm.to_mesh(me)
+    bm.free()
+    uvl = me.uv_layers.new(name='walls')
+    for poly in me.polygons:
+        n = poly.normal
+        poly.material_index = 1 if n.z > roof_nz else 0
+        t = Vector((-n.y, n.x, 0))
+        t = t.normalized() if t.length > 1e-6 else Vector((1, 0, 0))
+        for li in poly.loop_indices:
+            co = me.vertices[me.loops[li].vertex_index].co
+            uvl.data[li].uv = (co.dot(t), co.z)
+    vals = dict(wall=wall, style=style, bay=bay, floorh=floorh, win_w=win_w, win_h=win_h, frame=frame, busy=busy,
+                seed=rng.random() * 1000, roofc=roofc, flood=flood, **facade_runs(style))
+    for k in FACADE_ATTRS:
+        v = vals[k]
+        if isinstance(v, tuple):
+            a = me.attributes.new(k, 'FLOAT_COLOR', 'FACE')
+            for d in a.data:
+                d.color = (*v, 1.0)
+        else:
+            a = me.attributes.new(k, 'FLOAT', 'FACE')
+            a.data.foreach_set('value', [float(v)] * len(me.polygons))
+    me.materials.append(MAT['facade'])
+    me.materials.append(MAT['roof'])
+    ob = bpy.data.objects.new(name, me)
+    bpy.context.collection.objects.link(ob)
+    ob.lightgroup = lightgroup
+    return ob
+
+
 def tessellate(outer, holes=()):
     """Triangles covering outer minus holes (2D), as index triples into outer + holes flattened."""
     loops = [[Vector((x, y, 0)) for x, y in r] for r in [outer, *holes]]
@@ -637,105 +360,16 @@ def tessellate(outer, holes=()):
     return tris, flat
 
 
-def add_building(mb, b):
-    outer = [clean(r) for r in b['outer']]
-    inner = [clean(r) for r in b['inner']]
-    outer = [r for r in outer if r]
-    inner = [r for r in inner if r]
-    if not outer:
-        return
-    col = albedo(b)
-    col = tuple(max(0.01, c * rng.uniform(0.85, 1.12)) for c in col)
-    style, bay, floorh, win_w, win_h, frame, busy = facade_params(b, max(abs(signed_area(r)) for r in outer))
-    if style == 0:
-        col = tuple(c * 0.35 for c in col)  # a curtain wall's spandrels and mullions: dark glass and metal
-    seed = rng.random() * 1000
-    # On the ground under it (b['base'], above z = 0; extract.mjs). A part that starts at the ground reaches
-    # down to z = 0 too, so a building on a rise never floats over the flat ground slab.
-    zb = b.get('base', 0.0)
-    z0 = zb + b['min'] if b['min'] > 0 else min(0.0, zb)
-    roof = b['roof']
-    roof_h = roof['height'] if roof['shape'] not in ('flat',) else 0.0
-    zw = max(zb + b['height'] - roof_h, z0 + 0.5)
-    ztop = zb + b['height']
-    # Flat roofs: felt, gravel and plant, grey; pitched: slate or lead.
-    roofc = (rng.uniform(0.09, 0.17),) * 3 if roof['shape'] in ('flat', 'skillion') else (0.075, 0.08, 0.09)
-    rc = roof.get('colour')
-    if rc in NAMED:
-        roofc = tuple(c * 0.7 for c in NAMED[rc])
-    elif rc and rc.startswith('#') and len(rc) == 7:
-        roofc = desaturate(tuple(min(srgb_to_linear(int(rc[i:i + 2], 16) / 255) * 0.6, 0.4) for i in (1, 3, 5)), 0.5)
-    flood = FLOODLIT.get(b['id']) or FLOODLIT.get(b.get('name')) or FLOODLIT.get((b.get('within') or {}).get('name')) or 0.0
-    face_attrs = dict(wall=col, style=style, bay=bay, floorh=floorh, win_w=win_w, win_h=win_h, frame=frame, busy=busy, seed=seed, roofc=roofc, flood=flood,
-                      **facade_runs(style))
-    for ring in [*outer, *inner]:
-        is_hole = ring in inner
-        ccw = signed_area(ring) > 0
-        # Walls face outward for outer rings, inward (into the courtyard) for holes.
-        pts = ring if (ccw != is_hole) else ring[::-1]
-        u = 0.0
-        for i in range(len(pts)):
-            a, c = pts[i], pts[(i + 1) % len(pts)]
-            length = math.hypot(c[0] - a[0], c[1] - a[1])
-            mb.face([(a[0], a[1], z0), (c[0], c[1], z0), (c[0], c[1], zw), (a[0], a[1], zw)],
-                    [(u, z0), (u + length, z0), (u + length, zw), (u, zw)], 0, **face_attrs)
-            u += length
-    # Roof.
-    main = max(outer, key=lambda r: abs(signed_area(r)))
-    if roof['shape'] in ('flat', 'skillion') or roof_h <= 0.3:
-        for r in outer:
-            tris, flat = tessellate(r, [h for h in inner])
-            for t in tris:
-                mb.face([(*flat[t[0]], ztop), (*flat[t[1]], ztop), (*flat[t[2]], ztop)], None, 1, **face_attrs)
-        return
-    cx = sum(p[0] for p in main) / len(main)
-    cy = sum(p[1] for p in main) / len(main)
-    ring = main if signed_area(main) > 0 else main[::-1]
-    if roof['shape'] in ('pyramidal', 'cone', 'spire'):
-        for i in range(len(ring)):
-            a, c = ring[i], ring[(i + 1) % len(ring)]
-            mb.face([(a[0], a[1], zw), (c[0], c[1], zw), (cx, cy, ztop)], None, 1, **face_attrs)
-    elif roof['shape'] in ('dome', 'onion', 'round'):
-        steps = 6
-        prev = [(p[0], p[1], zw) for p in ring]
-        for s in range(1, steps + 1):
-            t = s / steps
-            k = math.cos(t * math.pi / 2)  # a quarter circle in section
-            z = zw + roof_h * math.sin(t * math.pi / 2)
-            cur = [(cx + (p[0] - cx) * k, cy + (p[1] - cy) * k, z) for p in ring]
-            for i in range(len(ring)):
-                j = (i + 1) % len(ring)
-                if s < steps:
-                    mb.face([prev[i], prev[j], cur[j], cur[i]], None, 1, **face_attrs)
-                else:
-                    mb.face([prev[i], prev[j], (cx, cy, ztop)], None, 1, **face_attrs)
-            prev = cur
-    else:
-        # Pitched roofs (gabled, hipped, mansard, …): a hipped frustum, its top the footprint shrunk.
-        k = 0.35
-        top = [(cx + (p[0] - cx) * k, cy + (p[1] - cy) * k, ztop) for p in ring]
-        for i in range(len(ring)):
-            j = (i + 1) % len(ring)
-            mb.face([(ring[i][0], ring[i][1], zw), (ring[j][0], ring[j][1], zw), top[j], top[i]], None, 1, **face_attrs)
-        tris, flat = tessellate([(p[0], p[1]) for p in top])
-        for t in tris:
-            mb.face([(*flat[t[0]], ztop), (*flat[t[1]], ztop), (*flat[t[2]], ztop)], None, 1, **face_attrs)
+def landmark_override(b):
+    if not landmarks:
+        return None
+    o = getattr(landmarks, 'OVERRIDES', {})
+    return o.get(b['id']) or o.get(b.get('name')) or o.get((b.get('within') or {}).get('name'))
 
 
-def build_city():
-    mb = MeshBuilder('buildings', FACADE_ATTRS)
-    skipped = 0
-    for b in scene_data['buildings']:
-        if b['id'] in LANDMARK_REPLACES:
-            skipped += 1
-            continue
-        try:
-            add_building(mb, b)
-        except Exception as e:  # a broken footprint should not stop the city
-            skipped += 1
-    ob = mb.build([MAT['facade'], MAT['roof']])
-    print(f'buildings: {len(scene_data["buildings"]) - skipped} ({skipped} skipped), {len(mb.faces)} faces')
-    return ob
+def replaced(b):
+    names = getattr(landmarks, 'REPLACES_WITHIN', ()) if landmarks else ()
+    return b['id'] in LANDMARK_REPLACES or b.get('name') in names or (b.get('within') or {}).get('name') in names
 
 
 def build_ground_and_water():
@@ -752,9 +386,15 @@ def build_ground_and_water():
     cutter = MeshBuilder('river_cut')
     water = MeshBuilder('water')
     wall = MeshBuilder('embankment')
+    fill = getattr(landmarks, 'RIVER_FILL', ()) if landmarks else ()
+
+    def filled(ring):  # a hole a landmark module fills with water (a pier it leaves out)
+        c = (sum(p[0] for p in ring) / len(ring), sum(p[1] for p in ring) / len(ring))
+        return any(math.dist(c, f) < 10.0 for f in fill)
+
     for w in scene_data['water']:
         o = [r for r in (clean(r) for r in w['outer']) if r]
-        h = [r for r in (clean(r) for r in w['inner']) if r]
+        h = [r for r in (clean(r) for r in w['inner']) if r and not filled(r)]
         for ring in o:
             tris, flat = tessellate(ring, h)
             for t in tris:
@@ -864,14 +504,15 @@ def build_trees():
         if math.hypot(*tr['at']) < 25:
             near += 1
             continue
-        h = tr['height'] or rng.uniform(*SITE.get('tree_h', (14, 26)))
-        crown = tr['crown'] or h * rng.uniform(0.6, 0.8)
+        own = random.Random(i * 7919 + 1)  # each tree's own draws: the buildings' do not reshuffle the trees
+        h = tr['height'] or own.uniform(*SITE.get('tree_h', (14, 26)))
+        crown = tr['crown'] or h * own.uniform(0.6, 0.8)
         ob = bpy.data.objects.new(f'tree_{i}', None)
         ob.instance_type = 'COLLECTION'
         ob.instance_collection = templates[i % len(templates)]
         ob.location = (tr['at'][0], tr['at'][1], tr.get('base', 0.0))
         ob.scale = (crown, crown, h)
-        ob.rotation_euler = (0, 0, rng.uniform(0, math.tau))
+        ob.rotation_euler = (0, 0, own.uniform(0, math.tau))
         parent.objects.link(ob)
     print(f'trees: {len(scene_data["trees"]) - near} ({SEASON}; {near} within 25 m of the eye left out)')
 
@@ -924,14 +565,49 @@ if os.path.exists(landmark_file):
     landmarks = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(landmarks)
     LANDMARK_REPLACES = set(getattr(landmarks, 'REPLACES', ()))
+    if hasattr(landmarks, 'prepare'):
+        LANDMARK_REPLACES |= set(landmarks.prepare(scene_data))
     FLOODLIT.update(getattr(landmarks, 'FLOODLIT', {}))
 
 
 # ---- World, light groups, camera, render ------------------------------------------------------------
 
+# What glass and metal reflect: a real overcast city sky (Poly Haven's "Urban Street 01", a London street
+# under cloud, Andreas Mischok, CC0), seen only by glossy rays: the walls are lit by the overcast dome as
+# before (the lighting is unchanged), while curtain walls and capsules mirror cloud, street and facades.
+HDRI = {'name': 'urban_street_01', 'url': 'https://dl.polyhaven.org/file/ph-assets/HDRIs/hdr/2k/urban_street_01_2k.hdr',
+        'saturation': 0.5}
+
+
+def hdri_path():
+    path = os.path.join(ROOT, 'data', 'hdri', os.path.basename(HDRI['url']))
+    if not os.path.exists(path):
+        import urllib.request
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        urllib.request.urlretrieve(HDRI['url'], path)
+    return path
+
+
+def hdri_scale(path):
+    """The HDRI's gain to the dome's brightness over the open sky (25 to 90 degrees up, weighted by solid
+    angle): a street HDRI's horizon is buildings, so matching it there would blow out every reflection of
+    the sky above (tried: 18 times too bright, the Jubilee stays and the Eye's capsules turned to chrome)."""
+    import OpenImageIO as oiio
+    import numpy as np
+    inp = oiio.ImageInput.open(path)
+    spec = inp.spec()
+    px = inp.read_image(0, 0, 0, 3, 'float').reshape(spec.height, spec.width, 3)
+    inp.close()
+    lum = (px @ np.array([0.2126, 0.7152, 0.0722])).mean(axis=1)
+    el = (0.5 - (np.arange(spec.height) + 0.5) / spec.height) * math.pi
+    w = np.cos(el) * (el > math.radians(25))
+    return float(((1 + 2 * np.sin(el)) * w).sum() / max((lum * w).sum(), 1e-6))
+
+
 def setup_world():
     """An overcast sky of unit horizon radiance, (1 + 2 sin h) / 3 × 3 up to the zenith (CIE overcast),
-    neutral in colour: the site tints and scales it with the live sky. Below the horizon, dim ground."""
+    neutral in colour: the site tints and scales it with the live sky. Below the horizon, dim ground. To
+    glossy rays, the reflection HDRI at the same horizon radiance, half desaturated."""
     world = bpy.data.worlds.new('sky')
     scene.world = world
     nt = nodes_of(world)
@@ -947,8 +623,20 @@ def setup_world():
     gain.outputs[0].default_value = 1.0
     bg = node(nt, 'ShaderNodeBackground', Color=(1, 1, 1, 1))
     L.new(math_node(nt, 'MULTIPLY', lum, gain.outputs[0]), bg.inputs['Strength'])
+    path = hdri_path()
+    env = node(nt, 'ShaderNodeTexEnvironment')
+    env.image = bpy.data.images.load(path)
+    sat = node(nt, 'ShaderNodeHueSaturation', Saturation=HDRI['saturation'])
+    L.new(env.outputs['Color'], sat.inputs['Color'])
+    refl = node(nt, 'ShaderNodeBackground')
+    L.new(sat.outputs['Color'], refl.inputs['Color'])
+    L.new(math_node(nt, 'MULTIPLY', gain.outputs[0], hdri_scale(path)), refl.inputs['Strength'])
+    pick = node(nt, 'ShaderNodeMixShader')
+    L.new(node(nt, 'ShaderNodeLightPath').outputs['Is Glossy Ray'], pick.inputs['Fac'])
+    L.new(bg.outputs[0], pick.inputs[1])
+    L.new(refl.outputs[0], pick.inputs[2])
     out = node(nt, 'ShaderNodeOutputWorld')
-    L.new(bg.outputs[0], out.inputs['Surface'])
+    L.new(pick.outputs[0], out.inputs['Surface'])
     return world
 
 
@@ -1000,7 +688,7 @@ def setup_camera():
         cam_data.latitude_max = math.radians(el1)
         scene.render.resolution_x = int(span * ppd * SCALE)
         scene.render.resolution_y = int((el1 - el0) * ppd * SCALE)
-        heading, pitch = BEARING, 0.0
+        heading, pitch = CENTRE, 0.0
     else:
         ref = REFS[CITY][VIEW]
         cam_data.type = 'PERSP'
@@ -1024,17 +712,51 @@ def setup_camera():
 
 setup_world()
 setup_render()
-build_city()
-build_ground_and_water()
-build_bridges()
-build_trees()
-build_lamps()
+filler.setup(globals())
+filler.build_city()
+if not ONLY:
+    build_ground_and_water()
+    build_bridges()
+    build_trees()
+    build_lamps()
 if landmarks:
     landmarks.build(globals())
 for ob in bpy.data.objects:
     if ob.name.startswith('buildings'):
         ob.lightgroup = 'city'  # the lit windows
 setup_camera()
+
+
+def scene_stats():
+    """What the bake draws: objects and instances (the GPU draw calls a real-time engine would issue, one
+    per object and material), and triangles, instanced trees counted per instance."""
+    dg = bpy.context.evaluated_depsgraph_get()
+    tris, objects, slots = 0, 0, 0
+    per_mesh, groups = {}, {}
+    for inst in dg.object_instances:
+        ob = inst.object
+        if ob.type != 'MESH':
+            continue
+        me = ob.data
+        if me.name not in per_mesh:
+            me.calc_loop_triangles()
+            per_mesh[me.name] = (len(me.loop_triangles), max(1, len(me.materials)))
+        t, m = per_mesh[me.name]
+        tris += t
+        objects += 1
+        slots += m
+        grp = 'trees' if inst.is_instance else ('buildings' if ob.name.startswith('buildings') else 'roof props' if ob.name.startswith('roof') else
+                                                'landmarks' if ob.name.split('_')[0] in LANDMARK_OBJECTS else 'other')
+        groups[grp] = groups.get(grp, 0) + t
+    print(f'stats: {objects} mesh objects and instances, {slots} draws (object x material), {tris:,} triangles')
+    print('stats by group: ' + ', '.join(f'{k} {v:,}' for k, v in sorted(groups.items(), key=lambda kv: -kv[1])))
+
+
+LANDMARK_OBJECTS = {'eye', 'jubilee', 'hungerford', 'elizabeth', 'victoria', 'central', 'palace', 'millbank', 'st', 'whitehall', 'clock'}
+LANDMARK_OBJECTS |= set(getattr(landmarks, 'OBJECT_PREFIXES', ()))
+
+
+scene_stats()
 print(f'rendering {VIEW} at {scene.render.resolution_x}x{scene.render.resolution_y}, {SAMPLES} samples → {OUT}.exr')
 EMISSION_STRENGTH = {}
 for m in bpy.data.materials:
@@ -1156,6 +878,6 @@ if VIEW == 'pano' and scene_data['water'] and arg('mirror', '1') == '1':
 if VIEW == 'pano':
     # Where the panorama sits in the sky, for scripts/blender/encode.py.
     res_y = int((PANO['el'][1] - PANO['el'][0]) * PANO['ppd'] * SCALE)
-    json.dump({'bearing': BEARING, 'span': PANO['span'], 'elevation': list(PANO['el']), 'season': SEASON,
+    json.dump({'bearing': BEARING, 'centre': CENTRE, 'span': PANO['span'], 'elevation': list(PANO['el']), 'season': SEASON,
                'size': [scene.render.resolution_x, res_y], 'mirror': mirror}, open(OUT + '.json', 'w'))
 print('done')

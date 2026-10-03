@@ -141,6 +141,7 @@ function SkyContent() {
   useEffect(() => {
     let alive = true
     let city = null
+    stats.gl = gl // dev: the renderer, for its per-frame draw counts (window.__lab.info)
     const globals = createSkyGlobals(gl, { coefficients: COEFFICIENTS })
     const q = timer?.begin()
     globals.atmosphere.init() // the per-visit tables, timed
@@ -215,6 +216,20 @@ function SkyPanel({ view, setView, dive, setDive }) {
       ready: () => isBackdropReady() && weather !== undefined && !!stats.sky && stats.sky.renders > 0 && !stats.sky.dirty,
       inputs: () => inputs,
       sky: () => stats.sky, // dev: the CitySky, to read its texture back
+      // dev: one frame's draw calls and triangles, summed over every render it makes (the sky, the scene,
+      // the effects' passes), and the GPU memory three.js tracks.
+      frameInfo: () =>
+        new Promise((done) => {
+          const info = stats.gl.info
+          info.autoReset = false
+          info.reset()
+          requestAnimationFrame(() =>
+            requestAnimationFrame(() => {
+              done({ ...info.render, ...info.memory })
+              info.autoReset = true
+            })
+          )
+        }),
     }
   })
 

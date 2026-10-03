@@ -5,7 +5,7 @@
   "bearing": 314.027,
   "azimuth": [
     254.027,
-    120.0
+    128.0
   ],
   "elevation": [
     -20.0,
@@ -16,7 +16,7 @@
     12000.0
   ],
   "size": [
-    3840,
+    4096,
     1344
   ],
   "mirror": {
@@ -25,7 +25,7 @@
       20.0
     ],
     "size": [
-      3840,
+      4096,
       320
     ],
     "eyeAboveWater": 3.6100000000000003
@@ -35,14 +35,18 @@
       -20.0,
       32.0
     ],
-    "lateShare": 0.2306,
+    "lateShare": 0.2181,
     "glowSize": [
-      1920,
+      2048,
       832
     ],
     "haloSize": [
-      960,
+      1024,
       416
+    ],
+    "starSize": [
+      4096,
+      1664
     ]
   },
   "source": "\u00a9 OpenStreetMap contributors, ODbL; terrain: USGS 3DEP via Mapzen terrain tiles; rendered in Blender (Cycles) with hand-modelled landmarks",
@@ -61,14 +65,15 @@
       "scale": {
         "light": 1.0,
         "night": 32.0,
-        "windows": 16.0,
+        "windows": 32.0,
         "mirror": {
           "light": 1.0,
           "night": 64.0,
-          "windows": 16.0
+          "windows": 32.0
         },
         "glow": 16.0,
-        "halo": 2.0
+        "halo": 2.0,
+        "star": 4.0
       }
     },
     "bare": {
@@ -81,14 +86,15 @@
       "scale": {
         "light": 1.0,
         "night": 32.0,
-        "windows": 16.0,
+        "windows": 32.0,
         "mirror": {
           "light": 1.0,
           "night": 64.0,
-          "windows": 16.0
+          "windows": 32.0
         },
         "glow": 16.0,
-        "halo": 2.0
+        "halo": 2.0,
+        "star": 4.0
       }
     }
   }

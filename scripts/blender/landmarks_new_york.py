@@ -13,7 +13,47 @@ import math
 ONE_WTC = 'way/713565776'
 BB_TOWER = 'way/1255363983'  # the Brooklyn Bridge's Manhattan tower (OSM: an 82.9 m stone block)
 BB_OUTLINE = 'way/375157262'  # its outline as man_made=bridge (a 26 m slab at deck height otherwise)
-REPLACES = {ONE_WTC, BB_TOWER, BB_OUTLINE}
+# The Woolworth Building's tower above its 120 m base, mapped as twelve parts (the stages, the corner
+# turrets, the pyramid): modelled whole here (woolworth), on the lowest stage's outline.
+WOOLWORTH_STAGE = 'way/274782323'
+WOOLWORTH_TOWER = {f'way/{i}' for i in (274782323, 274782325, 274782327, 274782329, 274782330, 274782332, 274782334, 274782336, 274782339,
+                                        274782341, 274782344)}
+# The Empire State Building's mooring mast and antenna, mapped as two pyramids (330 to 390 m and to 443.2 m):
+# modelled here (empire_state), on the antenna part's centre.
+ESB_ANTENNA = 'way/137425145'
+ESB_MAST = {ESB_ANTENNA, 'way/265932618'}
+# 8 Spruce Street (Frank Gehry, 2011; 265 m to the roof, OSM 271.6 m): mapped as eight stainless parts
+# stepping down from the tower; raised here on their outlines with Gehry's rippling bays (spruce8).
+SPRUCE8 = {f'way/{i}' for i in (274750635, 274750636, 274750637, 274750638, 274750639, 274750643, 274750646, 274750647)}
+REPLACES = {ONE_WTC, BB_TOWER, BB_OUTLINE} | WOOLWORTH_TOWER | ESB_MAST | SPRUCE8
+# The heroes: what says "New York" with every other building hidden (skyline.py --only heroes). The
+# Chrysler Building and 432 Park Avenue are not drawn from OSM (extract.mjs LANDMARK_POINTS places them).
+HEROES = {'Empire State Building', 'Woolworth Building'}
+OBJECT_PREFIXES = {'one', 'bb', 'woolworth', 'esb', 'chrysler', 'park432', 'spruce8'}
+# Each landmark's own stone and facade over all its OSM parts (filler.py add_building), instead of OSM's
+# palette colour and the generic office windows: the Woolworth Building's cream terracotta in gothic piers;
+# the Empire State Building's Indiana limestone with its aluminium spandrels in continuous vertical strips
+# (style 5, art deco).
+WOOL_TERRACOTTA = (0.44, 0.41, 0.33)
+COPPER = (0.075, 0.13, 0.105)  # weathered copper, the Woolworth roof's green-grey in ref2 and set2/p020
+ESB_LIMESTONE = (0.4, 0.38, 0.33)
+OVERRIDES = {
+    'Woolworth Building': dict(wall=WOOL_TERRACOTTA, roof=COPPER, style=4, cell=(1.9, 3.9, 0.17, 0.36, 0.3), busy=0.15),
+    'Empire State Building': dict(wall=ESB_LIMESTONE, roof=(0.2, 0.2, 0.2), style=5, cell=(1.75, 3.73, 0.2, 0.4, 0.45)),
+}
+_prepared = {}
+
+
+def is_hero(b):
+    return b.get('name') in HEROES or (b.get('within') or {}).get('name') in HEROES
+
+
+def prepare(scene_data):
+    """Notes the outlines of the OSM parts the models replace (skyline.py then skips them)."""
+    for b in scene_data['buildings']:
+        if b['id'] in (WOOLWORTH_STAGE, ESB_ANTENNA) or b['id'] in SPRUCE8:
+            _prepared[b['id']] = b
+    return set()
 # Floodlit at night, by name (a building or the building a part belongs to) or a part by its OSM id,
 # relative brightness. The crowns the reference photos show lit: the Woolworth Building's gold from its
 # setbacks up (ref5, ref8; its parts above 120 m); two lit spires among the pre-war towers (ref8): 70 Pine's
@@ -61,6 +101,12 @@ def build(g):
     mats = materials(g)
     one_wtc(g, mats)
     brooklyn_bridge(g, mats)
+    woolworth(g, mats)
+    empire_state(g, mats)
+    chrysler(g, mats)
+    park_432(g, mats)
+    if g['UPTO'] >= 2:
+        spruce8(g)
 
 
 def materials(g):
@@ -75,6 +121,10 @@ def materials(g):
         'cable': sm('bb_cable', (0.3, 0.27, 0.22), 0.45, Metallic=0.4),
         'necklace': em('bb_necklace', (1.0, 0.93, 0.8), 400.0),
         'road_lamp': em('bb_road_lamp', (1.0, 0.62, 0.3), 120.0),
+        # The Chrysler Building's crown: Nirosta stainless steel (Krupp's chrome-nickel steel, polished), and
+        # the white lights in its triangular windows that trace each arch at night.
+        'nirosta': sm('nirosta', (0.62, 0.62, 0.64), 0.22, Metallic=1.0),
+        'chrysler_lights': em('chrysler_lights', (1.0, 0.95, 0.86), 10.0, base=(0.5, 0.5, 0.52)),
     }
 
 
@@ -366,15 +416,25 @@ def brooklyn_bridge(g, mats):
         s1 = min(s + step, s_max)
         z0, z1 = road_at(s), road_at(s1)
         p0, p1 = c + along * s, c + along * s1
-        # The trusses: the deck's edges, 10 m deep, and the roadway slab.
+        # The stiffening trusses, 10 m deep: open lattice, not walls (Midtown shows through them from Pier 1,
+        # set2/w2, w3): top and bottom chords, a post and a diagonal each 6 m panel, the two outer trusses
+        # and two inner ones (the bridge has six); and the roadway's floor, 1.2 m, in the bottom third.
+        lo0, lo1 = z0 - BB['truss'] * 0.7, z1 - BB['truss'] * 0.7
+        hi0, hi1 = z0 + BB['truss'] * 0.3, z1 + BB['truss'] * 0.3
+        for x in (-half_deck, -4.5, 4.5, half_deck):
+            q0, q1 = p0 + across * x, p1 + across * x
+            tube(steel, q0 + Z * lo0, q1 + Z * lo1, 0.35, 4)
+            tube(steel, q0 + Z * hi0, q1 + Z * hi1, 0.35, 4)
+            tube(steel, q0 + Z * lo0, q0 + Z * hi0, 0.2, 4)
+            tube(steel, q0 + Z * lo0, q1 + Z * hi1, 0.15, 4)
+        f0, f1 = z0 - 1.2, z1 - 1.2
+        vs = [steel.verts.new(p0 + across * -half_deck + Z * f0), steel.verts.new(p0 + across * half_deck + Z * f0),
+              steel.verts.new(p1 + across * half_deck + Z * f1), steel.verts.new(p1 + across * -half_deck + Z * f1)]
+        steel.faces.new(vs)
         for side in (-1, 1):
             q0, q1 = p0 + across * (side * half_deck), p1 + across * (side * half_deck)
-            vs = [steel.verts.new(q0 + Z * (z0 - BB['truss'] * 0.7)), steel.verts.new(q1 + Z * (z1 - BB['truss'] * 0.7)),
-                  steel.verts.new(q1 + Z * (z1 + BB['truss'] * 0.3)), steel.verts.new(q0 + Z * (z0 + BB['truss'] * 0.3))]
+            vs = [steel.verts.new(q0 + Z * f0), steel.verts.new(q1 + Z * f1), steel.verts.new(q1 + Z * z1), steel.verts.new(q0 + Z * z0)]
             steel.faces.new(vs if side > 0 else vs[::-1])
-        vs = [steel.verts.new(p0 + across * -half_deck + Z * (z0 - BB['truss'] * 0.7)), steel.verts.new(p0 + across * half_deck + Z * (z0 - BB['truss'] * 0.7)),
-              steel.verts.new(p1 + across * half_deck + Z * (z1 - BB['truss'] * 0.7)), steel.verts.new(p1 + across * -half_deck + Z * (z1 - BB['truss'] * 0.7))]
-        steel.faces.new(vs)
         # The cables, as segments.
         for x in (-BB['outer'], -BB['inner'], BB['inner'], BB['outer']):
             tube(cables, p0 + across * x + Z * cable_at(s), p1 + across * x + Z * cable_at(s1), BB['cable_r'], 6)
@@ -419,3 +479,308 @@ def brooklyn_bridge(g, mats):
     mesh_object(g, 'bb_necklace', necklace, mats['necklace'])
     mesh_object(g, 'bb_road_lamps', lamps, mats['road_lamp'])
     print(f'landmark: Brooklyn Bridge (Manhattan tower {math.hypot(c.x, c.y):.0f} m at {math.degrees(math.atan2(c.x, c.y)) % 360:.1f} deg)')
+
+
+# ---- Hero landmarks ---------------------------------------------------------------------------------
+# Heights above the ground each stands on (the terrain, extract.mjs); the Manhattan grid's avenues run
+# 29 degrees east of true north.
+GRID = math.radians(29.0)
+
+
+def grid_axes():
+    from mathutils import Vector
+    ay = Vector((math.sin(GRID), math.cos(GRID), 0))  # up the avenues
+    return Vector((ay.y, -ay.x, 0)), ay  # along the cross streets, along the avenues
+
+
+def _rect_axes(ring):
+    """A rectangular outline's centre, its axes (unit, along its sides) and half sizes: the minimum-area
+    bounding rectangle (roofs.axes)."""
+    from mathutils import Vector
+    import roofs
+    (ux, uy), (cx, cy), long_, short = roofs.axes(ring)
+    ax = Vector((ux, uy, 0))
+    return Vector((cx, cy, 0)), ax, Vector((-uy, ux, 0)), long_ / 2, short / 2
+
+
+def woolworth(g, mats):
+    """The Woolworth Building's tower (Cass Gilbert, 1913; 241.4 m), above its 120 m base (OSM's, in its
+    cream terracotta and gothic piers: OVERRIDES): on the lowest stage's outline (OSM: a 26 m square from 120
+    to 170 m), the stages OSM maps, each with its corner turrets and pinnacles: a 26 m shaft to 170 m with
+    octagonal turrets at its corners to 172 m; a 22 m stage to 194 m; a 17 m stage to 203 m with four
+    turrets 4.8 m across rising to 215 m under their spirelets (OSM's 5 m parts); the steep copper pyramid
+    with gothic dormers to the octagonal lantern at 228 m; its spirelet and finial to 241.4 m. Floodlit
+    gold from the setbacks up (ref5, ref8: OSM's tower parts had 1.0)."""
+    import bmesh
+    from mathutils import Vector
+    from shapes import Z, square_stack, pinnacle, gable, lathe
+    b = _prepared.get(WOOLWORTH_STAGE)
+    if not b:
+        print('landmark: Woolworth Building tower not in the data')
+        return
+    c, ax, ay, _, _ = _rect_axes(b['outer'][0])
+    zb = b.get('base', 0.0)
+    k = lambda z: zb + z  # noqa: E731
+    stone = bmesh.new()
+    square_stack(stone, c, ax, ay, [(k(120), 13.0, 13.0), (k(170), 13.0, 13.0), (k(170), 11.0, 11.0), (k(194), 11.0, 11.0),
+                                    (k(194), 8.5, 8.5), (k(203), 8.5, 8.5)], cap_top=False)
+    # Gothic piers up the shaft's corners, standing proud.
+    for sx, sy in ((-1, -1), (1, -1), (1, 1), (-1, 1)):
+        square_stack(stone, c + ax * (sx * 12.4) + ay * (sy * 12.4), ax, ay, [(k(120), 1.0, 1.0), (k(170), 1.0, 1.0)])
+    g['facade_object']('woolworth_tower', stone, WOOL_TERRACOTTA, COPPER, style=4, bay=1.9, floorh=3.9, win_w=0.17, win_h=0.36, frame=0.3,
+                       busy=0.12, flood=1.0)
+    turrets = bmesh.new()
+    for sx, sy in ((-1, -1), (1, -1), (1, 1), (-1, 1)):
+        d = ax * sx + ay * sy
+        lathe(turrets, c + d * 12.6, [(k(165), 1.6), (k(172), 1.6), (k(172), 1.9), (k(172.6), 1.9), (k(172.6), 1.4), (k(178.5), 0.0)], sides=8,
+              phase=math.pi / 8)
+        pinnacle(turrets, c + d * 10.7, k(194), 0.9, 1.6, 3.4, sides=8)
+        lathe(turrets, c + d * 8.6, [(k(194), 2.4), (k(212), 2.4), (k(212), 2.75), (k(213), 2.75), (k(213), 2.3), (k(215), 2.3),
+                                     (k(215), 2.6), (k(222), 0.0)], sides=8, phase=math.pi / 8)
+    # Lesser pinnacles along each stage's parapet.
+    for face, side in ((ax, ay), (-ax, ay), (ay, ax), (-ay, ax)):
+        for t in (-6.0, -2.0, 2.0, 6.0):
+            pinnacle(turrets, c + face * 12.8 + side * t, k(170), 0.5, 1.2, 2.2, sides=4)
+        for t in (-5.0, 0.0, 5.0):
+            pinnacle(turrets, c + face * 10.8 + side * t, k(194), 0.45, 1.0, 2.0, sides=4)
+    g['facade_object']('woolworth_turrets', turrets, WOOL_TERRACOTTA, COPPER, style=3, roof_nz=0.6, flood=1.0)
+    roof = bmesh.new()
+    # The copper pyramid, steep (about 79 degrees), to the lantern's gallery; its gothic dormers.
+    square_stack(roof, c, ax, ay, [(k(203), 8.5, 8.5), (k(228), 3.6, 3.6)], cap_top=True)
+    for face, side in ((ax, ay), (-ax, ay), (ay, ax), (-ay, ax)):
+        for t in (-4.2, 0.0, 4.2):
+            gable(roof, c + face * 7.6 + side * t, side, face, 1.6, 2.4, k(206), 3.4)
+        gable(roof, c + face * 5.6, side, face, 1.4, 2.2, k(216), 3.0)
+    g['facade_object']('woolworth_roof', roof, COPPER, COPPER, style=3, roof_nz=-1.0, flood=0.6)
+    lantern = bmesh.new()
+    lathe(lantern, c, [(k(228), 3.9), (k(228.8), 3.9), (k(228.8), 3.3), (k(233.5), 3.3), (k(233.5), 3.6), (k(234.2), 3.6),
+                       (k(234.2), 2.9), (k(239.2), 0.5), (k(239.2), 0.3), (k(241.4), 0.0)], sides=8, phase=math.pi / 8)
+    g['facade_object']('woolworth_lantern', lantern, WOOL_TERRACOTTA, COPPER, style=4, bay=1.25, floorh=4.7, win_w=0.28, win_h=0.4,
+                       frame=0.4, busy=0.0, flood=1.2, roof_nz=0.5)
+    print(f'landmark: Woolworth Building (tower {math.hypot(c.x, c.y):.0f} m at {math.degrees(math.atan2(c.x, c.y)) % 360:.1f} deg)')
+
+
+def empire_state(g, mats):
+    """The Empire State Building's top (Shreve, Lamb & Harmon, 1931): OSM's setbacks stand to the 86th floor's
+    observatory (330 m in OSM; published 320 m); from there the mooring mast (published: from the 86th floor
+    to the 102nd floor's observatory at 373 m, its domed cap at the 381 m roof), on four flaring buttresses at
+    its foot, its aluminium ribs, the glazed 102nd-floor band, and the antenna to the 443.2 m tip. Floodlit
+    as OSM's crown parts were (1.4)."""
+    import bmesh
+    from mathutils import Vector
+    from shapes import Z, square_stack, lathe
+    b = _prepared.get(ESB_ANTENNA)
+    if not b:
+        print('landmark: Empire State Building not in the data')
+        return
+    ring = b['outer'][0]
+    c = Vector((sum(p[0] for p in ring) / len(ring), sum(p[1] for p in ring) / len(ring), 0))
+    zb = b.get('base', 0.0)
+    k = lambda z: zb + z  # noqa: E731
+    ax, ay = grid_axes()
+    mast = bmesh.new()
+    lathe(mast, c, [(k(328), 9.5), (k(333), 9.5), (k(338), 7.8), (k(356), 7.2), (k(356), 7.9), (k(357.5), 7.9), (k(357.5), 6.6),
+                    (k(364), 6.4), (k(364), 6.9), (k(365), 6.9), (k(365), 6.0), (k(372), 5.8), (k(372), 6.3), (k(373), 6.3),
+                    (k(375.5), 4.9), (k(378.5), 3.4), (k(381), 1.9)], sides=16, phase=math.pi / 16)
+    # The four buttresses at the mast's foot, on the diagonals, and its ribs.
+    for sx, sy in ((-1, -1), (1, -1), (1, 1), (-1, 1)):
+        d = (ax * sx + ay * sy).normalized()
+        o = Vector((-d.y, d.x, 0))
+        square_stack(mast, c + d * 9.0, d, o, [(k(320), 3.2, 0.9), (k(334), 2.2, 0.8), (k(345), 0.4, 0.5)], cap_top=True)
+    for i in range(8):
+        t = i / 8 * math.tau
+        d = Vector((math.cos(t), math.sin(t), 0))
+        square_stack(mast, c + d * 7.4, d, Vector((-d.y, d.x, 0)), [(k(338), 0.45, 0.3), (k(356), 0.45, 0.3)], cap_top=True)
+    g['facade_object']('esb_mast', mast, (0.46, 0.46, 0.45), (0.3, 0.3, 0.3), style=4, bay=1.6, floorh=4.4, win_w=0.18, win_h=0.38,
+                       frame=0.55, busy=0.0, flood=1.4, roof_nz=0.6)
+    antenna = bmesh.new()
+    lathe(antenna, c, [(k(381), 1.7), (k(392), 1.5), (k(392), 1.9), (k(393.5), 1.9), (k(393.5), 1.2), (k(412), 1.0),
+                       (k(412), 1.3), (k(413), 1.3), (k(413), 0.8), (k(432), 0.55), (k(443.2), 0.12)], sides=8)
+    g['facade_object']('esb_antenna', antenna, (0.32, 0.32, 0.32), (0.3, 0.3, 0.3), style=3, roof_nz=0.6, flood=0.7)
+    print(f'landmark: Empire State Building ({math.hypot(c.x, c.y):.0f} m at {math.degrees(math.atan2(c.x, c.y)) % 360:.1f} deg)')
+
+
+def _point(g, name):
+    from mathutils import Vector
+    p = g['scene_data'].get('landmarkPoints', {}).get(name)
+    if not p:
+        print(f'landmark: {name} not placed (no landmarkPoints in scene.json: run extract.mjs)')
+        return None, 0.0
+    return Vector((p['at'][0], p['at'][1], 0)), p.get('base', 0.0)
+
+
+def chrysler(g, mats):
+    """The Chrysler Building (William Van Alen, 1930; 318.9 m), 405 Lexington Avenue, by Wikipedia's
+    coordinates on the grid's axes. Its lot 201 by 167 ft (61 by 51 m), the base filling it to the 16th
+    floor; setbacks at the 16th, 18th, 23rd, 28th and 31st floors (published; floors about 3.66 m); the
+    square shaft to the 61st floor's eagles, chamfered above them to the 71st; the crown of seven
+    terraced arches in Nirosta steel on each face, each arch as wide as its tier, lit in its triangular
+    windows at night; the spire (the "vertex", 56 m) to the tip. Not published, from the photos: the
+    shaft about 27 m square, the arches' spacing (even, 5.2 m), the chamfers."""
+    import bmesh
+    from mathutils import Vector
+    from shapes import Z, square_stack, lathe, box
+    c, zb = _point(g, 'Chrysler Building')
+    if c is None:
+        return
+    ax, ay = grid_axes()  # ax along 42nd Street, ay up Lexington Avenue
+    k = lambda z: zb + z  # noqa: E731
+    f = 3.66
+    body = bmesh.new()
+    square_stack(body, c, ax, ay, [(k(0), 25.5, 30.5), (k(16 * f), 25.5, 30.5), (k(16 * f), 22.0, 26.0), (k(18 * f), 22.0, 26.0),
+                                   (k(18 * f), 19.0, 22.0), (k(23 * f), 19.0, 22.0), (k(23 * f), 17.0, 18.0), (k(28 * f), 17.0, 18.0),
+                                   (k(28 * f), 15.2, 15.6), (k(31 * f), 15.2, 15.6), (k(31 * f), 13.5, 13.5), (k(61 * f), 13.5, 13.5)],
+                 cap_top=True)
+    g['facade_object']('chrysler_body', body, (0.42, 0.41, 0.39), (0.2, 0.2, 0.2), style=1, bay=1.75, floorh=f, win_w=0.24, win_h=0.32,
+                       frame=0.12, busy=0.3)
+    steel = bmesh.new()
+    z0, z1 = k(61 * f), k(67.2 * f)
+    from shapes import prism
+    # Above the eagles: the shaft's corners chamfered (2.4 m), to the crown's foot.
+    pts = []
+    for (sx, sy) in ((1, 1), (-1, 1), (-1, -1), (1, -1)):
+        pts += [(sx * 12.6, sy * 10.2), (sx * 10.2, sy * 12.6)] if sx * sy > 0 else [(sx * 10.2, sy * 12.6), (sx * 12.6, sy * 10.2)]
+    plan = [tuple((c + ax * x + ay * y)[:2]) for x, y in pts]
+    prism(steel, plan, z0, z1, cap_top=True)
+    # The eagles at the 61st floor's corners, standing out on the diagonals.
+    for sx, sy in ((-1, -1), (1, -1), (1, 1), (-1, 1)):
+        d = (ax * sx + ay * sy).normalized()
+        box(steel, c + d * 20.0, d, Vector((-d.y, d.x, 0)), 2.6, 0.6, z0 - 1.2, z0 + 0.4)
+    g['facade_object']('chrysler_eagles', steel, (0.5, 0.5, 0.52), (0.5, 0.5, 0.52), style=1, bay=1.6, floorh=f, win_w=0.22, win_h=0.32,
+                       frame=0.5, busy=0.25)
+    crown = bmesh.new()
+    lights = bmesh.new()
+    z = z1
+    tiers = 7
+    for t in range(tiers):
+        w = 11.6 - 1.3 * t  # each tier's half width
+        top = z + 5.2
+        # The tier's core, from the tier below's springing (so it fills the arches behind) to this one's.
+        square_stack(crown, c, ax, ay, [(z - 5.2 if t else z, w, w), (top if t < tiers - 1 else z + 2.0, w, w)], cap_top=True)
+        # An arch on each face, a semicircle as wide as the face, 0.5 m thick.
+        for face, side in ((ax, ay), (-ax, ay), (ay, ax), (-ay, ax)):
+            n = 14
+            arc = [(-w, 0.0)] + [(-w * math.cos(math.pi * i / n), w * math.sin(math.pi * i / n)) for i in range(1, n)] + [(w, 0.0)]
+            front = [crown.verts.new(c + face * (w + 0.25) + side * a + Z * (z + b_)) for a, b_ in arc]
+            back = [crown.verts.new(c + face * (w - 0.25) + side * a + Z * (z + b_)) for a, b_ in arc]
+            crown.faces.new(front if face.dot(side.cross(Z)) < 0 else front[::-1])
+            crown.faces.new(back[::-1] if face.dot(side.cross(Z)) < 0 else back)
+            for i in range(len(arc)):
+                j = (i + 1) % len(arc)
+                crown.faces.new((front[i], front[j], back[j], back[i]))
+            # Its lights: the triangular windows along the arch, a band 0.4 to 2.4 m inside its edge (they are
+            # tall: set2/w2 shows the crown burning white at 6 km).
+            r0, r1 = w - 2.4, w - 0.4
+            band = []
+            for i in range(n + 1):
+                a = math.pi * i / n
+                band.append((-r1 * math.cos(a), r1 * math.sin(a), -r0 * math.cos(a), r0 * math.sin(a)))
+            for i in range(n):
+                (ox0, oz0, ix0, iz0), (ox1, oz1, ix1, iz1) = band[i], band[i + 1]
+                if i % 2:
+                    continue  # the triangles' gaps
+                q = [c + face * (w + 0.3) + side * ox0 + Z * (z + oz0), c + face * (w + 0.3) + side * ox1 + Z * (z + oz1),
+                     c + face * (w + 0.3) + side * ((ix0 + ix1) / 2) + Z * (z + (iz0 + iz1) / 2)]
+                lights.faces.new([lights.verts.new(v) for v in (q if face.dot(side.cross(Z)) < 0 else q[::-1])])
+        z = top
+    spire_foot = z - 5.2 + 3.9 + 1.0
+    lathe(crown, c, [(spire_foot, 2.4), (k(292), 1.6), (k(305), 0.9), (k(318.9), 0.0)], sides=8, phase=math.pi / 8)
+    mesh_object(g, 'chrysler_crown', crown, mats['nirosta'])
+    mesh_object(g, 'chrysler_lights', lights, mats['chrysler_lights'])
+    print(f'landmark: Chrysler Building ({math.hypot(c.x, c.y):.0f} m at {math.degrees(math.atan2(c.x, c.y)) % 360:.1f} deg, crown to {z - zb:.0f} m)')
+
+
+def park_432(g, mats):
+    """432 Park Avenue (Rafael Viñoly, 2015; 425.7 m), by Wikipedia's coordinates on the grid's axes: a
+    28.5 m square of white concrete, each face six square windows a floor (10 by 10 ft, 3.05 m, in a 4.75 m
+    bay), floors 4.75 m; five double-height mechanical floors open to the wind every twelve floors (the
+    facade's frame continues, the core stands inside, the sky shows through), and the open top floors round
+    the roof plant. Not published, from the photos: the open floors' heights (even, every 75 m), the core
+    (about 9 m square)."""
+    import bmesh
+    from shapes import Z, square_stack, box
+    c, zb = _point(g, '432 Park Avenue')
+    if c is None:
+        return
+    ax, ay = grid_axes()
+    k = lambda z: zb + z  # noqa: E731
+    h, top = 14.25, 425.7
+    opens = [(75.0 * i, 75.0 * i + 9.5) for i in range(1, 6)] + [(top - 14.0, top)]
+    closed = bmesh.new()
+    frame = bmesh.new()
+    z = 0.0
+    for a, b_ in opens:
+        square_stack(closed, c, ax, ay, [(k(z), h, h), (k(a), h, h)], cap_top=True, cap_bottom=z > 0)
+        # The open floors: the core, the frame's seven columns a side (corners shared) and the slab edges.
+        square_stack(frame, c, ax, ay, [(k(a), 4.6, 4.6), (k(b_), 4.6, 4.6)])
+        for face, side in ((ax, ay), (-ax, ay), (ay, ax), (-ay, ax)):
+            for i in range(7):
+                t = -h + 0.45 + i * (2 * h - 0.9) / 6
+                box(frame, c + face * (h - 0.45) + side * t, face, side, 0.45, 0.45, k(a), k(b_))
+            if b_ - a > 10:
+                for zz in (a + 4.7, a + 9.4):
+                    box(frame, c + face * (h - 0.45), face, side, 0.45, h, k(zz) - 0.35, k(zz) + 0.35)
+        z = b_
+    square_stack(frame, c, ax, ay, [(k(top) - 0.6, h, h), (k(top), h, h)], cap_bottom=True)
+    g['facade_object']('park432_tower', closed, (0.56, 0.55, 0.51), (0.25, 0.25, 0.25), style=1, bay=4.75, floorh=4.75, win_w=0.32,
+                       win_h=0.32, frame=0.55, busy=0.15)
+    g['facade_object']('park432_frame', frame, (0.56, 0.55, 0.51), (0.25, 0.25, 0.25), style=3)
+    print(f'landmark: 432 Park Avenue ({math.hypot(c.x, c.y):.0f} m at {math.degrees(math.atan2(c.x, c.y)) % 360:.1f} deg)')
+
+
+def spruce8(g):
+    """8 Spruce Street (Frank Gehry, 2011): each of OSM's eight parts raised on its outline, its walls rippling
+    in Gehry's stainless bays: each wall pushed out up to 1.3 m in waves 9 m long that slide sideways floor
+    by floor, so the folds run diagonally up the tower (set2/p019, p020, ref2); the south face, which is
+    flat, left flat. Stainless steel panels with punched windows."""
+    import bmesh
+    from mathutils import Vector
+    from shapes import ccw
+    parts = [_prepared[i] for i in sorted(SPRUCE8) if i in _prepared]
+    if not parts:
+        print('landmark: 8 Spruce Street not in the data')
+        return
+    bm = bmesh.new()
+    floor, step, amp, wave = 3.1, 1.5, 1.3, 9.0
+    for b in parts:
+        ring = ccw([tuple(p) for p in b['outer'][0][:-1]] if b['outer'][0][0] == b['outer'][0][-1] else [tuple(p) for p in b['outer'][0]])
+        zb = b.get('base', 0.0)
+        # The outline resampled every 1.5 m, each point with its outward normal and the distance along.
+        pts = []
+        u = 0.0
+        for i in range(len(ring)):
+            a, c = Vector((*ring[i], 0)), Vector((*ring[(i + 1) % len(ring)], 0))
+            e = c - a
+            if e.length < 1e-3:
+                continue
+            nrm = Vector((e.y, -e.x, 0)).normalized()
+            k = max(1, int(e.length // step))
+            for j in range(k):
+                pts.append((a + e * (j / k), nrm, u + e.length * j / k))
+            u += e.length
+        rows = []
+        z = zb + b['min']
+        top = zb + b['height']
+        levels = []
+        while z < top - 0.01:
+            levels.append(z)
+            z += floor
+        levels.append(top)
+        for zl in levels:
+            row = []
+            shift = (zl - zb) / floor * 0.9  # the folds slide 0.9 m a floor
+            for p, nrm, uu in pts:
+                south = max(0.0, -nrm.y)
+                k = amp * (0.5 + 0.5 * math.sin(math.tau * (uu + shift) / wave)) * (1 - min(1.0, south * 1.4))
+                k *= 0.0 if zl - zb < 25 else min(1.0, (zl - zb - 25) / 10)  # the brick base's plain walls
+                q = p + nrm * k
+                row.append(bm.verts.new((q.x, q.y, zl)))
+            rows.append(row)
+        for r0, r1 in zip(rows, rows[1:]):
+            n = len(r0)
+            for i in range(n):
+                bm.faces.new((r0[i], r0[(i + 1) % n], r1[(i + 1) % n], r1[i]))
+        bm.faces.new(rows[-1])
+    g['facade_object']('spruce8', bm, (0.42, 0.44, 0.47), (0.2, 0.2, 0.21), style=1, bay=1.5, floorh=floor, win_w=0.3, win_h=0.3, frame=0.6,
+                       busy=0.3)
+    print(f'landmark: 8 Spruce Street ({len(parts)} parts)')

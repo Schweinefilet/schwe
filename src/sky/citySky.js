@@ -100,6 +100,8 @@ async function loadSkyline(cityId, anisotropy, month = new Date().getUTCMonth() 
   const textures = { light, night, windows }
   if (mirror) [textures.mirrorLight, textures.mirrorNight, textures.mirrorWindows] = images.slice(3, 6)
   if (glow) [textures.glow, textures.halo] = images.slice(mirror ? 6 : 3)
+  // The lens's starbursts round the brightest lights, where the city has them (full resolution, apart).
+  if (glow && scale.star) textures.star = await loadSkylineImage(`${base}/${variant}-star.png`)
   return { meta, variant, scale, textures }
 }
 
@@ -146,6 +148,7 @@ export class CitySky {
       uSkylineScale: { value: new THREE.Vector3() },
       uSkylineLit: { value: new THREE.Vector3() },
       uSkylineGain: { value: new THREE.Vector3(SKY.skyline.lights, SKY.skyline.windows, SKY.skyline.hazePerKm) },
+      uSkylineHazeHeight: { value: SKY.skyline.hazeHeight },
       uSkylineMirrorLight: { value: NO_SKYLINE },
       uSkylineMirrorNight: { value: NO_SKYLINE },
       uSkylineMirrorWindows: { value: NO_SKYLINE },
@@ -161,6 +164,8 @@ export class CitySky {
       uSkylineGlowRect: { value: new THREE.Vector4() },
       uSkylineGlowScale: { value: new THREE.Vector3() },
       uSkylineGlowGain: { value: new THREE.Vector3(SKY.glow.tight, SKY.glow.wide, SKY.glow.haze) },
+      uSkylineStar: { value: NO_SKYLINE },
+      uSkylineStarGain: { value: 0 },
       uSkyLift: { value: new THREE.Vector3() },
       uSkyGain: { value: new THREE.Vector3(1, 1, 1) },
       uSkyLook: { value: new THREE.Vector2(1, 1) },
@@ -197,6 +202,10 @@ export class CitySky {
             u.uSkylineHalo.value = s.textures.halo
             u.uSkylineGlowScale.value.set(s.scale.glow, s.scale.halo, g.lateShare)
             u.uSkylineGlowRect.value.set(s.meta.azimuth[0] * RAD, s.meta.azimuth[1] * RAD, g.elevation[0] * RAD, (g.elevation[1] - g.elevation[0]) * RAD)
+            if (s.textures.star) {
+              u.uSkylineStar.value = s.textures.star
+              u.uSkylineStarGain.value = s.scale.star * SKY.glow.star
+            }
           }
           u.uSkylineOn.value = 1
         },

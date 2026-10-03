@@ -19,7 +19,7 @@
     3840,
     1152
   ],
-  "source": "\u00a9 OpenStreetMap contributors (ODbL); rendered in Blender (Cycles) with hand-modelled landmarks",
+  "source": "\u00a9 OpenStreetMap contributors, ODbL; rendered in Blender (Cycles) with hand-modelled landmarks",
   "variants": {
     "leaf": {
       "months": [
@@ -33,16 +33,16 @@
         11
       ],
       "scale": {
-        "light": 1.0,
+        "light": 2.0,
         "night": 32.0,
         "windows": 16.0,
         "mirror": {
           "light": 1.0,
           "night": 32.0,
-          "windows": 16.0
+          "windows": 8.0
         },
         "glow": 8.0,
-        "halo": 2.0
+        "halo": 1.0
       }
     },
     "bare": {
@@ -53,11 +53,11 @@
         3
       ],
       "scale": {
-        "light": 1.0,
+        "light": 2.0,
         "night": 32.0,
         "windows": 16.0,
         "mirror": {
-          "light": 1.0,
+          "light": 2.0,
           "night": 32.0,
           "windows": 16.0
         },
@@ -82,7 +82,7 @@
       -20.0,
       26.0
     ],
-    "lateShare": 0.3189,
+    "lateShare": 0.2809,
     "glowSize": [
       1920,
       736

@@ -6,11 +6,11 @@ import { effectiveTier } from './gpuScore.js'
 // its mips, 'half' about 5.5 MB.
 // Override for testing with ?tier=high|medium|low.
 export const TIERS = {
-  high: { rainCount: 6000, heroDrops: 10, decoders: 2, videoHeight: 1080, dpr: 2, effects: ['grain', 'bloom', 'vignette', 'lut'], splash: 'vat', backdropView: 'full' },
-  medium: { rainCount: 3000, heroDrops: 8, decoders: 1, videoHeight: 1080, dpr: 1.5, effects: ['grain', 'lut', 'vignette'], splash: 'vat', backdropView: 'half' },
+  high: { rainCount: 6000, heroDrops: 10, decoders: 2, videoHeight: 1080, dpr: 2, effects: ['smaa', 'grain', 'bloom', 'vignette', 'lut'], splash: 'vat', backdropView: 'full' },
+  medium: { rainCount: 3000, heroDrops: 8, decoders: 1, videoHeight: 1080, dpr: 1.5, effects: ['smaa', 'grain', 'lut', 'vignette'], splash: 'vat', backdropView: 'half' },
   // Low keeps the vignette: the effect pass has to run anyway (it converts to sRGB), and the vignette
   // merges into it for free.
-  low: { rainCount: 1200, heroDrops: 4, decoders: 1, videoHeight: 720, dpr: 1, effects: ['lut', 'vignette'], splash: 'vat', backdropView: 'half' },
+  low: { rainCount: 1200, heroDrops: 4, decoders: 1, videoHeight: 720, dpr: 1, effects: ['smaa', 'lut', 'vignette'], splash: 'vat', backdropView: 'half' },
 }
 export const TIER_ORDER = ['high', 'medium', 'low']
 

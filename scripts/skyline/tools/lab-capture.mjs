@@ -68,7 +68,9 @@ if (process.argv.includes('--dive')) {
         const url = await page.evaluate(() => document.querySelector('canvas').toDataURL('image/jpeg', 0.92))
         const file = `${OUT}/${CITY}-${time}-${weather}-${view}.jpg`
         await writeFile(file, Buffer.from(url.split(',')[1], 'base64'))
-        console.log(file)
+        // One frame's draw calls and triangles over every render it makes, and the textures held.
+        const info = await page.evaluate(() => window.__lab.frameInfo?.())
+        console.log(file, info ? `(${info.calls} draw calls, ${info.triangles} triangles, ${info.textures} textures)` : '')
       }
     }
   }

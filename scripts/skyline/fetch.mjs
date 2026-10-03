@@ -22,7 +22,8 @@ if (!CITY) {
   console.error('usage: node scripts/skyline/fetch.mjs --city <id> [--only buildings|water|extra]')
   process.exit(1)
 }
-const SPAN = 130 // degrees: the panorama's 120 and a margin
+// Degrees either side of the bearing: the panorama's (the vantage's `span`, default -60 to 60) and 5 more.
+const MARGIN = 5
 const NEAR = 2500
 const FAR = 7000
 const RAD = Math.PI / 180
@@ -38,11 +39,15 @@ const bearingTo = ([a1, o1], [a2, o2]) =>
   Math.atan2(Math.sin((o2 - o1) * RAD) * Math.cos(a2 * RAD), Math.cos(a1 * RAD) * Math.sin(a2 * RAD) - Math.sin(a1 * RAD) * Math.cos(a2 * RAD) * Math.cos((o2 - o1) * RAD)) / RAD
 const mean = (bs) => Math.atan2(bs.reduce((s, b) => s + Math.sin(b * RAD), 0), bs.reduce((s, b) => s + Math.cos(b * RAD), 0)) / RAD
 const BEARING = (mean(view.toward.map((t) => bearingTo(view.from.at, t.at))) + 360) % 360
+const [LEFT, RIGHT] = view.span ?? [-60, 60]
 
 // The view's wedge as an Overpass polygon, out to r metres.
 function wedge(r) {
   const pts = [[lat0, lon0]]
-  for (let a = -SPAN / 2; a <= SPAN / 2; a += 5) {
+  const a0 = LEFT - MARGIN
+  const a1 = RIGHT + MARGIN
+  const steps = [...Array(Math.ceil((a1 - a0) / 5)).keys()].map((k) => a0 + k * 5).concat(a1)
+  for (const a of steps) {
     const b = (BEARING + a) * RAD
     pts.push([lat0 + (r * Math.cos(b)) / 110540, lon0 + (r * Math.sin(b)) / (111320 * Math.cos(lat0 * RAD))])
   }

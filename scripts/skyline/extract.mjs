@@ -16,7 +16,6 @@ const arg = (name, fallback = null) => {
   return i >= 0 ? process.argv[i + 1] : fallback
 }
 const CITY = arg('city')
-const SPAN = Number(arg('span', 120)) + 10 // a little wider than the panorama, for its edges
 const NEAR = 2500
 const FAR = 7000
 const FLOOR = 3.2
@@ -30,6 +29,9 @@ const bearingTo = ([a1, o1], [a2, o2]) =>
   Math.atan2(Math.sin((o2 - o1) * RAD) * Math.cos(a2 * RAD), Math.cos(a1 * RAD) * Math.sin(a2 * RAD) - Math.sin(a1 * RAD) * Math.cos(a2 * RAD) * Math.cos((o2 - o1) * RAD)) / RAD
 const mean = (bs) => Math.atan2(bs.reduce((s, b) => s + Math.sin(b * RAD), 0), bs.reduce((s, b) => s + Math.cos(b * RAD), 0)) / RAD
 const BEARING = (mean(view.toward.map((t) => bearingTo(view.from.at, t.at))) + 360) % 360
+// The panorama's azimuths either side of the bearing (the vantage's `span`), and 5 degrees more for its edges.
+const VIEW_SPAN = view.span ?? [-60, 60]
+const [LEFT, RIGHT] = [VIEW_SPAN[0] - 5, VIEW_SPAN[1] + 5]
 
 const KX = 111320 * Math.cos(lat0 * RAD)
 const KY = 110540
@@ -55,7 +57,7 @@ const inWedge = (pts, r) =>
     const d = Math.hypot(x, y)
     if (d > r) return false
     const rel = ((Math.atan2(x, y) / RAD - BEARING + 540) % 360) - 180
-    return Math.abs(rel) <= SPAN / 2 || d < 60
+    return (rel >= LEFT && rel <= RIGHT) || d < 60
   })
 const contains = (ring, [px, py]) => {
   let odd = false
@@ -65,6 +67,15 @@ const contains = (ring, [px, py]) => {
     if (yi > py !== yj > py && px < ((xj - xi) * (py - yi)) / (yj - yi) + xi) odd = !odd
   }
   return odd
+}
+// roof:direction as degrees (OSM allows compass letters too), or null.
+const COMPASS = ['N', 'NNE', 'NE', 'ENE', 'E', 'ESE', 'SE', 'SSE', 'S', 'SSW', 'SW', 'WSW', 'W', 'WNW', 'NW', 'NNW']
+const roofDirection = (v) => {
+  if (v == null) return null
+  const i = COMPASS.indexOf(String(v).trim().toUpperCase())
+  if (i >= 0) return i * 22.5
+  const n = Number(v)
+  return Number.isFinite(n) ? n : null
 }
 const centroid = (ring) => [ring.reduce((s, p) => s + p[0], 0) / ring.length, ring.reduce((s, p) => s + p[1], 0) / ring.length]
 // A multipolygon's rings from its member ways: ways sharing end nodes joined into chains. A chain left
@@ -152,7 +163,16 @@ for (const e of osm.elements) {
     inner,
     height: +height.toFixed(2),
     min: +min.toFixed(2),
-    roof: { shape, height: +roofH.toFixed(2), colour: t['roof:colour'] ?? null, material: t['roof:material'] ?? null },
+    // `tagged`: OSM gives the roof's shape (untagged roofs are taken as flat; skyline's filler may pitch
+    // them); `direction`: a skillion's downhill compass bearing, where mapped.
+    roof: {
+      shape,
+      height: +roofH.toFixed(2),
+      colour: t['roof:colour'] ?? null,
+      material: t['roof:material'] ?? null,
+      tagged: t['roof:shape'] != null,
+      direction: roofDirection(t['roof:direction']),
+    },
     levels,
     estimated,
     material: t['building:material'] ?? null,
@@ -186,6 +206,21 @@ for (const id of LANDMARK_OUTLINES) {
   landmarkOutlines[id] = o.outer
   const inside = (b) => o.outer.some((r) => contains(r, centroid(b.outer[0])))
   for (const list of [outlines, parts]) for (let i = list.length - 1; i >= 0; i--) if (list[i].id === id || inside(list[i])) list.splice(i, 1)
+}
+
+// Landmarks modelled whole by hand where OSM's outline is not used, placed by their published position
+// (Wikipedia's coordinates): what OSM maps with its centre within `clear` metres is not raised.
+const LANDMARK_POINTS = {
+  'new-york': {
+    'Chrysler Building': { at: [40.751667, -73.975278], clear: 32 },
+    '432 Park Avenue': { at: [40.761389, -73.971944], clear: 18 },
+  },
+}[CITY] ?? {}
+const landmarkPoints = {}
+for (const [name, { at, clear }] of Object.entries(LANDMARK_POINTS)) {
+  const p = local({ lat: at[0], lon: at[1] })
+  landmarkPoints[name] = { at: p }
+  for (const list of [outlines, parts]) for (let i = list.length - 1; i >= 0; i--) if (Math.hypot(...centroid(list[i].outer[0]).map((v, k) => v - p[k])) < clear) list.splice(i, 1)
 }
 
 // An outline with mapped parts is drawn by its parts alone. Each part notes the building it belongs to
@@ -261,6 +296,7 @@ for (const b of buildings) {
 const outlineBase = new Map(outlines.map((o) => [o.id, baseAt(centroid(o.outer[0]))]))
 for (const b of buildings) b.base = (b.within && outlineBase.get(b.within.id)) ?? outlineBase.get(b.id) ?? baseAt(centroid(b.outer[0]))
 const landmarkBases = Object.fromEntries(Object.entries(landmarkOutlines).map(([id, o]) => [id, baseAt(centroid(o[0]))]))
+for (const lp of Object.values(landmarkPoints)) lp.base = baseAt(lp.at)
 
 // ---- The rest ----------------------------------------------------------------------------------
 const water = []
@@ -306,13 +342,14 @@ for (const e of [...waterRelations, ...extra.elements.filter((e) => !(e.type ===
 
 const out = {
   city: CITY,
-  vantage: { name: view.from.name, bearing: +BEARING.toFixed(3) },
+  vantage: { name: view.from.name, bearing: +BEARING.toFixed(3), span: VIEW_SPAN },
   source: TERRAIN ? '© OpenStreetMap contributors, ODbL; terrain: USGS 3DEP via Mapzen terrain tiles' : '© OpenStreetMap contributors, ODbL',
   terrain: TERRAIN,
   counts: { buildings: buildings.length, partsReplacingOutlines: replaced, estimatedHeights: buildings.filter((b) => b.estimated).length, heightsFromNeighbours: byMedian, water: water.length, bridges: bridges.length, piers: piers.length, trees: trees.length, lamps: lamps.length },
   buildings,
   landmarkOutlines,
   landmarkBases,
+  landmarkPoints,
   replacedOutlines,
   water,
   bridges,

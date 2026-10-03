@@ -269,7 +269,7 @@ export const SPLASH = {
   answerAt: SPLASH_AT + 3.0, // the ending's type fades in as the rings spread, and stays
   // As the drop meets the water the frozen moment ends: the rain around eases to `timeScale` of its
   // speed over `seconds` (real time) and keeps falling slowly on the held last frame.
-  rainAgain: { at: SPLASH_AT + 2.5, timeScale: 0.4, seconds: 3 },
+  rainAgain: { at: SPLASH_AT + 2.5, timeScale: 0.8, seconds: 3 },
   // Once the scroll passes autoFrom going down, the ending plays itself (the scroll moves with it,
   // locked) to the end at about autoRate units per second, then holds on the last frame.
   autoFrom: SPLASH_AT + 0.1, // the drop leaves the word (fallAt)
@@ -304,7 +304,7 @@ export const PUDDLE_RAIN = {
   clock: 0.3,
   period: 8,
   tile: 8, // world units: the rain and the surface repeat every tile in both directions
-  rate: 40, // impacts per world unit² per second of the rain's clock (a downpour)
+  rate: 20, // impacts per world unit² per second of the rain's clock (a downpour)
   seed: 20260930,
   lead: 0.06, // seconds a drop is seen falling before it lands
   // Camera distance (world units): the full bake within `full`, its light copy out to `far`, fading
@@ -448,8 +448,9 @@ export const SKY = {
   // show one. `lights`, `windows`: the on-screen gain of its fixed lights (lamps, floodlights, landmarks)
   // and of its lit windows (display-referred, after the sky's exposure: a real window, a hundred times
   // brighter than a city's night sky, would blow the skyline out); `hazePerKm`: how fast distant
-  // buildings fade into the light around them (plus rain or fog).
-  skyline: { url: 'skyline/', lights: 0.15, windows: 0.18, hazePerKm: 0.12 },
+  // buildings fade into the light around them at the eye's height (plus rain or fog); `hazeHeight`: the
+  // scale height (m) the haze thins with above it (a city's hazy layer; a tower's top stands clearer).
+  skyline: { url: 'skyline/', lights: 0.15, windows: 0.18, hazePerKm: 0.12, hazeHeight: 600 },
   // The water below a skyline (a river), drawn live in the drop: its waves from the city's wind
   // (src/sky/waves.js), reflecting the city (the skyline's mirror render), the sky, the sun and the moon.
   // `slopeScale`: the share of the open sea's mean-square slope (Cox and Munk) a sheltered city river
@@ -464,7 +465,9 @@ export const SKY = {
   // after Unreal Engine's default Gaussian-sum bloom (which would be 0.33 and 0.21: intensity 0.675 times
   // the tints of its sizes); `haze`: the halo the air adds, times the share of the light it scatters over
   // a kilometre (more in rain and fog). The user's choice of three strengths (2026-09-30): the subtle one.
-  glow: { tight: 0.35, wide: 0.25, haze: 1.0 },
+  // `star`: the starbursts a stopped-down lens puts on bright point lights (encode.py: 18 spikes, a
+  // nine-blade aperture, as on the bridge's necklace in set2/w0), where a city's skyline has them.
+  glow: { tight: 0.35, wide: 0.25, haze: 1.0, star: 12.0 },
   // The camera's look (sky.glsl skyTonemap: AgX, then this in its log space as Blender applies looks), by
   // day and by night, mixed by how dark it is. `lift` raises the blacks toward its colour, `gain` tints the
   // highlights, then `contrast` (a power) and `saturation`. Night: the user's choice of three strengths

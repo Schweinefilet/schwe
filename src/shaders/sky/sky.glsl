@@ -38,7 +38,8 @@ uniform vec2 uSkylineDist;    // log of the nearest encoded distance (m), and th
 uniform vec3 uSkylineScale;   // what each texture's RGB was divided by to fit
 uniform vec3 uSkylineLit;     // weights of the evening and late windows (local time), how dark it is (0 day, 1 night)
 uniform vec3 uSkylineGain;    // on-screen gain of the fixed lights and of the windows (display-referred: added
-                              // after the exposure), and haze per km
+                              // after the exposure), and haze per km at the eye's height
+uniform float uSkylineHazeHeight; // the clear air's haze thins with height: its scale height (m)
 uniform float uSkyHaze;       // rain or fog extinction near the ground, per km
 uniform float uSkyRain;       // rain now, mm/h (eased between readings)
 uniform float uSkyTime;       // seconds, the city's own live clock (its falling rain), wrapping every 600
@@ -72,6 +73,8 @@ uniform sampler2D uSkylineHalo;
 uniform vec4 uSkylineGlowRect;    // as uSkylineRect (it reaches higher: a halo spreads past the tallest light)
 uniform vec3 uSkylineGlowScale;   // what the glow and halo were divided by; the share of windows lit late
 uniform vec3 uSkylineGlowGain;    // on-screen gain of the glow, of the halo, and the halo the air adds in haze
+uniform sampler2D uSkylineStar;   // the lens's starbursts round the brightest lights (over the glow's rect, full resolution)
+uniform float uSkylineStarGain;   // what it was divided by, times its on-screen gain (0: none)
 // The camera's look (SKY.grade, day and night mixed by how dark it is), applied in AgX's own space as
 // Blender applies its looks: lift and gain per channel, contrast (a power), saturation.
 uniform vec3 uSkyLift;
@@ -265,12 +268,17 @@ bool skylineUv(vec3 d, out vec2 uv, out float sides) {
 // lit by `fill` (the sky behind us, which the walls we see face) and fading with distance into `horizon`
 // (the light behind them), as rgb premultiplied, a: coverage; and `lights`, the city's own lights and
 // windows after dark, display-referred (added after the exposure: a real window, a hundred times brighter
-// than a city's night sky, would blow the skyline out).
-vec4 skylineDecode(vec4 L, vec4 N, vec4 W, vec3 scale, vec3 fill, vec3 horizon, float sides, out vec3 lights) {
+// than a city's night sky, would blow the skyline out). `sinEl`: the sine of the view's elevation there.
+vec4 skylineDecode(vec4 L, vec4 N, vec4 W, vec3 scale, vec3 fill, vec3 horizon, float sides, float sinEl, out vec3 lights) {
   float cover = L.a * sides;
   float km = exp(uSkylineDist.x + (N.a / max(L.a, 1e-3)) * uSkylineDist.y) / 1000.0;
-  // Aerial perspective: farther buildings fade into the light around them, faster in rain or fog.
-  float clear = exp(-km * (uSkylineGain.z + uSkyHaze));
+  // Aerial perspective: farther buildings fade into the light around them, faster in rain or fog. The
+  // clear air's haze thins with height (density exp(-z / H) above the eye): a sight line climbing `rise`
+  // metres crosses (1 - exp(-rise / H)) / (rise / H) of the haze a level one would, so a distant tower's
+  // top stands clearer than its foot.
+  float x = km * 1000.0 * sinEl / max(uSkylineHazeHeight, 1.0);
+  float thin = abs(x) < 1e-3 ? 1.0 - 0.5 * x : (1.0 - exp(-x)) / x;
+  float clear = exp(-km * (uSkylineGain.z * thin + uSkyHaze));
   vec3 lit = L.rgb * scale.x * fill * sides;
   vec3 c = horizon * cover * (1.0 - clear) + lit * clear;
   // After dark: the fixed lights, and the windows, the evening's giving way to the few still lit late.
@@ -291,7 +299,7 @@ vec4 skyline(vec2 uv, float sides, float foot, vec3 fill, vec3 horizon, out vec3
   if (L.a * sides <= 1e-3) return vec4(0.0);
   vec4 N = textureLod(uSkylineNight, uv, lod);
   vec4 W = textureLod(uSkylineWindows, uv, lod);
-  return skylineDecode(L, N, W, uSkylineScale, fill, horizon, sides, lights);
+  return skylineDecode(L, N, W, uSkylineScale, fill, horizon, sides, sin(uSkylineRect.z + uv.y * uSkylineRect.w), lights);
 }
 
 // Smooth sampling of a soft texture seen magnified: a cubic B-spline from four bilinear reads, so no
@@ -332,6 +340,11 @@ vec3 skylineGlow(vec3 d, float foot) {
   float air = 1.0 - exp(-(uSkylineGain.z + uSkyHaze));
   vec3 c = g.rgb * uSkylineGlowScale.x * uSkylineGlowGain.x * (1.0 - lateOff * g.a)
          + h.rgb * uSkylineGlowScale.y * (uSkylineGlowGain.y + uSkylineGlowGain.z * air) * (1.0 - lateOff * h.a);
+  // The starbursts: thin spikes, read plainly (a B-spline would smear them), mip-mapped when minified.
+  if (uSkylineStarGain > 0.0) {
+    float tps = float(textureSize(uSkylineStar, 0).x) / uSkylineGlowRect.y;
+    c += textureLod(uSkylineStar, uv, log2(max(foot * tps, 1.0))).rgb * uSkylineStarGain;
+  }
   return c * uSkylineGain.x * uSkylineLit.z * exp(-uSkyHaze) * sides;
 }
 
@@ -435,6 +448,38 @@ float waterNoise(vec2 p) {
              mix(glitterHash(vec3(i + vec2(0.0, 1.0), 7.0)), glitterHash(vec3(i + vec2(1.0, 1.0), 7.0)), f.x), f.y);
 }
 
+#ifndef MIRROR_STEPS
+#define MIRROR_STEPS 16
+#endif
+// Where on the mirror panorama a wave-tilted reflection lands. The panorama is the city seen from the
+// eye's mirror image, `hE` metres below the water: exact for flat water, whose every reflected ray passes
+// through that point. A tilted facet's ray does not: it leaves the water `dw` metres out (horizontally,
+// where the eye sees it `e` below the horizon) at elevation `er`, and read straight from the mirror eye it
+// would pass under whatever stands between, so a far light's streak would run through a pontoon, a pier
+// or the embankment in front of it, where the object's own reflection should leave a dark patch on the
+// water. So the ray is marched: the mirror eye sees its point at R metres out at elevation
+// atan(((R - dw) tan er + hE) / R), from e (at the water) to er (far away); the march steps evenly through
+// those elevations (so a low object's band of the mirror cannot be stepped over) and at each takes the
+// ray's distance there, R = (hE - dw tan er) / (tan em - tan er). The first surface the panorama holds
+// nearer than the ray's point is what the facet reflects (the point is behind it, as a screen-space
+// reflection tests depth). For flat water (er = e) it is the plain mirror, as before.
+float mirrorHit(float u, float e, float er, float dw, float hE) {
+  float ter = tan(er);
+  float num = hE - dw * ter;
+  for (int k = 1; k <= MIRROR_STEPS; k++) {
+    float em = mix(e, er, float(k) / float(MIRROR_STEPS + 1));
+    float v = (em - uSkylineMirrorRect.z) / uSkylineMirrorRect.w;
+    if (v > 1.0 || v < 0.0) break; // above the mirror panorama only sky; below it, the water's edge
+    float R = num / (tan(em) - ter);
+    vec2 uv = vec2(u, v);
+    vec4 L = textureLod(uSkylineMirrorLight, uv, 0.0);
+    if (L.a < 0.5) continue;
+    float N = textureLod(uSkylineMirrorNight, uv, 0.0).a;
+    if (exp(uSkylineDist.x + (N / L.a) * uSkylineDist.y) * cos(em) <= R) return em;
+  }
+  return er;
+}
+
 // The water seen along d (below the horizon, where the skyline leaves it uncovered): rgb before the
 // exposure; `lights`, the city's lights reflected, after it.
 vec3 water(vec3 d, float foot, vec3 fill, vec3 horizon, vec3 zenith, vec3 deck, out vec3 lights) {
@@ -443,6 +488,7 @@ vec3 water(vec3 d, float foot, vec3 fill, vec3 horizon, vec3 zenith, vec3 deck, 
   vec2 h = d.xz / cosE;                  // the view's direction across the water
   vec2 hp = vec2(-h.y, h.x);
   float slant = uSkylineWater.y / sinE;  // metres to the water
+  float dw = slant * cosE;                // and along it
   vec2 P = d.xz * slant;
   // The pixel's footprint on the water: long toward the horizon, narrow across.
   float along = foot * slant / sinE;
@@ -515,14 +561,15 @@ vec3 water(vec3 d, float foot, vec3 fill, vec3 horizon, vec3 zenith, vec3 deck, 
     float F = fresnelWater(-vn);
     vec3 r = d - 2.0 * vn * n;
     float er = asin(clamp(r.y, 0.0, 1.0)); // reflected down into the water: another wave's back, low sky
-    vec2 uv = vec2(mod(atan(r.x, -r.z) - uSkylineMirrorRect.x, 2.0 * PI) / uSkylineMirrorRect.y,
-                   (er - uSkylineMirrorRect.z) / uSkylineMirrorRect.w);
+    float u = mod(atan(r.x, -r.z) - uSkylineMirrorRect.x, 2.0 * PI) / uSkylineMirrorRect.y;
+    // What the facet's ray meets first, marched out from where it leaves the water (mirrorHit).
+    vec2 uv = vec2(u, (mirrorHit(u, asin(sinE), er, dw, uSkylineWater.y) - uSkylineMirrorRect.z) / uSkylineMirrorRect.w);
     float inside = 1.0 - smoothstep(0.92, 1.0, uv.y); // above the mirror panorama there is only sky
     vec4 L = textureGrad(uSkylineMirrorLight, uv, gx, gy) * inside;
     vec4 N = textureGrad(uSkylineMirrorNight, uv, gx, gy) * inside;
     vec4 W = dark ? textureGrad(uSkylineMirrorWindows, uv, gx, gy) * inside : vec4(0.0);
     vec3 li;
-    vec4 m = skylineDecode(L, N, W, uSkylineMirrorScale, fill, horizon, 1.0, li);
+    vec4 m = skylineDecode(L, N, W, uSkylineMirrorScale, fill, horizon, 1.0, sin(er), li);
     float q = 0.5 * tj;
     vec3 st = skyTap[1] + q * 0.5 * (skyTap[2] - skyTap[0]) + q * q * 0.5 * (skyTap[2] - 2.0 * skyTap[1] + skyTap[0]);
     mirrorDay += wj * F * m.rgb;

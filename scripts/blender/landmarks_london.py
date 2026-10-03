@@ -12,7 +12,13 @@ ELIZABETH = 'way/123557148'
 HUNGERFORD = 'way/184107136'
 # Drawn here instead of raised from OpenStreetMap: the London Eye's footprint (raised, a solid slab) and
 # Hungerford Bridge's outline (as a deck, a 38 m wide slab over the river).
-REPLACES = {EYE_WAY, HUNGERFORD}
+# Left out (user's choice, 2026-10-02): three moored craft OSM maps as buildings on the river 160 to 175 m
+# out (the generic facade made them a floating block of office windows).
+MOORED = {'way/1424896013', 'way/1424896014', 'way/1424896015'}
+REPLACES = {EYE_WAY, HUNGERFORD} | MOORED
+# Holes in the river OSM cuts for Brunel's pier's two ends (left out, below), by their centres (metres from
+# the vantage): filled with water instead of raised as stone blocks.
+RIVER_FILL = ((-165.0, -234.0), (-198.0, -299.0))
 # Floodlit at night, by name (a building or the building a part belongs to), relative brightness: the
 # Palace and its towers golden (ref1, ref6), the Abbey, and the river front's grand buildings dimmer.
 FLOODLIT = {
@@ -26,14 +32,96 @@ EYE_LED = (0.04, 0.12, 1.0)
 # The Jubilee stays' glow at the top of the fan (see rods_material).
 ROD_GLOW = 16.0
 
+# ---- Hero landmarks -------------------------------------------------------------------------------
+# The buildings that say "London from Waterloo Bridge" with everything else hidden (skyline.py --only
+# heroes): the Eye, the Palace of Westminster's three towers and its pinnacled river front, the Abbey,
+# Portcullis House's chimneys, Whitehall Court's pavilion roofs, the towers beyond (Millbank, St George
+# Wharf) and the Jubilee footbridges. Reference photos: data/refs/london/ (ref1-6) and set2/ (37 more
+# from Waterloo Bridge looking upstream, Wikimedia Commons; sources.json credits each).
+HEROES = {'Palace of Westminster', 'Elizabeth Tower', 'Victoria Tower', 'Westminster Abbey', 'Portcullis House', 'Whitehall Court',
+          'Millbank Tower', 'Westminster Hall', 'Central Tower', 'County Hall', 'Shell Centre'}
+# Modelled whole here instead of raised from their OpenStreetMap parts.
+REPLACES_WITHIN = {'Elizabeth Tower', 'Victoria Tower'}
+MILLBANK = 'way/24553530'
+# St George Wharf Tower (Vauxhall): OSM maps it as four stacked rings, 148 to 181 m.
+ST_GEORGE = ('way/1429872268', 'way/1429872269', 'way/1429872270', 'way/1429872271')
+CENTRAL_TOWER = 'way/123557145'  # its base; the lantern and spire above (OSM's parts, to 78 m) are modelled
+VICTORIA_BASE = 'way/1134791149'
+
+# Linear albedo. Anston limestone (the Palace), weathered to a warm brown-grey (set2/big-c123, overcast); its roofs cast
+# iron tiles, near black-blue; Portland stone for Whitehall and the South Bank's offices; Portcullis
+# House's sandstone and its bronze roof and chimneys, dark in every photo.
+ANSTON = (0.28, 0.22, 0.15)
+IRON_ROOF = (0.035, 0.04, 0.05)
+SLATE = (0.055, 0.06, 0.07)
+PORTLAND = (0.38, 0.36, 0.31)
+GOTHIC_CELL = (1.7, 4.6, 0.13, 0.36, 0.3)  # bay, floor height, light half width and height, frame
+# Each landmark's stone, roof and facade style over all its OSM parts (filler.py add_building), instead
+# of OSM's palette colours and the generic office windows; `parts` for its windowless parts (Portcullis
+# House's chimneys are bronze, like its roof).
+OVERRIDES = {
+    'Palace of Westminster': dict(wall=ANSTON, roof=IRON_ROOF, style=4, cell=GOTHIC_CELL, busy=0.12),
+    'Westminster Hall': dict(wall=ANSTON, roof=SLATE, style=4, cell=GOTHIC_CELL, busy=0.0),
+    'Central Tower': dict(wall=ANSTON, roof=IRON_ROOF, style=4, cell=GOTHIC_CELL, busy=0.0),
+    'Westminster Abbey': dict(wall=(0.31, 0.28, 0.22), roof=(0.07, 0.07, 0.075), style=4, cell=(2.2, 6.0, 0.16, 0.4, 0.3), busy=0.0),
+    'Portcullis House': dict(wall=(0.2, 0.18, 0.155), roof=(0.07, 0.055, 0.04), parts=(0.06, 0.05, 0.04)),
+    'Whitehall Court': dict(wall=PORTLAND, roof=SLATE),
+    'County Hall': dict(wall=PORTLAND, roof=(0.16, 0.075, 0.05)),
+    'Shell Centre': dict(wall=(0.34, 0.32, 0.27)),
+    'Ministry of Defence': dict(wall=PORTLAND),
+}
+_prepared = {}
+
+
+def is_hero(b):
+    return (b.get('name') in HEROES or (b.get('within') or {}).get('name') in HEROES or b['id'] in ST_GEORGE
+            or b['id'] == MILLBANK)
+
+
+def prepare(scene_data):
+    """OSM elements the hero models replace (skyline.py skips them), noted before the city is built: St
+    George Wharf's rings, Millbank Tower, and the Palace's parts above the Central Tower's base."""
+    out = set(ST_GEORGE) | {MILLBANK}
+    base = next((b for b in scene_data['buildings'] if b['id'] == CENTRAL_TOWER), None)
+    if base:
+        c = _centroid(base['outer'][0])
+        for b in scene_data['buildings']:
+            if (b.get('within') or {}).get('name') == 'Palace of Westminster' and b['min'] >= 24 and math.dist(_centroid(b['outer'][0]), c) < 12:
+                out.add(b['id'])
+    _prepared['replaced'] = out
+    return out
+
+
+def _centroid(ring):
+    return (sum(p[0] for p in ring) / len(ring), sum(p[1] for p in ring) / len(ring))
+
+
+def _axes(ring):
+    """A square tower's centre and axes from its outline: the longest edge's direction and its normal."""
+    from mathutils import Vector
+    pts = [Vector((x, y, 0)) for x, y in ring]
+    if (pts[0] - pts[-1]).length < 1e-6:
+        pts = pts[:-1]
+    c = sum(pts, Vector()) / len(pts)
+    a, b = max(((pts[i], pts[(i + 1) % len(pts)]) for i in range(len(pts))), key=lambda e: (e[1] - e[0]).length)
+    ax = (b - a).normalized()
+    return c, ax, Vector((-ax.y, ax.x, 0))
+
 
 def build(g):
     bridges = {b['id']: b for b in g['scene_data']['bridges']}
     mats = materials(g)
     london_eye(g, mats, footprint_of(g, EYE_WAY))
     jubilee_bridges(g, mats, bridges)
-    clock_faces(g, mats)
-    embankment_lights(g, mats)
+    elizabeth_tower(g, mats)
+    victoria_tower(g, mats)
+    central_tower(g, mats)
+    palace_pinnacles(g)
+    millbank_tower(g)
+    st_george_wharf(g)
+    whitehall_court_roofs(g)
+    if not g['ONLY']:
+        embankment_lights(g, mats)
 
 
 def materials(g):
@@ -49,17 +137,19 @@ def materials(g):
         'eye_rim': lit_material(g, 'eye_rim', (0.62, 0.63, 0.64), EYE_LED, 2.0),
         'eye_spokes': lit_material(g, 'eye_spokes', (0.55, 0.56, 0.57), EYE_LED, 1.2),
         'capsule': glass_capsule(g),
-        'led': em('eye_led', EYE_LED, 40.0),
-        'mast_led': em('mast_led', (0.85, 0.9, 1.0), 30.0),
-        'deck_led': em('deck_led', (0.7, 0.75, 1.0), 6.0),
+        'led': em('eye_led', EYE_LED, 40.0, base=(0.6, 0.61, 0.62)),
+        'mast_led': em('mast_led', (0.85, 0.9, 1.0), 30.0, base=(0.6, 0.61, 0.62)),
+        'deck_led': em('deck_led', (0.7, 0.75, 1.0), 6.0, base=(0.3, 0.3, 0.3)),
         'cable': sm('cable', (0.55, 0.56, 0.57), 0.4, Metallic=0.5),
         'rods': rods_material(g),
         'balustrade': sm('balustrade', (0.6, 0.63, 0.64), 0.05, **{'Transmission Weight': 0.85}),
         'truss': sm('truss', (0.05, 0.05, 0.055), 0.6, Metallic=0.6),
         'brick': brick_material(g),
-        'clock': em('clock_face', (1.0, 0.95, 0.82), 9.0),
-        'lantern': em('lantern', (1.0, 0.8, 0.55), 25.0),
-        'festoon': em('festoon', (1.0, 0.85, 0.62), 30.0),
+        'clock': opal_material(g),
+        'gilt': gilt_material(g),
+        'flag': flag_material(g),
+        'lantern': em('lantern', (1.0, 0.8, 0.55), 25.0, base=(0.5, 0.48, 0.42)),
+        'festoon': em('festoon', (1.0, 0.85, 0.62), 30.0, base=(0.5, 0.5, 0.48)),
     }
 
 
@@ -135,7 +225,9 @@ def rods_material(g):
     node, math_node = g['node'], g['math_node']
     mat = bpy.data.materials.new('rods')
     nt = g['nodes_of'](mat)
-    b = node(nt, 'ShaderNodeBsdfPrincipled', Roughness=0.3, Metallic=0.7, **{'Base Color': (0.7, 0.71, 0.72, 1)})
+    # Painted, mostly diffuse: a mirror-like steel would reflect the dark street below the horizon, and the
+    # photos show the fans pale against everything (set2).
+    b = node(nt, 'ShaderNodeBsdfPrincipled', Roughness=0.35, Metallic=0.25, **{'Base Color': (0.72, 0.73, 0.74, 1)})
     geo = node(nt, 'ShaderNodeNewGeometry')
     sep = node(nt, 'ShaderNodeSeparateXYZ')
     nt.links.new(geo.outputs['Position'], sep.inputs[0])
@@ -475,35 +567,14 @@ def jubilee_bridges(g, mats, bridges):
         # Iron cylinder piers (Commons photos: between the pylons' caissons), halfway between pylons,
         # four across the railway.
         spots = [(a + b) / 2 for a, b in zip(JUBILEE_PIERS, JUBILEE_PIERS[1:])]
-        for t in spots:
-            if BRUNEL_PIER['along'][0] - 3 <= t <= BRUNEL_PIER['along'][1] + 3:
-                continue
+        for t in spots:  # Brunel's pier left out (below): iron piers there too
             k = min(int(t / 4), len(girders[0]) - 1, len(girders[1]) - 1)
             a0, b0 = girders[0][k], girders[1][k]
             for f in (0.0, 0.33, 0.67, 1.0):
                 q = a0 + (b0 - a0) * f
                 tube(dark, q + Z * (water - 1), q + Z * (z_bot - 1.2), 1.3, 14)
-        # Brunel's brick pier (1845): the body across the whole bridge below the railway, and each end
-        # rising to a round-arched head (ref4: the downstream head's top about 15.4 m up).
-        t0, t1 = BRUNEL_PIER['along']
-        p0, a = d_line.at((t0 + t1) / 2)
-        q0, _ = u_line.at(u_line.nearest(p0))
-        across = (q0 - p0).normalized()  # downstream to upstream
-        half_l, z_head, rise = (t1 - t0) / 2, 12.0, 3.4
-        lo, hi = -BRUNEL_PIER['down'][1], BRUNEL_PIER['up'][1]
-        box(brick, p0 + across * ((lo + hi) / 2), a, across, half_l, (hi - lo) / 2, water - 1, 5.2)
-        for e0, e1 in ((-BRUNEL_PIER['down'][1], -BRUNEL_PIER['down'][0]), BRUNEL_PIER['up']):
-            centre = p0 + across * ((e0 + e1) / 2)
-            half_w = (e1 - e0) / 2
-            box(brick, centre, a, across, half_l, half_w, water - 1, z_head)
-            # The arched head: a half disc spanning the pier's length, run the width of the end.
-            for j in range(12):
-                s0, s1 = math.pi * j / 12, math.pi * (j + 1) / 12
-                ring_pts = [centre + a * (half_l * math.cos(s)) + Z * (z_head + rise * math.sin(s)) for s in (s0, s1)]
-                vs = [brick.verts.new(v + across * (sw * half_w)) for v in (centre + Z * z_head, *ring_pts) for sw in (-1, 1)]
-                brick.faces.new((vs[0], vs[2], vs[4]))
-                brick.faces.new((vs[5], vs[3], vs[1]))
-                brick.faces.new((vs[2], vs[3], vs[5], vs[4]))
+        # Brunel's brick pier (1845) is left out, its heads and its body (user's choice, 2026-10-02): from
+        # the bridge it read as a block standing in front of Hungerford Bridge, not as part of it.
     mesh_object(g, 'hungerford_iron', dark, mats['truss'])
     mesh_object(g, 'hungerford_brick', brick, mats['brick'])
     print('landmark: Hungerford and Golden Jubilee Bridges')
@@ -511,33 +582,331 @@ def jubilee_bridges(g, mats, bridges):
 
 
 
-def clock_faces(g, mats):
-    """Elizabeth Tower's four dials (7 m across, their centres about 55 m up: between the clock stage's
-    corner turrets, 51.5 m, and the belfry's pinnacles, 60.5 m, as OSM maps them), on the tower's own
-    faces, glowing through their opal glass at night."""
+def opal_material(g):
+    """Elizabeth Tower's dials: opal glass, white by day, lit from behind at night (the Emission is the
+    city's light, switched by skyline.py)."""
+    bpy, node = g['bpy'], g['node']
+    mat = bpy.data.materials.new('clock_face')
+    nt = g['nodes_of'](mat)
+    b = node(nt, 'ShaderNodeBsdfPrincipled', Roughness=0.35, **{'Base Color': (0.7, 0.69, 0.62, 1)})
+    e = node(nt, 'ShaderNodeEmission', Strength=9.0, Color=(1.0, 0.95, 0.82, 1))
+    g['output'](nt, g['add_shaders'](nt, b.outputs[0], e.outputs[0]))
+    return mat
+
+
+def gilt_material(g):
+    """Gilding (the dials' surrounds, the spires' finials and crockets): gold leaf, a little worn; it takes
+    the floodlight warm at night."""
+    bpy, node = g['bpy'], g['node']
+    mat = bpy.data.materials.new('gilt')
+    nt = g['nodes_of'](mat)
+    b = node(nt, 'ShaderNodeBsdfPrincipled', Roughness=0.32, Metallic=1.0, **{'Base Color': (0.8, 0.58, 0.27, 1)})
+    e = node(nt, 'ShaderNodeEmission', Strength=2.5, Color=(1.0, 0.64, 0.3, 1))
+    g['output'](nt, g['add_shaders'](nt, b.outputs[0], e.outputs[0]))
+    return mat
+
+
+def flag_material(g):
+    """The Union Flag on Victoria Tower (flown when Parliament sits; a few pixels across here): blue
+    field, the white saltire and cross, the red cross, by the flag's own UVs."""
+    bpy, node, math_node, mix = g['bpy'], g['node'], g['math_node'], g['mix_colour']
+    mat = bpy.data.materials.new('flag')
+    nt = g['nodes_of'](mat)
+    uv = node(nt, 'ShaderNodeTexCoord')
+    sep = node(nt, 'ShaderNodeSeparateXYZ')
+    nt.links.new(uv.outputs['UV'], sep.inputs[0])
+    u, v = sep.outputs['X'], sep.outputs['Y']
+    du = math_node(nt, 'ABSOLUTE', math_node(nt, 'SUBTRACT', u, 0.5))
+    dv = math_node(nt, 'ABSOLUTE', math_node(nt, 'SUBTRACT', v, 0.5))
+    diag = math_node(nt, 'LESS_THAN', math_node(nt, 'ABSOLUTE', math_node(nt, 'SUBTRACT', du, dv)), 0.07)  # the saltire, corner to corner
+    white = math_node(nt, 'MAXIMUM', math_node(nt, 'MAXIMUM', math_node(nt, 'LESS_THAN', du, 0.1), math_node(nt, 'LESS_THAN', dv, 0.17)), diag)
+    red = math_node(nt, 'MAXIMUM', math_node(nt, 'LESS_THAN', du, 0.06), math_node(nt, 'LESS_THAN', dv, 0.1))
+    col = mix(nt, white, (0.012, 0.03, 0.14), (0.75, 0.75, 0.72))
+    col = mix(nt, red, col, (0.5, 0.02, 0.03))
+    b = node(nt, 'ShaderNodeBsdfPrincipled', Roughness=0.8)
+    nt.links.new(col, b.inputs['Base Color'])
+    b.inputs['Coat Weight'].default_value = 0.0
+    g['output'](nt, b.outputs[0])
+    return mat
+
+
+def elizabeth_tower(g, mats):
+    """Elizabeth Tower (Barry and Pugin, 1859; 96 m; the shaft 12 m square), on OSM's outline and axes
+    (way/123557148), in its stages as set2/big-c003 shows them, scaled by the dials (7 m across, their
+    centres 55 m up): the plinth; the panelled shaft with its corner buttresses; the clock stage corbelled
+    out (49.3 to 61.1 m), a dial in a gilt surround on each face; the short belfry band (to 64.6 m); the
+    lower iron roof, 14 m wide at its eaves to 7.7 m, with gilt dormers; the gilt lantern of the Ayrton
+    Light on its gallery (72.5 to 78 m); the upper spire (to 92.2 m) and the gilt finial. Pinnacles at
+    the clock stage's corners, at the lower roof's and round the lantern's top."""
     import bmesh
     from mathutils import Vector
+    from shapes import Z, square_stack, pinnacle, gable, lathe
     fp = g['scene_data'].get('replacedOutlines', {}).get(ELIZABETH)
     if not fp:
         print('landmark: Elizabeth Tower footprint not in the data')
         return
-    ring = [Vector((x, y, 0)) for x, y in fp['outer'][0]]
-    if (ring[0] - ring[-1]).length < 1e-6:
-        ring = ring[:-1]
-    c = sum(ring, Vector()) / len(ring)
-    # The tower's axes: its longest edge's direction and the perpendicular.
-    a, b = max(((ring[i], ring[(i + 1) % len(ring)]) for i in range(len(ring))), key=lambda e: (e[1] - e[0]).length)
-    ax = (b - a).normalized()
-    ay = Vector((-ax.y, ax.x, 0))
-    bm = bmesh.new()
-    for d in (ax, -ax, ay, -ay):
-        half = max((p - c).dot(d) for p in ring)
-        res = bmesh.ops.create_circle(bm, cap_ends=True, segments=32, radius=3.5)
+    c, ax, ay = _axes(fp['outer'][0])
+    faces = ((ax, ay), (-ax, ay), (ay, ax), (-ay, ax))
+    stone = bmesh.new()
+    square_stack(stone, c, ax, ay, [(0, 7.4, 7.4), (7, 7.4, 7.4), (7, 6.9, 6.9), (48.5, 6.9, 6.9), (49.3, 7.35, 7.35),
+                                    (60.4, 7.35, 7.35), (60.4, 7.6, 7.6), (61.1, 7.6, 7.6), (61.1, 7.0, 7.0), (64.6, 7.0, 7.0)], cap_top=False)
+    # Corner buttresses up the shaft, standing 0.45 m proud.
+    for sx, sy in ((-1, -1), (1, -1), (1, 1), (-1, 1)):
+        square_stack(stone, c + ax * (sx * 6.55) + ay * (sy * 6.55), ax, ay, [(7, 0.8, 0.8), (48.5, 0.8, 0.8)])
+    g['facade_object']('elizabeth_stone', stone, ANSTON, IRON_ROOF, style=4, bay=1.45, floorh=5.2, win_w=0.12, win_h=0.38, frame=0.3,
+                       busy=0.0, flood=FLOODLIT['Elizabeth Tower'])
+    iron = bmesh.new()
+    square_stack(iron, c, ax, ay, [(64.6, 7.1, 7.1), (72.5, 3.85, 3.85)], cap_top=False)  # the lower roof
+    square_stack(iron, c, ax, ay, [(78.3, 3.6, 3.6), (92.2, 0.2, 0.2), (92.4, 0.0, 0.0)])  # the upper spire
+    g['facade_object']('elizabeth_spire', iron, ANSTON, IRON_ROOF, style=3, roof_nz=-1.0, flood=0.5)
+    lantern = bmesh.new()
+    square_stack(lantern, c, ax, ay, [(72.5, 4.2, 4.2), (73.2, 4.2, 4.2), (73.2, 3.75, 3.75), (77.9, 3.75, 3.75), (77.9, 4.0, 4.0),
+                                      (78.3, 4.0, 4.0)], cap_bottom=True)
+    g['facade_object']('elizabeth_lantern', lantern, (0.55, 0.42, 0.2), IRON_ROOF, style=4, bay=1.25, floorh=4.7, win_w=0.3, win_h=0.4,
+                       frame=0.5, busy=0.0, flood=1.6)
+    gilt = bmesh.new()
+    # The dials' gilt surrounds, 8.4 m square; dormers on the lower roof; the orb and finial.
+    for d, o in faces:
+        square_stack(gilt, c + d * 7.45, o, d, [(50.8, 4.2, 0.12), (59.2, 4.2, 0.12)], cap_bottom=True)
+        for k in (-2.6, 0.0, 2.6):
+            gable(gilt, c + d * 6.0 + o * k, o, d, 0.9, 1.2, 66.2, 1.7)
+    lathe(gilt, c, [(92.1, 0.25), (92.6, 0.5), (93.1, 0.5), (93.5, 0.1), (96.0, 0.06), (96.0, 0.0)], sides=12)
+    mesh_object(g, 'elizabeth_gilt', gilt, mats['gilt'], 'city')
+    pins = bmesh.new()
+    for sx, sy in ((-1, -1), (1, -1), (1, 1), (-1, 1)):
+        pinnacle(pins, c + ax * (sx * 7.25) + ay * (sy * 7.25), 61.1, 0.8, 1.6, 2.2, sides=8)  # the clock stage's corners
+        pinnacle(pins, c + ax * (sx * 6.75) + ay * (sy * 6.75), 64.6, 0.45, 3.8, 2.6, sides=6)  # the lower roof's
+        pinnacle(pins, c + ax * (sx * 3.85) + ay * (sy * 3.85), 78.3, 0.4, 0.9, 1.6, sides=6)  # round the lantern's top
+    g['facade_object']('elizabeth_pinnacles', pins, (0.45, 0.35, 0.18), IRON_ROOF, style=3, roof_nz=-1.0, flood=1.0)
+    dials = bmesh.new()
+    for d, _ in faces:
+        res = bmesh.ops.create_circle(dials, cap_ends=True, segments=40, radius=3.5)
         q = Vector((0, 0, 1)).rotation_difference(d)
         for v in res['verts']:
-            v.co = q @ v.co + c + d * (half + 0.3) + Vector((0, 0, 55.0))
-    mesh_object(g, 'clock_faces', bm, mats['clock'], 'city')
-    print('landmark: Elizabeth Tower clock faces')
+            v.co = q @ v.co + c + d * 7.6 + Z * 55.0
+    mesh_object(g, 'clock_faces', dials, mats['clock'], 'city')
+    print('landmark: Elizabeth Tower')
+
+
+def victoria_tower(g, mats):
+    """Victoria Tower (98.5 m to its turrets' tops; 23 m square): the panelled shaft to a battlemented
+    parapet at 77 m, an octagonal turret at each corner rising past it to an open stage and a crocketed
+    spirelet ringed by small pinnacles, two lesser pinnacles on each face between them, the low iron roof
+    and the flagstaff (OSM: its top 120 m) with the Union Flag. Centre and axes from OSM's base (way/
+    1134791149); the stages' heights from OSM's parts and ref4."""
+    import bmesh
+    from shapes import Z, square_stack, pinnacle, lathe
+    from mathutils import Vector
+    base = next((b for b in g['scene_data']['buildings'] if b['id'] == VICTORIA_BASE), None)
+    if not base:
+        print('landmark: Victoria Tower not in the data')
+        return
+    c, ax, ay = _axes(base['outer'][0])
+    hw = 11.1
+    stone = bmesh.new()
+    square_stack(stone, c, ax, ay, [(0, hw, hw), (75.5, hw, hw), (75.5, hw + 0.25, hw + 0.25), (77.0, hw + 0.25, hw + 0.25),
+                                    (77.0, 8.6, 8.6), (85.5, 1.2, 1.2), (86.5, 0.6, 0.6)])
+    # Battlements: merlons 1.2 m tall, 1.4 m wide, every 2.8 m along the parapet.
+    for d, o in ((ax, ay), (-ax, ay), (ay, ax), (-ay, ax)):
+        k = -8.4
+        while k <= 8.41:
+            square_stack(stone, c + d * (hw + 0.05) + o * k, o, d, [(77.0, 0.7, 0.2), (78.2, 0.7, 0.2)])
+            k += 2.8
+    turrets = []
+    for sx, sy in ((-1, -1), (1, -1), (1, 1), (-1, 1)):
+        q = c + ax * (sx * (hw - 1.0)) + ay * (sy * (hw - 1.0))
+        turrets.append(q)
+        lathe(stone, q, [(0, 2.75), (84.0, 2.75), (84.0, 3.05), (85.0, 3.05), (85.0, 2.75), (89.5, 2.75), (89.5, 3.15), (90.2, 3.15)],
+              sides=8, phase=math.pi / 8, axes=(ax, ay))
+    g['facade_object']('victoria_tower', stone, ANSTON, IRON_ROOF, style=4, bay=1.6, floorh=4.8, win_w=0.13, win_h=0.37, frame=0.3,
+                       busy=0.02, flood=FLOODLIT['Victoria Tower'])
+    spires = bmesh.new()
+    for q in turrets:
+        # The spirelet (set2/big-c123): a neck over the turret's top, a swelling cap, then a slender point.
+        lathe(spires, q, [(90.2, 2.6), (90.8, 2.6), (91.2, 1.8), (92.8, 2.15), (94.6, 1.3), (96.5, 0.45), (98.5, 0.0)], sides=8, phase=math.pi / 8,
+              axes=(ax, ay))
+        for i in range(8):
+            t = (i + 0.5) / 8 * math.tau
+            p = q + ax * (2.9 * math.cos(t)) + ay * (2.9 * math.sin(t))
+            pinnacle(spires, p, 90.2, 0.35, 0.8, 1.7, sides=4)
+    for d, o in ((ax, ay), (-ax, ay), (ay, ax), (-ay, ax)):
+        for k in (-3.7, 3.7):
+            p = c + d * (hw - 0.6) + o * k
+            lathe(spires, p, [(70, 0.95), (87.0, 0.95), (87.0, 1.2), (87.5, 1.2), (87.9, 0.9), (89.3, 0.55), (90.8, 0.25), (93.5, 0.0)],
+                  sides=8, phase=math.pi / 8, axes=(ax, ay))
+    g['facade_object']('victoria_spires', spires, ANSTON, (0.12, 0.1, 0.08), style=3, roof_nz=-1.0, flood=FLOODLIT['Victoria Tower'] * 0.8)
+    pole = bmesh.new()
+    tube(pole, c + Z * 86.5, c + Z * 120.0, 0.22, 8)
+    mesh_object(g, 'victoria_flagstaff', pole, g['MAT']['iron'])
+    # The flag: 6 by 3 m (ref4's flag at the fitted distance), flying from the staff's top, a little
+    # slack, downwind of the prevailing south-westerly.
+    flag = bmesh.new()
+    uv = flag.loops.layers.uv.new('UVMap')
+    fly = (ax * 0.6 + ay * 0.8).normalized()
+    cols = 8
+    rows = []
+    for i in range(cols + 1):
+        t = i / cols
+        p = c + fly * (6.0 * t) + Z * (math.sin(t * 5.0) * 0.25)
+        rows.append((flag.verts.new(p + Z * (119.6 - 3.0 - 0.5 * t)), flag.verts.new(p + Z * (119.6 - 0.3 * t))))
+    for i in range(cols):
+        f = flag.faces.new((rows[i][0], rows[i + 1][0], rows[i + 1][1], rows[i][1]))
+        for loop, (u, v) in zip(f.loops, ((i / cols, 0), ((i + 1) / cols, 0), ((i + 1) / cols, 1), (i / cols, 1))):
+            loop[uv].uv = (u, v)
+    mesh_object(g, 'victoria_flag', flag, mats['flag'])
+    print('landmark: Victoria Tower')
+
+
+def central_tower(g, mats):
+    """The Central Tower over the Central Lobby: from the roofs at 25 m a low octagonal roof, the
+    octagonal lantern of tall windows (10 m across) with a pinnacle at each corner, a narrower stage and
+    the slender spire to 78 m, as OSM's parts give it (way/123557145 and those above it). The photos from
+    the bridge (ref4, set2/big-c123) agree: its tip shows inside Victoria Tower's crown, about 3.5 degrees
+    up, where a 91 m spire (a published figure) would stand clear above the crown."""
+    import bmesh
+    from shapes import pinnacle, lathe
+    from mathutils import Vector
+    base = next((b for b in g['scene_data']['buildings'] if b['id'] == CENTRAL_TOWER), None)
+    if not base:
+        return
+    cx, cy = _centroid(base['outer'][0])
+    c = Vector((cx, cy, 0))
+    ph = math.pi / 8
+    stone = bmesh.new()
+    lathe(stone, c, [(24.0, 9.6), (25.0, 9.6), (36.5, 5.4), (49.0, 5.4), (49.0, 5.7), (50.0, 5.7), (50.0, 3.4), (61.5, 3.4)], sides=8, phase=ph)
+    g['facade_object']('central_tower', stone, ANSTON, IRON_ROOF, style=4, bay=1.4, floorh=6.0, win_w=0.15, win_h=0.42, frame=0.3,
+                       busy=0.0, flood=0.8, roof_nz=0.02)
+    spire = bmesh.new()
+    lathe(spire, c, [(61.5, 3.4), (61.5, 2.8), (77.0, 0.15), (78.0, 0.0)], sides=8, phase=ph)
+    g['facade_object']('central_spire', spire, ANSTON, IRON_ROOF, style=3, roof_nz=-1.0, flood=0.6)
+    pins = bmesh.new()
+    for i in range(8):
+        t = ph + i / 8 * math.tau
+        pinnacle(pins, c + Vector((5.3 * math.cos(t), 5.3 * math.sin(t), 0)), 50.0, 0.7, 2.6, 3.4, sides=8)
+        pinnacle(pins, c + Vector((3.3 * math.cos(t), 3.3 * math.sin(t), 0)), 61.5, 0.4, 1.0, 2.0, sides=6)
+    g['facade_object']('central_pinnacles', pins, ANSTON, ANSTON, style=3, roof_nz=-1.0, flood=0.6)
+    print('landmark: Central Tower')
+
+
+def palace_pinnacles(g):
+    """The Palace's river front and courts bristle with pinnacles (every photo's spiky roofline): one at
+    each corner of its roofs between 15 and 45 m and every 7 m along their edges, 0.8 m square, 2 m of
+    shaft and a 2.6 m spirelet, all stone. OSM maps the towers' pinnacles, not these."""
+    import bmesh
+    from mathutils import Vector
+    from shapes import pinnacle, edge_points
+    bm = bmesh.new()
+    n = 0
+    for b in g['scene_data']['buildings']:
+        if (b.get('within') or {}).get('name') != 'Palace of Westminster' or b['id'] in _prepared.get('replaced', ()):
+            continue
+        if b['roof']['shape'] != 'flat' or not (15 <= b['height'] <= 45):
+            continue
+        ring = b['outer'][0]
+        if abs(g['signed_area'](ring)) < 30:
+            continue
+        top = b.get('base', 0.0) + b['height']
+        for p, inward in edge_points(ring, 7.0):
+            pinnacle(bm, p + inward * 0.4, top, 0.6, 2.4, 2.6)
+            n += 1
+    g['facade_object']('palace_pinnacles', bm, ANSTON, ANSTON, style=3, roof_nz=-1.0, flood=0.7)
+    print(f'landmark: Palace pinnacles ({n})')
+
+
+def millbank_tower(g):
+    """Millbank Tower (1963; 118 m, 32 floors): OSM's outline (way/24553530), its curved ends rounded as
+    built, raised from the podium's roof at 9.6 m as a curtain wall of dark blue-green glass between close
+    mullions; the top two floors a plant room behind louvres, set back a metre."""
+    import bmesh
+    from shapes import chaikin, inset, prism
+    b = next((b for b in g['scene_data']['buildings'] if b['id'] == MILLBANK), None)
+    if not b:
+        return
+    ring = chaikin(b['outer'][0], rounds=2)
+    bm = bmesh.new()
+    prism(bm, ring, b['min'], 111.6)
+    g['facade_object']('millbank_tower', bm, (0.04, 0.05, 0.055), (0.12, 0.12, 0.12), style=0, bay=1.25, floorh=3.4, win_w=0.45, win_h=0.37,
+                       frame=0.08, busy=0.2)
+    top = inset(ring, 1.0) or ring
+    bm = bmesh.new()
+    prism(bm, top, 111.6, 118.0)
+    g['facade_object']('millbank_plant', bm, (0.1, 0.105, 0.11), (0.12, 0.12, 0.12), style=3)
+    print('landmark: Millbank Tower')
+
+
+def st_george_wharf(g):
+    """St George Wharf Tower (Vauxhall, 2014; 181 m with its turbine): a faceted glass drum 34 m across
+    (OSM's rings: 148, 160 and 168 m), tapering straight in over its top 25 m to the square frame round
+    the wind turbine at the top (ref4, set2/c116)."""
+    import bmesh
+    from mathutils import Vector
+    from shapes import Z, lathe, square_stack
+    bs = [b for b in g['scene_data']['buildings'] if b['id'] in ST_GEORGE]
+    if not bs:
+        return
+    cx, cy = _centroid(max(bs, key=lambda b: b['height'])['outer'][0])
+    c = Vector((cx, cy, 0))
+    bm = bmesh.new()
+    lathe(bm, c, [(0, 17.0), (147, 17.0), (160, 13.5), (168, 10.0), (171, 7.0)], sides=20)
+    g['facade_object']('st_george_wharf', bm, (0.05, 0.055, 0.06), (0.1, 0.1, 0.1), style=0, bay=1.4, floorh=3.2, win_w=0.45, win_h=0.38,
+                       frame=0.1, busy=0.25, roof_nz=0.3)
+    frame = bmesh.new()
+    ax, ay = Vector((1, 0, 0)), Vector((0, 1, 0))
+    for sx, sy in ((-1, -1), (1, -1), (1, 1), (-1, 1)):
+        q = c + ax * (sx * 4.2) + ay * (sy * 4.2)
+        square_stack(frame, q, ax, ay, [(171, 0.35, 0.35), (181, 0.35, 0.35)])
+    for z in (176.0, 180.6):
+        square_stack(frame, c, ax, ay, [(z, 4.55, 4.55), (z + 0.4, 4.55, 4.55)], cap_bottom=True)
+    g['facade_object']('st_george_frame', frame, (0.3, 0.31, 0.32), (0.3, 0.31, 0.32), style=3)
+    print('landmark: St George Wharf Tower')
+
+
+def whitehall_court_roofs(g):
+    """Whitehall Court (1887, French Renaissance; OSM's walls to 28.8 m, a flat roof): its steep slate
+    roofs, a mansard round the whole block rising 7 m, a pavilion turret with a pointed slate spire at
+    each sharp corner, and chimney stacks along the ridge (the spiky right-hand edge of the photos taken
+    upstream, set2/c013, c078)."""
+    import bmesh
+    from mathutils import Vector
+    from shapes import Z, inset, prism, edge_points, lathe, box, ccw
+    b = next((b for b in g['scene_data']['buildings'] if b.get('name') == 'Whitehall Court'), None)
+    if not b:
+        return
+    ring = ccw([tuple(p) for p in b['outer'][0]])
+    z0 = b.get('base', 0.0) + b['height']
+    top = inset(ring, 3.5)
+    if not top:
+        print('landmark: Whitehall Court roof inset failed')
+        return
+    bm = bmesh.new()
+    # The mansard: the outline at the eaves to the inset outline 7 m up (the two have the same vertex count
+    # when the inset dropped none; otherwise a hipped prism of the inset alone).
+    if len(top) == len(ring):
+        lo = [bm.verts.new((x, y, z0)) for x, y in ring]
+        hi = [bm.verts.new((x, y, z0 + 7.0)) for x, y in top]
+        for i in range(len(ring)):
+            j = (i + 1) % len(ring)
+            bm.faces.new((lo[i], lo[j], hi[j], hi[i]))
+        from mathutils import geometry
+        for t in geometry.tessellate_polygon([[Vector((x, y, 0)) for x, y in top]]):
+            bm.faces.new((hi[t[0]], hi[t[1]], hi[t[2]]))
+    else:
+        prism(bm, top, z0, z0 + 7.0)
+    g['facade_object']('whitehall_court_roof', bm, PORTLAND, SLATE, style=3, roof_nz=0.02)
+    turrets, spires, stacks = bmesh.new(), bmesh.new(), bmesh.new()
+    n = 0
+    for p, inward in edge_points(ring, 1e9, corner_min_deg=55.0):
+        q = p + inward * 1.6
+        lathe(turrets, q, [(z0 - 6, 2.3), (z0 + 6.5, 2.3)], sides=8)
+        lathe(spires, q, [(z0 + 6.5, 2.6), (z0 + 15.5, 0.0)], sides=8)
+        n += 1
+    for p, inward in edge_points(top, 13.0, corner_min_deg=200.0, margin=3.0):
+        box(stacks, p + inward * 0.8, Vector((1, 0, 0)), Vector((0, 1, 0)), 0.8, 0.45, z0 + 5.0, z0 + 10.0)
+    g['facade_object']('whitehall_court_turrets', turrets, PORTLAND, SLATE, style=4, bay=1.6, floorh=3.6, win_w=0.16, win_h=0.3, busy=0.1,
+                       flood=FLOODLIT['Whitehall Court'])
+    g['facade_object']('whitehall_court_spires', spires, PORTLAND, SLATE, style=3, roof_nz=-1.0)
+    g['facade_object']('whitehall_court_stacks', stacks, (0.2, 0.15, 0.11), SLATE, style=3)
+    print(f'landmark: Whitehall Court roofs ({n} turrets)')
 
 
 # The Victoria Embankment's lamp standards (Bazalgette's dolphin lamps, 1870s) along the river wall,
