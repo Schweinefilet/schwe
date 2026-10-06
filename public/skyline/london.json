@@ -42,7 +42,8 @@
           "windows": 8.0
         },
         "glow": 8.0,
-        "halo": 1.0
+        "halo": 1.0,
+        "trees": 1.0
       }
     },
     "bare": {
@@ -62,7 +63,8 @@
           "windows": 16.0
         },
         "glow": 8.0,
-        "halo": 2.0
+        "halo": 2.0,
+        "trees": 1.0
       }
     }
   },
@@ -82,7 +84,7 @@
       -20.0,
       26.0
     ],
-    "lateShare": 0.2809,
+    "lateShare": 0.28,
     "glowSize": [
       1920,
       736

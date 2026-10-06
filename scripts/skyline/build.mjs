@@ -2,7 +2,8 @@
 // A city's skyline for its drop, end to end: OpenStreetMap data (fetch.mjs, with --fetch), the scene
 // (extract.mjs), the panorama rendered in Blender once per variant (scripts/blender/skyline.py: its trees
 // in leaf and bare), and packed for the site (scripts/blender/encode.py → public/skyline/<city>.json and
-// public/skyline/<city>/<variant>-{light,night,windows}.png). Needs Blender 5 on PATH (or BLENDER=…).
+// public/skyline/<city>/<variant>-{light,night,windows}.png), and its smaller copies for the drops that
+// show less (scripts/skyline/sets.py → <city>/half/, <city>/small/). Needs Blender 5 on PATH (or BLENDER=…).
 //
 //   npm run skyline -- --city london [--fetch] [--samples 128] [--scale 1] [--only leaf]
 //
@@ -40,3 +41,4 @@ for (const [variant, months] of Object.entries(VARIANTS)) {
   run(BLENDER, ['-b', '--factory-startup', '-P', 'scripts/blender/skyline.py', '--', '--city', CITY, '--view', 'pano', '--season', variant, '--scale', arg('scale', '1'), '--samples', arg('samples', '128'), '--out', out])
   run(BLENDER, ['-b', '--factory-startup', '-P', 'scripts/blender/encode.py', '--', '--city', CITY, '--render', out, '--variant', variant, '--months', months.join(',')])
 }
+run('python3', ['scripts/skyline/sets.py', '--city', CITY])

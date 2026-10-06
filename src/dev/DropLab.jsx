@@ -29,6 +29,7 @@ import Effects from '../scenes/Effects.jsx'
 //   ?at=2026-09-29T14:30Z  the moment (default: now, following the clock)
 //   ?clip=tokyo_night_clear  show that clip instead of a sky
 //   ?wl=hillaire          Hillaire's original wavelengths (680/550/440 nm), for before/after comparison
+//   ?set=small            the skyline's smaller copy (SKY.skyline.sets: full, half, small; default full)
 // Sliders preview extremes: cloud cover, rain, local time of day, wind. Views: orbit, drift (the drop at
 // true size, posed exactly as at a drift key), dive (the dive's eye; the dive slider eases the optics).
 // window.__lab drives it from scripts (scripts/sky-stills.mjs).
@@ -38,6 +39,7 @@ const CLIP = params.get('clip')
 const COEFFICIENTS = params.get('wl') === 'hillaire' ? HILLAIRE_RGB : SKY.atmosphere
 const CITY = CITIES.find((c) => c.id === params.get('city')) ?? CITIES.find((c) => c.id === DEFAULT_DIVE_CITY)
 const AT = parseAt(params.get('at'))
+const SET = params.get('set') ?? 'full'
 
 const R = HERO.radius
 const around = (DRIFT.around[0] * Math.PI) / 180
@@ -58,11 +60,13 @@ const stats = { refreshMs: null, frameMs: null, tablesMs: null, sky: null, stars
 export default function DropLab() {
   const [view, setView] = useState('orbit')
   const [dive, setDive] = useState(0)
+  const [showPanel, setShowPanel] = useState(true) // h toggles it, for clean screenshots
   useEffect(() => void (rig.dive = dive), [dive])
 
   useEffect(() => {
     globalUniforms.uTimeScale.value = 0
     const onKey = (e) => {
+      if (e.key === 'h' || e.key === 'H') return setShowPanel((v) => !v)
       if (e.key !== 's' && e.key !== 'S') return
       const a = document.createElement('a')
       a.download = 'still.jpg'
@@ -90,7 +94,7 @@ export default function DropLab() {
         <ViewPose view={view} />
         <Effects />
       </Canvas>
-      {!CLIP && <SkyPanel view={view} setView={setView} dive={dive} setDive={setDive} />}
+      {!CLIP && <SkyPanel hidden={!showPanel} view={view} setView={setView} dive={dive} setDive={setDive} />}
     </>
   )
 }
@@ -149,7 +153,7 @@ function SkyContent() {
     globals.ready.then(() => {
       if (!alive) return
       stats.stars = globals.stars
-      city = new CitySky(globals, SKY.skyView[quality.name], CITY.id)
+      city = new CitySky(globals, SKY.skyView[quality.name], CITY.id, { detail: SET })
       stats.sky = city
       if (labInputs) city.set(labInputs)
       applyInputs = (inputs) => city.set(inputs)
@@ -179,7 +183,7 @@ function SkyContent() {
   return sky ? <HeroDrop position={[0, 0, 0]} sky={sky.content} dive dispersion={quality.name === 'high'} /> : null
 }
 
-function SkyPanel({ view, setView, dive, setDive }) {
+function SkyPanel({ hidden, view, setView, dive, setDive }) {
   const [weather, setWeather] = useState(undefined) // undefined: loading
   const [override, setOverride] = useState({ cloud: null, rain: null, hour: null, fog: null, wind: null, windFrom: null })
   const [now, setNow] = useState(() => new Date())
@@ -213,7 +217,7 @@ function SkyPanel({ view, setView, dive, setDive }) {
         if (d != null) setDive(d)
         if (Object.keys(o).length) setOverride((prev) => ({ ...prev, ...o }))
       },
-      ready: () => isBackdropReady() && weather !== undefined && !!stats.sky && stats.sky.renders > 0 && !stats.sky.dirty,
+      ready: () => isBackdropReady() && weather !== undefined && !!stats.sky && stats.sky.renders > 0 && !stats.sky.dirty && stats.sky.skylineSettled,
       inputs: () => inputs,
       sky: () => stats.sky, // dev: the CitySky, to read its texture back
       // dev: one frame's draw calls and triangles, summed over every render it makes (the sky, the scene,
@@ -241,7 +245,7 @@ function SkyPanel({ view, setView, dive, setDive }) {
   const deg = (v) => `${v.toFixed(1)}°`
 
   return (
-    <div style={panelStyle}>
+    <div style={hidden ? { ...panelStyle, display: 'none' } : panelStyle}>
       <div>
         {CITY.name} {localTimeString(CITY, date)} · {date.toISOString().slice(0, 16)}Z
         {inputs && (

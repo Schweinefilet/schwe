@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useFrame, useThree } from '@react-three/fiber'
-import { CONTENT, DIVE, HERO, heroDropsFor, visibleDrops } from '../config.js'
+import * as THREE from 'three'
+import { CONTENT, DIVE, HERO, SKY, heroDropsFor, visibleDrops } from '../config.js'
 import { quality } from '../core/quality.js'
 import { prewarm } from '../core/prewarm.js'
 import { createPosterAtlas } from '../content/posterAtlas.js'
@@ -8,9 +9,11 @@ import { usesFootage } from '../content/contentSource.js'
 import { pinDrop, registerDrop, unregisterDrop, updateVideoBudget } from '../content/videoManager.js'
 import { state } from '../core/state.js'
 import { useTier } from '../core/useTier.js'
-import { acquireSky, releaseSky, skyContent, startSky } from '../sky/skyManager.js'
+import { acquireSky, onSkyReady, prefetchSkies, releaseSky, setSkyDetail, skyContent, startSky } from '../sky/skyManager.js'
 import HeroDrop from './HeroDrop.jsx'
 import DropLabelAnchors from './DropLabelAnchors.jsx'
+
+const _p = new THREE.Vector3()
 
 // The dive drop is always kept, and so is the ending's rain city; lower tiers show fewer of the others.
 const pickVisible = (drops, keep) => visibleDrops(drops, quality.heroDrops, keep)
@@ -40,10 +43,36 @@ function SkyDrops({ diveCity, keep }) {
   const visible = useMemo(() => pickVisible(heroDropsFor(diveCity), keep), [tier, diveCity, keep])
   const group = useRef()
 
+  // Each drop's city holds the images it can show (SKY.skyline): the dive drop the full set (half on a
+  // small canvas), a drift drop the small set, the half one while the camera passes close.
+  const wide = useThree((s) => Math.max(s.size.width, s.size.height) * s.viewport.dpr)
+  const diveSet = wide <= SKY.skyline.diveHalfMax ? 'half' : 'full'
+  const near = useRef(new Set())
+  useEffect(() => {
+    near.current.clear()
+    for (const d of visible) setSkyDetail(d.city, 'drop', d.dive ? diveSet : null)
+    return () => visible.forEach((d) => setSkyDetail(d.city, 'drop', null))
+  }, [visible, diveSet])
+  // The half sets of the drift's cities, fetched in the order the camera passes them once the visit
+  // has begun, so each is in before the camera comes close (on a slow connection a set takes seconds).
+  useEffect(() => onSkyReady(() => prefetchSkies(visible.filter((d) => !d.dive).map((d) => d.city), 'half')), [visible])
+  // (Asked before the drops take their cities, so a city starts on the set it needs.)
   useEffect(() => {
     visible.forEach((d) => acquireSky(d.city))
     return () => visible.forEach((d) => releaseSky(d.city))
   }, [visible])
+  useFrame(({ camera }) => {
+    const [enter, leave] = SKY.skyline.near
+    for (const d of visible) {
+      if (d.dive) continue
+      const dist = camera.position.distanceTo(_p.fromArray(d.pos))
+      const was = near.current.has(d.city)
+      if (was ? dist < leave : dist >= enter) continue
+      if (was) near.current.delete(d.city)
+      else near.current.add(d.city)
+      setSkyDetail(d.city, 'drop', was ? null : 'half')
+    }
+  })
 
   // Compile the drop's sky variant now (under the loader), not on the frame a drop first comes into view.
   useEffect(() => prewarm(gl, group.current, camera, scene), [gl, camera, scene, visible])

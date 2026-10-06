@@ -25,6 +25,9 @@ const fragmentShader = `${envChunk}\n${dropFrag}`
 const BLACK = new THREE.DataTexture(new Uint8Array([0, 0, 0, 255]), 1, 1)
 BLACK.needsUpdate = true
 const FULL_RECT = new THREE.Vector4(0, 0, 1, 1)
+// Dev: ?skyclock=<seconds> holds the cities' clock (their rain, waves and trees) still, for before/after
+// captures; window.__skyClock.value moves it (frame-by-frame clips).
+const HELD_CLOCK = import.meta.env.DEV ? (window.__skyClock = { value: Number(new URLSearchParams(location.search).get('skyclock') ?? NaN) }) : { value: NaN }
 
 // The proxy mesh only has to cover the sphere's silhouette; the shader finds the exact surface.
 // A little larger than the radius so the low-poly outline never clips the true edge.
@@ -142,7 +145,7 @@ export default function HeroDrop({
         u.uDiveZoom.value = diveZoom(camera)
       }
     }
-    if (sky) skyClock.value = (performance.now() / 1000) % 600 // the city's live rain (sky.glsl cityRain)
+    if (sky) skyClock.value = Number.isNaN(HELD_CLOCK.value) ? (performance.now() / 1000) % 600 : HELD_CLOCK.value // the city's live rain (sky.glsl cityRain)
     const s = slot ?? (slotKey ? getSlot(slotKey) : null)
     const live = s?.texture ? s.live : 0
     u.uLive.value = live

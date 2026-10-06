@@ -8,6 +8,10 @@
 /splash/*
   Cache-Control: public, max-age=86400
 
+# City skylines (public/skyline/: meta and image sets, several MB each): changes only if re-rendered.
+/skyline/*
+  Cache-Control: public, max-age=86400
+
 /benchmarks/*
   Cache-Control: public, max-age=604800
 

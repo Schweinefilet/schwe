@@ -53,6 +53,8 @@ uniform sampler2D uSkylineMirrorWindows;
 uniform vec4 uSkylineMirrorRect;  // as uSkylineRect
 uniform vec3 uSkylineMirrorScale;
 uniform vec2 uSkylineWater;       // 1 where the city's skyline has water; the eye's height above it (m)
+uniform sampler2D uSkylineMirrorReach; // the nearest the mirror holds (mirrorReach), levels stacked; R8
+uniform float uSkylineMirrorReachOn;   // 1 when it is loaded
 // Its waves (src/sky/waves.js): per train its wave vector (x east, z south; rad/m), amplitude (m) and
 // angular frequency (rad/s); where the wind blows (x, z) and the slope variance of the waves too short
 // to model, along and across it; the glitter's cell (m), period (s) and periods in the clock's loop.
@@ -73,6 +75,8 @@ uniform sampler2D uSkylineHalo;
 uniform vec4 uSkylineGlowRect;    // as uSkylineRect (it reaches higher: a halo spreads past the tallest light)
 uniform vec3 uSkylineGlowScale;   // what the glow and halo were divided by; the share of windows lit late
 uniform vec3 uSkylineGlowGain;    // on-screen gain of the glow, of the halo, and the halo the air adds in haze
+uniform sampler2D uSkylineTrees;  // r: how much each texel sways in the wind (tree coverage times height up the crown; half size)
+uniform vec4 uSkylineTreeSway;    // sway at a crown's top (rad), lean across the view (-1..1), swing (rad/s), flutter share
 uniform sampler2D uSkylineStar;   // the lens's starbursts round the brightest lights (over the glow's rect, full resolution)
 uniform float uSkylineStarGain;   // what it was divided by, times its on-screen gain (0: none)
 // The camera's look (SKY.grade, day and night mixed by how dark it is), applied in AgX's own space as
@@ -291,10 +295,40 @@ vec4 skylineDecode(vec4 L, vec4 N, vec4 W, vec3 scale, vec3 fill, vec3 horizon, 
 // premultiplied by its coverage (a) and its `lights` (skylineDecode). Every texture holds light
 // premultiplied by coverage, decoded linear before filtering, so the drift's tiny drops read its averaged
 // mip levels correctly.
+// Smooth noise along a line, -1..1 (the trees' gusts): a cheap hash, no sines.
+float swayHash(float i) {
+  i = fract(i * 0.1031);
+  i *= i + 33.33;
+  return fract(i * (i + i));
+}
+float swayNoise(float x) {
+  float i = floor(x);
+  float f = fract(x);
+  return mix(swayHash(i), swayHash(i + 1.0), f * f * (3.0 - 2.0 * f)) * 2.0 - 1.0;
+}
+
+// Where the skyline is read at uv once its trees have moved in the wind (uSkylineTreeSway): each crown
+// swings about a downwind lean, its gusts rolling along the panorama, its leaves fluttering finer and
+// faster; the trunks and everything else stand still. Only where it moves a tenth of a pixel or more
+// (`foot`: the pixel's footprint, rad).
+vec2 treeSway(vec2 uv, float lod, float foot) {
+  if (uSkylineTreeSway.x < 0.1 * foot) return uv;
+  float m = textureLod(uSkylineTrees, uv, max(lod - 1.0, 0.0)).r;
+  if (m < 0.004) return uv;
+  float x = uv.x * uSkylineRect.y / 0.006; // about a crown's width (0.35 degree) per unit
+  float t = uSkyTime * uSkylineTreeSway.z;
+  float gust = 0.6 + 0.4 * swayNoise(x * 0.25 - t * 0.12);
+  float swing = sin(t + 6.2831853 * swayNoise(x + 17.0)) * gust;
+  float flutter = swayNoise(x * 9.0 + uv.y * 300.0 + t * 1.9);
+  float dx = uSkylineTreeSway.x * m * (0.5 * uSkylineTreeSway.y * gust + 0.5 * swing + uSkylineTreeSway.w * flutter);
+  return vec2(uv.x - dx / uSkylineRect.y, uv.y);
+}
+
 vec4 skyline(vec2 uv, float sides, float foot, vec3 fill, vec3 horizon, out vec3 lights) {
   lights = vec3(0.0);
   float texelsPerRadian = float(textureSize(uSkylineLight, 0).x) / uSkylineRect.y;
   float lod = log2(max(foot * texelsPerRadian, 1.0));
+  uv = treeSway(uv, lod, foot);
   vec4 L = textureLod(uSkylineLight, uv, lod);
   if (L.a * sides <= 1e-3) return vec4(0.0);
   vec4 N = textureLod(uSkylineNight, uv, lod);
@@ -451,6 +485,26 @@ float waterNoise(vec2 p) {
 #ifndef MIRROR_STEPS
 #define MIRROR_STEPS 16
 #endif
+#ifndef MIRROR_SKIPS
+#define MIRROR_SKIPS 4
+#endif
+// The nearest anything is (log distance, as the night image's alpha over coverage) that a bilinear read of
+// the mirror at u, anywhere from v = va to vb, could return: from uSkylineMirrorReach (citySky.js
+// mirrorReach), whose level j holds, per texel column c, the least over columns c and c + 1 and over 2^j
+// rows; its levels are stacked, each half the last's height (rounded up). Two reads cover the band.
+float mirrorReach(float u, float va, float vb) {
+  ivec2 size = textureSize(uSkylineMirrorLight, 0);
+  int c = clamp(int(floor(u * float(size.x) - 0.5)), 0, size.x - 1);
+  int a = clamp(int(floor(min(va, vb) * float(size.y) - 0.5)), 0, size.y - 1);
+  int b = clamp(int(floor(max(va, vb) * float(size.y) - 0.5)) + 1, 0, size.y - 1);
+  int span = 1, at = 0, rows = size.y;
+  for (int j = 0; j < 12 && span < b - a + 1; j++) {
+    at += rows;
+    rows = (rows + 1) / 2;
+    span *= 2;
+  }
+  return min(texelFetch(uSkylineMirrorReach, ivec2(c, at + a / span), 0).r, texelFetch(uSkylineMirrorReach, ivec2(c, at + b / span), 0).r);
+}
 // Where on the mirror panorama a wave-tilted reflection lands. The panorama is the city seen from the
 // eye's mirror image, `hE` metres below the water: exact for flat water, whose every reflected ray passes
 // through that point. A tilted facet's ray does not: it leaves the water `dw` metres out (horizontally,
@@ -463,10 +517,34 @@ float waterNoise(vec2 p) {
 // ray's distance there, R = (hE - dw tan er) / (tan em - tan er). The first surface the panorama holds
 // nearer than the ray's point is what the facet reflects (the point is behind it, as a screen-space
 // reflection tests depth). For flat water (er = e) it is the plain mirror, as before.
+//
+// Most steps cannot hit: the ray's point runs out from dw to infinity as the march goes on, and a step hits
+// only once it has passed something in the panorama. So the march starts at the first step whose point is
+// as far as the nearest thing anywhere in its band of the mirror (mirrorReach): every step before it misses
+// whatever the band holds, so the march finds the same hit, in a step or two instead of up to sixteen.
 float mirrorHit(float u, float e, float er, float dw, float hE) {
   float ter = tan(er);
   float num = hE - dw * ter;
-  for (int k = 1; k <= MIRROR_STEPS; k++) {
+  int first = 1;
+  if (uSkylineMirrorReachOn > 0.5 && abs(er - e) > 1e-6) {
+    float v1 = (mix(e, er, 1.0 / float(MIRROR_STEPS + 1)) - uSkylineMirrorRect.z) / uSkylineMirrorRect.w;
+    float vn = clamp((mix(e, er, float(MIRROR_STEPS) / float(MIRROR_STEPS + 1)) - uSkylineMirrorRect.z) / uSkylineMirrorRect.w, 0.0, 1.0);
+    if (v1 > 1.0 || v1 < 0.0) return er; // as the march's first step would
+    float cosLow = cos(max(abs(e), abs(er))); // cos em is least at the band's steepest end
+    // Skip, then look again over what is left of the band (narrower, often holding only farther things).
+    for (int i = 0; i < MIRROR_SKIPS; i++) {
+      float va = (mix(e, er, float(first) / float(MIRROR_STEPS + 1)) - uSkylineMirrorRect.z) / uSkylineMirrorRect.w;
+      // The nearest a step could find, foreshortened as the test below does; a hair nearer, for rounding.
+      float reach = exp(uSkylineDist.x + mirrorReach(u, va, vn) * uSkylineDist.y) * cosLow * 0.999;
+      // The step where the ray's point first gets that far: 1 / R = (tan em - tan er) / num falls along the march.
+      float s = (atan(ter + num / reach) - e) / (er - e) * float(MIRROR_STEPS + 1);
+      int next = isnan(s) || isinf(s) ? first : clamp(int(floor(s)), first, MIRROR_STEPS + 1);
+      if (next == first) break;
+      first = next;
+      if (first > MIRROR_STEPS || va < 0.0 || va > 1.0) break;
+    }
+  }
+  for (int k = first; k <= MIRROR_STEPS; k++) {
     float em = mix(e, er, float(k) / float(MIRROR_STEPS + 1));
     float v = (em - uSkylineMirrorRect.z) / uSkylineMirrorRect.w;
     if (v > 1.0 || v < 0.0) break; // above the mirror panorama only sky; below it, the water's edge

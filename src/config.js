@@ -450,7 +450,32 @@ export const SKY = {
   // brighter than a city's night sky, would blow the skyline out); `hazePerKm`: how fast distant
   // buildings fade into the light around them at the eye's height (plus rain or fog); `hazeHeight`: the
   // scale height (m) the haze thins with above it (a city's hazy layer; a tower's top stands clearer).
-  skyline: { url: 'skyline/', lights: 0.15, windows: 0.18, hazePerKm: 0.12, hazeHeight: 600 },
+  // `sets`: the smaller copies of each city's images (scripts/skyline/sets.py), the mip levels the GPU
+  // would make: `half` (level 1) and `small` (level 3). A drop loads only what it can show (measured on
+  // the site at 2× density: the drift's drops read level 4 and up, down to 1.5 only as one passes the
+  // camera and leaves the frame; the falling drop level 3 and up). The dive drop holds the full set, or
+  // the half one where the canvas's wider side is at most `diveHalfMax` pixels: the dive spans that side
+  // with a fixed lens (DIVE.viewFov), and up to there it reads level 1 and up (measured: none below at
+  // 1013 px portrait, a few at 844 landscape). A drift drop holds the small set, the half one while the
+  // camera is within `near[0]` of it, until it is `near[1]` away again: a drop's spacing, so the half set
+  // is asked for about 0.5 timeline units before the drop first needs it (0.3 s at PACE.max).
+  skyline: {
+    url: 'skyline/',
+    lights: 0.15,
+    windows: 0.18,
+    hazePerKm: 0.12,
+    hazeHeight: 600,
+    sets: { full: '', half: 'half/', small: 'small/' },
+    diveHalfMax: 800,
+    near: [4.5, 5],
+    // The trees sway in the live wind, where the city's render marks them (its trees image: tree coverage
+    // times height up the crown). `sway`: how far a crown's top moves (degrees, as seen from the vantage:
+    // the panorama holds 32 texels a degree) in calm air and at `windFull` m/s and above; `period`: a
+    // crown's swing (s); `flutter`: the leaves' quicker, finer motion, as a share of the sway. A crown
+    // leans downwind by half its sway, as much as the wind blows across the view. Only a texel or two:
+    // the render holds nothing behind a tree, so a larger swing would drag the buildings with it.
+    trees: { sway: [0.008, 0.06], windFull: 10, period: 1.8, flutter: 0.35 },
+  },
   // The water below a skyline (a river), drawn live in the drop: its waves from the city's wind
   // (src/sky/waves.js), reflecting the city (the skyline's mirror render), the sky, the sun and the moon.
   // `slopeScale`: the share of the open sea's mean-square slope (Cox and Munk) a sheltered city river

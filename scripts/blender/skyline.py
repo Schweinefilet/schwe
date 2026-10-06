@@ -2,7 +2,7 @@
 
     blender -b --factory-startup -P scripts/blender/skyline.py -- --city london \
         [--view pano|<ref>] [--scale 0.25] [--samples 128] [--season leaf|bare]
-        [--passes sky,city,win,late,depth] [--out data/skyline/london/render] [--border x0,x1,y0,y1]
+        [--passes sky,city,win,late,depth,trees] [--out data/skyline/london/render] [--border x0,x1,y0,y1]
 
 Builds the scene from data/skyline/<city>/scene.json (scripts/skyline/extract.mjs: OpenStreetMap
 buildings, water, trees, street lamps, bridges; metres east (x) and north (y) of the vantage) plus the
@@ -513,6 +513,7 @@ def build_trees():
         ob.location = (tr['at'][0], tr['at'][1], tr.get('base', 0.0))
         ob.scale = (crown, crown, h)
         ob.rotation_euler = (0, 0, own.uniform(0, math.tau))
+        ob['tree'] = 1.0  # the trees pass (tree_material) picks them out
         parent.objects.link(ob)
     print(f'trees: {len(scene_data["trees"]) - near} ({SEASON}; {near} within 25 m of the eye left out)')
 
@@ -799,6 +800,26 @@ def depth_material():
     return mat
 
 
+def tree_material():
+    """The trees pass: white where a tree is, black elsewhere (as coverage, through the film's alpha), so the
+    site can sway the trees' pixels and nothing else (encode.py packs it)."""
+    mat = bpy.data.materials.new('trees')
+    nt = nodes_of(mat)
+    tree = node(nt, 'ShaderNodeAttribute', attribute_type='INSTANCER', attribute_name='tree')
+    # How far up the tree (the templates are a unit tall): the trunk stands still, the crown bends more
+    # the higher it is, as a tree in the wind does.
+    sep = node(nt, 'ShaderNodeSeparateXYZ')
+    nt.links.new(node(nt, 'ShaderNodeTexCoord').outputs['Object'], sep.inputs[0])
+    bend = node(nt, 'ShaderNodeMapRange', **{'From Min': 0.25, 'From Max': 0.9, 'To Min': 0.0, 'To Max': 1.0})
+    bend.interpolation_type = 'SMOOTHSTEP'
+    nt.links.new(sep.outputs['Z'], bend.inputs['Value'])
+    e = node(nt, 'ShaderNodeEmission', Strength=1.0)
+    nt.links.new(math_node(nt, 'MULTIPLY', tree.outputs['Fac'], bend.outputs['Result']), e.inputs['Color'])
+    out = node(nt, 'ShaderNodeOutputMaterial')
+    nt.links.new(e.outputs[0], out.inputs['Surface'])
+    return mat
+
+
 def render(path):
     scene.render.filepath = path
     bpy.ops.render.render(write_still=True)
@@ -847,12 +868,22 @@ def render_set(prefix, passes):
         scene.cycles.samples = SAMPLES
         scene.cycles.use_denoising = True
         scene.cycles.filter_width = filter_width
+    if 'trees' in passes:
+        set_lights()
+        scene.view_layers[0].material_override = TREES
+        scene.cycles.samples = 32  # anti-aliased like the light renders' coverage; no light to converge
+        scene.cycles.use_denoising = False
+        render(prefix + '-trees')
+        scene.view_layers[0].material_override = None
+        scene.cycles.samples = SAMPLES
+        scene.cycles.use_denoising = True
 
 
 # Five renders of the one scene: light adds linearly, so each source can be rendered alone and the
 # site mixes them by the live sky, the dark and the local hour.
 DEPTH = depth_material()
-passes = arg('passes', 'sky,city,win,late,depth').split(',')
+TREES = tree_material()
+passes = arg('passes', 'sky,city,win,late,depth,trees').split(',')
 render_set(OUT, passes)
 mirror = None
 if VIEW == 'pano' and scene_data['water'] and arg('mirror', '1') == '1':
@@ -872,7 +903,7 @@ if VIEW == 'pano' and scene_data['water'] and arg('mirror', '1') == '1':
         if ob.name.startswith('water'):
             ob.visible_camera = False
     clip_below_water()  # every material, the distance render's too
-    render_set(OUT + '-mirror', passes)
+    render_set(OUT + '-mirror', [p for p in passes if p != 'trees'])  # the river's trees stay still
     mirror = {'elevation': [0.0, top], 'size': [scene.render.resolution_x, scene.render.resolution_y],
               'eyeAboveWater': SITE['eye'] - wz}
 if VIEW == 'pano':

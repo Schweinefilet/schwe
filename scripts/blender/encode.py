@@ -18,6 +18,8 @@ the renders' true, unclipped values, the river's streaks included as they averag
 
   <variant>-glow.png     RGB the tight part (half resolution), / scale; A the windows' share of it
   <variant>-halo.png     RGB the wide part (quarter resolution), / scale; A the windows' share of it
+  <variant>-trees.png    grey: how much each pixel sways in the wind (tree coverage times height up the
+                         crown; half resolution, linear), where the render has the trees pass
   <variant>-star.png     RGB the lens's starbursts round the city's fixed lights (full resolution), / scale;
                          A 0 (the windows are too dim for them); where the city sets STAR
 
@@ -113,6 +115,31 @@ out_dir = os.path.join(ROOT, 'public', 'skyline', CITY)
 os.makedirs(out_dir, exist_ok=True)
 
 
+def fill_distance(d, depth_cover, cover, passes=4):
+    known = depth_cover >= 0.5 * cover
+    weight = np.where(known, depth_cover, 0.0)
+    for _ in range(passes):
+        todo = ~known & (cover > 1e-3)
+        if not todo.any():
+            break
+        best_w = np.zeros_like(weight)
+        best_d = d.copy()
+        for dy in (-1, 0, 1):
+            for dx in (-1, 0, 1):
+                if dy == 0 and dx == 0:
+                    continue
+                w = np.roll(np.roll(weight, dy, 0), dx, 1)
+                nd = np.roll(np.roll(d, dy, 0), dx, 1)
+                better = w > best_w
+                best_w = np.where(better, w, best_w)
+                best_d = np.where(better, nd, best_d)
+        fill = todo & (best_w > 0)
+        d = np.where(fill, best_d, d)
+        weight = np.where(fill, best_w * 0.5, weight)
+        known = known | fill
+    return d
+
+
 def encode_set(prefix, tag):
     """One panorama's renders → its three PNGs (<variant><tag>-light, -night, -windows); returns their
     scales, the coverage, and the lights and windows as the clear air leaves them (for the glow)."""
@@ -120,6 +147,10 @@ def encode_set(prefix, tag):
     cover = sky[..., 3]
     # Distance: the depth render's premultiplied distance over its coverage, log between NEAR and FAR.
     d = depth[..., 0] / np.maximum(depth[..., 3], 1e-4)
+    # Along an edge the depth render can cover less than the colour does (to nothing): there it holds no
+    # distance, which would read as the nearest (NEAR), as if every silhouette stood at the eye. Such a
+    # texel takes the distance of its best-covered neighbour, grown out a texel at a time.
+    d = fill_distance(d, depth[..., 3], sky[..., 3])
     logd = np.clip(np.log(np.maximum(d, NEAR) / NEAR) / math.log(FAR / NEAR), 0, 1)
     logd = np.where(cover > 1e-3, logd, 1.0)
     late_share = np.where(lum(win[..., :3]) > 1e-4, np.clip(lum(late[..., :3]) / np.maximum(lum(win[..., :3]), 1e-4), 0, 1), 0.0)
@@ -261,6 +292,21 @@ if STAR:
     write(os.path.join(out_dir, f'{VARIANT}-star.png'), star / scale, np.zeros(star.shape[:2]))
     scales['star'] = scale
     glow_meta['starSize'] = [star.shape[1], star.shape[0]]
+
+# The trees, where the render has them (skyline.py's trees pass): how much each pixel sways in the wind,
+# its tree coverage times how high up the crown it is (the trunks stand still), at half size (the sway
+# is a texel or two of smooth motion). One grey channel, linear.
+if os.path.exists(f'{SRC}-trees.exr'):
+    sway = read('trees')[..., 0]
+    sway = 0.25 * (sway[0::2, 0::2] + sway[1::2, 0::2] + sway[0::2, 1::2] + sway[1::2, 1::2])
+    out = np.ascontiguousarray((np.clip(sway, 0, 1) * 255 + 0.5).astype(np.uint8)[..., None])  # (h, w, 1): OIIO reads a 2-D array wrong
+    path = os.path.join(out_dir, f'{VARIANT}-trees.png')
+    o = oiio.ImageOutput.create(path)
+    o.open(path, oiio.ImageSpec(out.shape[1], out.shape[0], 1, 'uint8'))
+    o.write_image(out)
+    o.close()
+    print('→', path, f'{os.path.getsize(path) / 1e6:.2f} MB')
+    scales['trees'] = 1.0
 
 # The meta: the panorama's place in the sky (as skyline.py rendered it) and the variants.
 scene = json.load(open(os.path.join(ROOT, 'data', 'skyline', CITY, 'scene.json')))

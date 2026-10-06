@@ -14,6 +14,9 @@ const LEAVE_SECONDS = 1.2
 // vignette. Bloom only catches the brightest values,
 // which in this scene are drop highlights. Which effects run depends on the quality tier; when a live
 // tier drop removes one, it fades out first instead of switching off between two frames.
+// Dev: ?nograin leaves the grain out, so before/after captures compare pixel for pixel.
+const NO_GRAIN = import.meta.env.DEV && new URLSearchParams(location.search).has('nograin')
+
 export default function Effects() {
   const tier = useTier()
   const [effects, setEffects] = useState(quality.effects)
@@ -55,7 +58,7 @@ export default function Effects() {
       {has('smaa') && <SMAA />}
       {has('bloom') && <Bloom ref={bloom} mipmapBlur luminanceThreshold={GRADE.bloomThreshold} luminanceSmoothing={0.1} intensity={GRADE.bloomIntensity} />}
       {lut && <LUT lut={lut} />}
-      {has('grain') && <Noise ref={grain} premultiply blendFunction={BlendFunction.SCREEN} opacity={GRADE.grain} />}
+      {has('grain') && !NO_GRAIN && <Noise ref={grain} premultiply blendFunction={BlendFunction.SCREEN} opacity={GRADE.grain} />}
       {has('vignette') && <Vignette offset={0.3} darkness={GRADE.vignette} />}
     </EffectComposer>
   )

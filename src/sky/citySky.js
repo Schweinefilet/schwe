@@ -59,11 +59,27 @@ export function createSkyGlobals(renderer, { model = createHillaire, coefficient
 const NO_SKYLINE = new THREE.DataTexture(new Uint8Array([0, 0, 0, 0]), 1, 1)
 NO_SKYLINE.needsUpdate = true
 
+// Images fetched ahead of need (CitySky.prefetch), held compressed until a set takes them.
+const blobs = new Map() // url → Promise<Blob>
+async function fetchBlob(url) {
+  const res = await fetch(url)
+  if (!res.ok) throw new Error(`${res.status} ${url}`)
+  return res.blob()
+}
+function takeBlob(url) {
+  const blob = blobs.get(url)
+  blobs.delete(url)
+  return blob ? blob.catch(() => fetchBlob(url)) : fetchBlob(url)
+}
+
 // One of a skyline's images, rows bottom-up (v runs up with elevation). RGB is light encoded sRGB, so the
 // GPU decodes it before filtering and its mip levels average light as a camera would; alpha is data.
-async function loadSkylineImage(url, anisotropy = 1) {
-  const blob = await (await fetch(url)).blob()
+// The decoded image is let go once it is on the GPU.
+// `grey`: one linear channel (the trees' sway), not light: kept as one byte a texel.
+async function loadSkylineImage(url, anisotropy = 1, grey = false) {
+  const blob = await takeBlob(url)
   const bitmap = await createImageBitmap(blob, { imageOrientation: 'flipY', premultiplyAlpha: 'none', colorSpaceConversion: 'none' })
+  if (grey) return greyTexture(bitmap)
   const texture = new THREE.Texture(bitmap)
   texture.flipY = false
   texture.premultiplyAlpha = false
@@ -71,15 +87,37 @@ async function loadSkylineImage(url, anisotropy = 1) {
   texture.minFilter = THREE.LinearMipmapLinearFilter
   texture.generateMipmaps = true
   texture.anisotropy = anisotropy
+  texture.userData.bytes = (bitmap.width * bitmap.height * 4 * 4) / 3 // on the GPU, with its mip levels
+  texture.onUpdate = () => bitmap.close()
   texture.needsUpdate = true
   return texture
 }
 
-// A city's skyline (scripts/blender/: rendered in Blender, packed by encode.py): the variant for this
-// month as three textures (daylight and coverage; the fixed lights and distance; the windows), their
-// scales, and where the panorama sits in the sky; where the city has water, the same three for its
-// reflection (the mirror render). null when the city has none.
-async function loadSkyline(cityId, anisotropy, month = new Date().getUTCMonth() + 1) {
+const bitmapPixels = (bitmap) => {
+  const ctx = new OffscreenCanvas(bitmap.width, bitmap.height).getContext('2d', { willReadFrequently: true })
+  ctx.drawImage(bitmap, 0, 0)
+  return ctx.getImageData(0, 0, bitmap.width, bitmap.height).data
+}
+
+function greyTexture(bitmap) {
+  const { width: w, height: h } = bitmap
+  const rgba = bitmapPixels(bitmap)
+  bitmap.close()
+  const data = new Uint8Array(w * h)
+  for (let i = 0; i < data.length; i++) data[i] = rgba[i * 4]
+  const texture = new THREE.DataTexture(data, w, h, THREE.RedFormat, THREE.UnsignedByteType)
+  texture.minFilter = THREE.LinearMipmapLinearFilter
+  texture.magFilter = THREE.LinearFilter
+  texture.generateMipmaps = true
+  texture.unpackAlignment = 1
+  texture.userData.bytes = (w * h * 4) / 3
+  texture.needsUpdate = true
+  return texture
+}
+
+// A city's skyline (scripts/blender/: rendered in Blender, packed by encode.py): its meta, the variant
+// for this month and its scales. null when the city has none.
+async function loadSkylineMeta(cityId, month = new Date().getUTCMonth() + 1) {
   if (!SKYLINES.includes(cityId)) return null // not rendered yet (scripts/build-skyline-index.mjs)
   const base = `${import.meta.env.BASE_URL}${SKY.skyline.url}${cityId}`
   const res = await fetch(`${base}.json`)
@@ -87,30 +125,79 @@ async function loadSkyline(cityId, anisotropy, month = new Date().getUTCMonth() 
   const meta = await res.json()
   const variant = meta.version === 2 ? skylineVariant(meta, month) : null
   if (!variant) return null
-  const scale = meta.variants[variant].scale
-  const names = ['light', 'night', 'windows']
-  const mirror = meta.mirror && scale.mirror
-  const glow = meta.glow && scale.glow
-  const images = await Promise.all([
-    ...names.map((k) => loadSkylineImage(`${base}/${variant}-${k}.png`)),
-    ...(mirror ? names.map((k) => loadSkylineImage(`${base}/${variant}-mirror-${k}.png`, anisotropy)) : []),
-    ...(glow ? ['glow', 'halo'].map((k) => loadSkylineImage(`${base}/${variant}-${k}.png`)) : []),
-  ])
-  const [light, night, windows] = images
-  const textures = { light, night, windows }
-  if (mirror) [textures.mirrorLight, textures.mirrorNight, textures.mirrorWindows] = images.slice(3, 6)
-  if (glow) [textures.glow, textures.halo] = images.slice(mirror ? 6 : 3)
-  // The lens's starbursts round the brightest lights, where the city has them (full resolution, apart).
-  if (glow && scale.star) textures.star = await loadSkylineImage(`${base}/${variant}-star.png`)
-  return { meta, variant, scale, textures }
+  return { base, meta, variant, scale: meta.variants[variant].scale }
 }
+
+// One set of the skyline's images (SKY.skyline.sets: full size, or a smaller copy): three textures
+// (daylight and coverage; the fixed lights and distance; the windows); where the city has water, the same
+// three for its reflection (the mirror render); after dark, its glow and halo, and the lens's starbursts
+// where it has them. setUrls lists them, loadSkylineSet loads them.
+function setUrls({ base, meta, variant, scale }, set) {
+  const dir = `${base}/${set}${variant}`
+  const urls = { light: `${dir}-light.png`, night: `${dir}-night.png`, windows: `${dir}-windows.png` }
+  if (meta.mirror && scale.mirror) Object.assign(urls, { mirrorLight: `${dir}-mirror-light.png`, mirrorNight: `${dir}-mirror-night.png`, mirrorWindows: `${dir}-mirror-windows.png` })
+  if (meta.glow && scale.glow) Object.assign(urls, { glow: `${dir}-glow.png`, halo: `${dir}-halo.png` })
+  if (meta.glow && scale.glow && scale.star) urls.star = `${dir}-star.png`
+  if (scale.trees) urls.trees = `${dir}-trees.png`
+  return urls
+}
+
+// Dev: ?reach=0 marches every step (mirrorHit), for before/after comparisons.
+const MIRROR_REACH = !(import.meta.env.DEV && new URLSearchParams(location.search).get('reach') === '0')
+
+const MIRRORS = new Set(['mirrorLight', 'mirrorNight', 'mirrorWindows']) // the water's streaks read these anisotropically
+
+async function loadSkylineSet(m, set, anisotropy) {
+  const entries = Object.entries(setUrls(m, set))
+  const loaded = await Promise.all(entries.map(([k, url]) => loadSkylineImage(url, MIRRORS.has(k) ? anisotropy : 1, k === 'trees')))
+  const textures = Object.fromEntries(entries.map(([k], i) => [k, loaded[i]]))
+  if (textures.mirrorLight) textures.mirrorReach = mirrorReach(textures.mirrorLight.image, textures.mirrorNight.image)
+  return textures
+}
+
+// What mirrorHit (sky.glsl) needs to skip the steps that cannot hit: for each texel column c of the mirror
+// render, the nearest thing (log distance as stored, the night image's alpha over coverage, 0 near to 1
+// far) over columns c and c + 1 and, at level j, over 2^j rows, the levels stacked bottom up, each half the
+// last's height (rounded up). Rounded down to 8 bits, so it never says farther than the render holds;
+// texels with no coverage count as farthest. Read from the decoded images before they go to the GPU.
+function mirrorReach(lightBitmap, nightBitmap) {
+  const { width: w, height: h } = lightBitmap
+  const L = bitmapPixels(lightBitmap)
+  const N = bitmapPixels(nightBitmap)
+  const heights = [h]
+  while (heights.at(-1) > 1) heights.push(Math.ceil(heights.at(-1) / 2))
+  const data = new Uint8Array(w * heights.reduce((a, b) => a + b, 0))
+  const near = (c, r) => {
+    const i = (r * w + c) * 4 + 3
+    return L[i] ? Math.min(255, Math.floor((255 * N[i]) / L[i])) : 255
+  }
+  for (let r = 0; r < h; r++) for (let c = 0; c < w; c++) data[r * w + c] = Math.min(near(c, r), near(Math.min(c + 1, w - 1), r))
+  let below = 0
+  for (let j = 1; j < heights.length; j++) {
+    const at = below + heights[j - 1]
+    for (let r = 0; r < heights[j]; r++) {
+      const r0 = below + 2 * r
+      const r1 = below + Math.min(2 * r + 1, heights[j - 1] - 1)
+      for (let c = 0; c < w; c++) data[(at + r) * w + c] = Math.min(data[r0 * w + c], data[r1 * w + c])
+    }
+    below = at
+  }
+  const texture = new THREE.DataTexture(data, w, data.length / w, THREE.RedFormat, THREE.UnsignedByteType)
+  texture.minFilter = texture.magFilter = THREE.NearestFilter
+  texture.unpackAlignment = 1
+  texture.userData.bytes = data.length
+  texture.needsUpdate = true
+  return texture
+}
+
+const disposeAll = (textures) => Object.values(textures ?? {}).forEach((t) => t?.dispose())
 
 const WAVES = SKY.water.waves
 
 const angleBetween = (a, b) => Math.abs(((a - b + 540) % 360) - 180)
 
 export class CitySky {
-  constructor(globals, [width, height], cityId = null) {
+  constructor(globals, [width, height], cityId = null, { detail = 'full', upload = async () => {} } = {}) {
     this.globals = globals
     this.target = lutTarget(width, height, { wrapS: THREE.RepeatWrapping }) // azimuth wraps
     this.lutKey = null
@@ -155,6 +242,8 @@ export class CitySky {
       uSkylineMirrorRect: { value: new THREE.Vector4() },
       uSkylineMirrorScale: { value: new THREE.Vector3() },
       uSkylineWater: { value: new THREE.Vector2() },
+      uSkylineMirrorReach: { value: NO_SKYLINE },
+      uSkylineMirrorReachOn: { value: 0 },
       uSkyWaves: { value: Array.from({ length: WAVES }, () => new THREE.Vector4()) },
       uSkyWaveTail: { value: new THREE.Vector4() },
       uSkyGlitter: { value: new THREE.Vector3(1, 1, 1) },
@@ -165,6 +254,8 @@ export class CitySky {
       uSkylineGlowScale: { value: new THREE.Vector3() },
       uSkylineGlowGain: { value: new THREE.Vector3(SKY.glow.tight, SKY.glow.wide, SKY.glow.haze) },
       uSkylineStar: { value: NO_SKYLINE },
+      uSkylineTrees: { value: NO_SKYLINE },
+      uSkylineTreeSway: { value: new THREE.Vector4() }, // sway at the crown's top (rad), lean across the view (-1..1), swing (rad/s), flutter share
       uSkylineStarGain: { value: 0 },
       uSkyLift: { value: new THREE.Vector3() },
       uSkyGain: { value: new THREE.Vector3(1, 1, 1) },
@@ -174,45 +265,96 @@ export class CitySky {
     this.waves = null // the trains, fixed once the wind is first known (src/sky/waves.js)
     this.wind = 0
     this.rain = 0
-    if (cityId)
-      loadSkyline(cityId, globals.maxAnisotropy).then(
-        (s) => {
-          if (!s) return
-          const RAD = Math.PI / 180
-          const u = this.uniforms
-          this.skyline = s
-          u.uSkylineLight.value = s.textures.light
-          u.uSkylineNight.value = s.textures.night
-          u.uSkylineWindows.value = s.textures.windows
-          u.uSkylineScale.value.set(s.scale.light, s.scale.night, s.scale.windows)
-          u.uSkylineRect.value.set(s.meta.azimuth[0] * RAD, s.meta.azimuth[1] * RAD, s.meta.elevation[0] * RAD, (s.meta.elevation[1] - s.meta.elevation[0]) * RAD)
-          u.uSkylineDist.value.set(Math.log(s.meta.distance[0]), Math.log(s.meta.distance[1] / s.meta.distance[0]))
-          if (s.textures.mirrorLight) {
-            const m = s.meta.mirror
-            u.uSkylineMirrorLight.value = s.textures.mirrorLight
-            u.uSkylineMirrorNight.value = s.textures.mirrorNight
-            u.uSkylineMirrorWindows.value = s.textures.mirrorWindows
-            u.uSkylineMirrorScale.value.set(s.scale.mirror.light, s.scale.mirror.night, s.scale.mirror.windows)
-            u.uSkylineMirrorRect.value.set(s.meta.azimuth[0] * RAD, s.meta.azimuth[1] * RAD, m.elevation[0] * RAD, (m.elevation[1] - m.elevation[0]) * RAD)
-            u.uSkylineWater.value.set(1, m.eyeAboveWater)
-          }
-          if (s.textures.glow) {
-            const g = s.meta.glow
-            u.uSkylineGlow.value = s.textures.glow
-            u.uSkylineHalo.value = s.textures.halo
-            u.uSkylineGlowScale.value.set(s.scale.glow, s.scale.halo, g.lateShare)
-            u.uSkylineGlowRect.value.set(s.meta.azimuth[0] * RAD, s.meta.azimuth[1] * RAD, g.elevation[0] * RAD, (g.elevation[1] - g.elevation[0]) * RAD)
-            if (s.textures.star) {
-              u.uSkylineStar.value = s.textures.star
-              u.uSkylineStarGain.value = s.scale.star * SKY.glow.star
-            }
-          }
-          u.uSkylineOn.value = 1
-        },
-        (err) => console.warn(`[sky] no skyline for ${cityId}:`, err.message)
-      )
+    // The skyline: its meta now, a set of its images once a drop asks for one (setDetail). `upload`
+    // puts a set's textures on the GPU before they are shown (the site spreads that over frames).
+    this.upload = upload
+    this.skylineMeta = cityId
+      ? loadSkylineMeta(cityId).catch((err) => console.warn(`[sky] no skyline for ${cityId}:`, err.message))
+      : Promise.resolve(null)
+    this.detail = null // the set asked for (a key of SKY.skyline.sets), null for none
+    this.loads = 0
+    this.skyline = null // the set shown: { meta, scale, detail, textures }
+    this.settled = null
     // What HeroDrop needs to draw this sky: the shader code and the uniforms, shared by reference.
     this.content = { glsl: `${globals.atmosphere.glsl}\n${skyChunk}`, uniforms: this.uniforms }
+    this.setDetail(detail)
+  }
+
+  // Which set of the skyline's images to hold (a key of SKY.skyline.sets), or null for none. The set
+  // shown stays until the new one is on the GPU; the old one is then let go.
+  setDetail(detail) {
+    if (detail === this.detail) return
+    this.detail = detail
+    const load = ++this.loads
+    const current = () => load === this.loads
+    if (!detail) return this.showSkyline(null)
+    this.skylineMeta
+      .then(async (m) => {
+        if (!m && current()) this.settled = detail // nothing to show
+        if (!m || !current()) return
+        const textures = await loadSkylineSet(m, SKY.skyline.sets[detail], this.globals.maxAnisotropy)
+        if (current()) await this.upload(Object.values(textures))
+        if (current()) this.showSkyline({ meta: m.meta, scale: m.scale, detail, textures })
+        else disposeAll(textures)
+      })
+      .catch((err) => console.warn(`[sky] skyline set ${detail} unavailable:`, err.message))
+  }
+
+  // Dev: the set asked for is the one shown.
+  get skylineSettled() {
+    return this.settled === this.detail
+  }
+
+  // Fetch a set's images now, held compressed until setDetail asks for that set (resolves when they are in).
+  prefetch(detail) {
+    return this.skylineMeta.then((m) => {
+      if (!m) return
+      const urls = Object.values(setUrls(m, SKY.skyline.sets[detail]))
+      for (const url of urls) if (!blobs.has(url)) blobs.set(url, fetchBlob(url))
+      return Promise.allSettled(urls.map((url) => blobs.get(url)))
+    })
+  }
+
+  showSkyline(s) {
+    const old = this.skyline
+    this.skyline = s
+    this.settled = s?.detail ?? null
+    const u = this.uniforms
+    const t = s?.textures ?? {}
+    u.uSkylineLight.value = t.light ?? NO_SKYLINE
+    u.uSkylineNight.value = t.night ?? NO_SKYLINE
+    u.uSkylineWindows.value = t.windows ?? NO_SKYLINE
+    u.uSkylineMirrorLight.value = t.mirrorLight ?? NO_SKYLINE
+    u.uSkylineMirrorNight.value = t.mirrorNight ?? NO_SKYLINE
+    u.uSkylineMirrorWindows.value = t.mirrorWindows ?? NO_SKYLINE
+    u.uSkylineMirrorReach.value = t.mirrorReach ?? NO_SKYLINE
+    u.uSkylineMirrorReachOn.value = t.mirrorReach && MIRROR_REACH ? 1 : 0
+    u.uSkylineGlow.value = t.glow ?? NO_SKYLINE
+    u.uSkylineHalo.value = t.halo ?? NO_SKYLINE
+    u.uSkylineStar.value = t.star ?? NO_SKYLINE
+    u.uSkylineTrees.value = t.trees ?? NO_SKYLINE
+    u.uSkylineOn.value = s ? 1 : 0
+    if (s && !old) {
+      this.setTrees(this.wind) // its lean follows the panorama's bearing
+      const RAD = Math.PI / 180
+      const { meta, scale } = s
+      u.uSkylineScale.value.set(scale.light, scale.night, scale.windows)
+      u.uSkylineRect.value.set(meta.azimuth[0] * RAD, meta.azimuth[1] * RAD, meta.elevation[0] * RAD, (meta.elevation[1] - meta.elevation[0]) * RAD)
+      u.uSkylineDist.value.set(Math.log(meta.distance[0]), Math.log(meta.distance[1] / meta.distance[0]))
+      if (t.mirrorLight) {
+        const m = meta.mirror
+        u.uSkylineMirrorScale.value.set(scale.mirror.light, scale.mirror.night, scale.mirror.windows)
+        u.uSkylineMirrorRect.value.set(meta.azimuth[0] * RAD, meta.azimuth[1] * RAD, m.elevation[0] * RAD, (m.elevation[1] - m.elevation[0]) * RAD)
+        u.uSkylineWater.value.set(1, m.eyeAboveWater)
+      }
+      if (t.glow) {
+        const g = meta.glow
+        u.uSkylineGlowScale.value.set(scale.glow, scale.halo, g.lateShare)
+        u.uSkylineGlowRect.value.set(meta.azimuth[0] * RAD, meta.azimuth[1] * RAD, g.elevation[0] * RAD, (g.elevation[1] - g.elevation[0]) * RAD)
+        u.uSkylineStarGain.value = t.star ? scale.star * SKY.glow.star : 0
+      }
+    }
+    disposeAll(old?.textures)
   }
 
   get dirty() {
@@ -269,6 +411,17 @@ export class CitySky {
     const u = this.uniforms
     this.waves.trains.forEach((t, i) => u.uSkyWaves.value[i].set(t.vector[0], t.vector[1], e.amplitudes[i], t.omega))
     u.uSkyWaveTail.value.set(this.waves.dir[0], this.waves.dir[1], e.tail[0], e.tail[1])
+    this.setTrees(windMs)
+  }
+
+  // The trees' sway in this wind (SKY.skyline.trees): stronger with it, leaning as it blows across the view.
+  setTrees(windMs) {
+    const { sway, windFull, period, flutter } = SKY.skyline.trees
+    const k = Math.min(Math.max(windMs / windFull, 0), 1)
+    const bearing = this.skyline?.meta.bearing ?? 0
+    const across = this.waves ? Math.sin(((this.waves.towardDeg - bearing) * Math.PI) / 180) : 0
+    const deg = sway[0] + (sway[1] - sway[0]) * k
+    this.uniforms.uSkylineTreeSway.value.set((deg * Math.PI) / 180, across * k, (2 * Math.PI) / period, flutter)
   }
 
   // Weather only (cloud deck, haze, rain, wind): the site eases these between readings, so a new reading
@@ -289,6 +442,7 @@ export class CitySky {
 
   dispose() {
     this.target.dispose()
-    for (const t of Object.values(this.skyline?.textures ?? {})) t.dispose()
+    this.loads++
+    disposeAll(this.skyline?.textures)
   }
 }

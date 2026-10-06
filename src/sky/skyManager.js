@@ -11,13 +11,35 @@ import { skyInputs } from './inputs.js'
 // does at most one piece of GPU work per frame (a setup step or one city's texture), so no frame
 // spikes. Nothing here is React state: drops read uniforms by reference, and React hears only once,
 // when everything is prepared (onSkyReady), which holds the loader's "enter".
+//
+// Each city holds only the set of its skyline's images its drops can show (SKY.skyline.sets): each user
+// asks for one (setSkyDetail), the city loads the largest asked for, and lets its images go when no drop
+// draws it. A set's textures go onto the GPU one per frame, like the setup steps.
 
 const INPUTS_EVERY_MS = 15000 // the sun moves under 0.07° in that time; textures re-render every 0.25°
 const EASE_TIME = 0.5 // seconds (time constant): a new weather reading is 98% in after 2 s, never a cut
 const CITY = Object.fromEntries(CITIES.map((c) => [c.id, c]))
 
-const skies = new Map() // city id → { sky, users, target, shown }
+const skies = new Map() // city id → { sky, users, wants, target, shown }
+const DETAIL_ORDER = Object.keys(SKY.skyline.sets) // largest first
+// Dev: ?skyset=full holds every city on that set whatever its drops ask (before/after comparisons);
+// so does __schwe.skyset('full'), and __schwe.skyset(null) lets the drops ask again.
+let forcedSet = import.meta.env.DEV ? new URLSearchParams(location.search).get('skyset') : null
+if (import.meta.env.DEV)
+  window.__schwe = Object.assign(window.__schwe ?? {}, {
+    skyset: (set) => {
+      forcedSet = set
+      skies.forEach(applyDetail)
+    },
+    // The mirror march's skip (sky.glsl mirrorHit) on or off, where a city has it loaded.
+    mirrorReach: (on) =>
+      skies.forEach(({ sky }) => {
+        const u = sky.uniforms
+        u.uSkylineMirrorReachOn.value = on && u.uSkylineMirrorReach.value.isDataTexture ? 1 : 0
+      }),
+  })
 let globals = null
+let renderer = null
 let steps = [] // per-visit setup still to do, one per frame
 let loaded = false // star catalogue and cloud noise are in
 let rows = undefined // the weather rows the inputs were last computed from
@@ -26,8 +48,9 @@ let ready = false
 const listeners = new Set()
 
 // Idempotent. Builds the shared sky once; the atmosphere tables are queued, one per frame.
-export function startSky(renderer) {
+export function startSky(gl) {
   if (globals) return
+  renderer = gl
   globals = createSkyGlobals(renderer)
   steps = globals.atmosphere.initSteps()
   globals.ready.then(() => {
@@ -43,7 +66,8 @@ export function startSky(renderer) {
 export function skyContent(cityId) {
   let entry = skies.get(cityId)
   if (!entry) {
-    entry = { sky: new CitySky(globals, SKY.skyView[quality.name] ?? SKY.skyView.high, cityId), users: 0, target: null, shown: null }
+    const sky = new CitySky(globals, SKY.skyView[quality.name] ?? SKY.skyView.high, cityId, { detail: null, upload })
+    entry = { sky, users: 0, wants: new Map(), target: null, shown: null }
     skies.set(cityId, entry)
     lastInputs = -Infinity
   }
@@ -52,12 +76,59 @@ export function skyContent(cityId) {
 
 export function acquireSky(cityId) {
   skyContent(cityId)
-  skies.get(cityId).users++
+  const entry = skies.get(cityId)
+  entry.users++
+  applyDetail(entry)
 }
 
 export function releaseSky(cityId) {
   const entry = skies.get(cityId)
-  if (entry) entry.users = Math.max(0, entry.users - 1)
+  if (!entry) return
+  entry.users = Math.max(0, entry.users - 1)
+  applyDetail(entry)
+}
+
+// Which set of the city's skyline images `who` (a drop) needs: a key of SKY.skyline.sets, or null to
+// withdraw its ask. The city holds the largest set asked for (the small one if none is), none undrawn.
+export function setSkyDetail(cityId, who, detail) {
+  skyContent(cityId)
+  const entry = skies.get(cityId)
+  if ((entry.wants.get(who) ?? null) === detail) return
+  if (detail) entry.wants.set(who, detail)
+  else entry.wants.delete(who)
+  applyDetail(entry)
+}
+
+// Undrawn cities let their images go on the next frame (updateSky), so a drop re-mounted in the same
+// render keeps them.
+function applyDetail(entry) {
+  if (!entry.users) return
+  const i = Math.min(...[...entry.wants.values()].map((d) => DETAIL_ORDER.indexOf(d)).filter((i) => i >= 0))
+  entry.sky.setDetail(forcedSet ?? DETAIL_ORDER[Number.isFinite(i) ? i : DETAIL_ORDER.length - 1])
+}
+
+// Fetch these cities' `detail` sets ahead, one city at a time in this order (held compressed until a
+// drop asks for them; CitySky.prefetch). A newer call replaces the queue.
+let prefetchRun = 0
+export async function prefetchSkies(cityIds, detail) {
+  const run = ++prefetchRun
+  for (const id of cityIds) {
+    if (run !== prefetchRun) return
+    skyContent(id)
+    await skies.get(id).sky.prefetch(detail)
+  }
+}
+
+// A set's textures onto the GPU, one per frame (in the setup queue); resolves when all are.
+function upload(textures) {
+  return new Promise((done) => {
+    textures.forEach((t, i) =>
+      steps.push(() => {
+        renderer.initTexture(t)
+        if (i === textures.length - 1) done()
+      })
+    )
+  })
 }
 
 // Every frame, before anything draws (Experience's SkyFrame, priority -3).
@@ -67,6 +138,7 @@ export function updateSky(renderer, dt) {
   if (step) return step()
   if (state.clips !== rows || performance.now() - lastInputs > INPUTS_EVERY_MS) readInputs()
   ease(dt)
+  for (const entry of skies.values()) if (!entry.users) entry.sky.setDetail(null)
   for (const entry of skies.values()) {
     if (entry.users > 0 && entry.sky.dirty) {
       entry.sky.render(renderer)
@@ -129,10 +201,15 @@ export function skySettled() {
   if (!ready) return false
   for (const { users, sky, shown, target } of skies.values()) {
     if (!users) continue
-    if (sky.dirty) return false
+    if (sky.dirty || !sky.skylineSettled) return false
     if (shown && target && ['cover', 'tau', 'baseKm', 'haze'].some((k) => Math.abs(shown[k] - target[k]) > 1e-3)) return false
   }
   return true
 }
 
-export const skyStats = () => ({ cities: [...skies].filter(([, e]) => e.users > 0).map(([id]) => id), renders: [...skies.values()].reduce((n, e) => n + e.sky.renders, 0) })
+export const skyStats = () => ({
+  cities: [...skies].filter(([, e]) => e.users > 0).map(([id]) => id),
+  renders: [...skies.values()].reduce((n, e) => n + e.sky.renders, 0),
+  sets: Object.fromEntries([...skies].map(([id, e]) => [id, e.sky.skyline?.detail ?? null])), // the image set each city shows
+  skylineMB: [...skies.values()].reduce((n, e) => n + Object.values(e.sky.skyline?.textures ?? {}).reduce((m, t) => m + t.userData.bytes, 0), 0) / 2 ** 20,
+})
