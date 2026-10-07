@@ -15,6 +15,7 @@ import vertexShader from '../shaders/rainSplash.vert.glsl?raw'
 import { plink } from '../audio/audioEngine.js'
 import { TAU, WaveSim } from './waves/WaveSim.js'
 import { calmField, surfaceUniforms } from './waves/surface.js'
+import { overlay } from '../ui/overlay.js'
 
 // Beat 7, after the hero drop: rain on the puddle. Every drop is one of the baked library's splashes
 // (blender/splash/bake_rain.py), placed by the schedule (core/puddleRain.js), turned and scaled, played
@@ -25,6 +26,26 @@ import { calmField, surfaceUniforms } from './waves/surface.js'
 // freezes with the rest of the rain and, on the last frame, falls for as long as the page is open.
 
 const CAP = { full: 512, far: 2048, beads: 1024, pins: 8192 }
+
+// The ending's answer and final screen are a title card over the water: no splash stands behind them
+// (overlay.typeZone, from EndType.jsx). A splash whose screen box (its crown's reach across, its height
+// up from where it lands) comes within KEEP_OUT px of the type's box fades out by how far it reaches in;
+// its rings still spread there.
+const KEEP_OUT = 28
+const _sp = new THREE.Vector3()
+function typeClear(camera, size, zone, x, y, z, halfWidth, height) {
+  _sp.set(x, y, z).project(camera)
+  if (_sp.z > 1) return 1
+  const sx = ((_sp.x + 1) / 2) * size.width
+  const ground = ((1 - _sp.y) / 2) * size.height
+  _sp.set(x, y + height, z).project(camera)
+  const top = ((1 - _sp.y) / 2) * size.height
+  const half = Math.max((ground - top) * (halfWidth / height), 1)
+  // How far the splash's box reaches into the zone grown by KEEP_OUT, in px (≤ 0: clear of it).
+  const inX = Math.min(sx + half - (zone[0] - KEEP_OUT), zone[2] + KEEP_OUT - (sx - half))
+  const inY = Math.min(ground - (zone[1] - KEEP_OUT), zone[3] + KEEP_OUT - top)
+  return 1 - smooth(0, KEEP_OUT, Math.min(inX, inY))
+}
 
 // ---- The splashes ---------------------------------------------------------------------------------
 
@@ -68,10 +89,9 @@ void main() {
   gl_FragColor = vec4(0.0);
   return;
 #endif
-  float facing = pow(1.0 - clamp(dot(-v, n), 0.0, 1.0), 5.0);
   // Coming and going (the rain's intensity, distance, the bake's end) it fades as a whole; a dither
   // showed its pattern on splashes close to the camera.
-  gl_FragColor = vec4(shadeWaterRough(v, n, uRough), mix(0.85, 1.0, facing) * vFade);
+  gl_FragColor = vec4(shadeSplash(v, n, uRough), splashAlpha(v, n) * vFade);
 }`
 
 // ---- The surface pins -----------------------------------------------------------------------------
@@ -396,7 +416,7 @@ const smooth = (a, b, x) => {
 }
 
 export default function PuddleRain() {
-  const { gl, camera, scene } = useThree()
+  const { gl, camera, scene, size } = useThree()
   const group = useRef()
 
   const [wanted, setWanted] = useState(false)
@@ -527,6 +547,7 @@ export default function PuddleRain() {
     const wpm = PUDDLE_RAIN.worldPerMeter
     const cellsPerWorld = sim.size / tile
     const release = PUDDLE_RAIN.pin.release
+    const zone = overlay.typeZone
 
     for (const s of splashes) s.full.count = s.far.count = 0
     beads.count = 0
@@ -558,6 +579,8 @@ export default function PuddleRain() {
       if (fade <= 0.01) return
       const scale = schedule.scale[i]
       const clear = PUDDLE_RAIN.clear * meta.dropRadius * scale * wpm
+      const crownHalf = meta.profile.reach * wpm // world units at scale 1
+      const crownHeight = (meta.boundsMax[1] - meta.surfaceY) * wpm
       const cos = Math.cos(schedule.rot[i])
       const sin = Math.sin(schedule.rot[i])
 
@@ -598,7 +621,9 @@ export default function PuddleRain() {
             // Behind the camera: skip (the ground point's direction against the view).
             const ahead = (wx - _cam.x) * _fwd.x + (wz - _cam.z) * _fwd.z
             if (ahead < -0.5) continue
-            const f = fade * ending * (1 - smooth(fadeDist, farDist, dist)) * smooth(clear * 0.6, clear, dist)
+            let f = fade * ending * (1 - smooth(fadeDist, farDist, dist)) * smooth(clear * 0.6, clear, dist)
+            if (f <= 0.01) continue
+            if (zone) f *= typeClear(camera, size, zone, wx, groundY, wz, crownHalf * scale, crownHeight * scale)
             if (f <= 0.01) continue
             // A drop close by that landed during this step is heard.
             if (local < dt && dist < 2.2 && f > 0.5) {

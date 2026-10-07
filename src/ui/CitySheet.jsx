@@ -1,15 +1,19 @@
 import { useEffect, useRef } from 'react'
 import { createPortal } from 'react-dom'
-import { COUNT } from './answer.js'
+import { CITIES } from '../config.js'
+import { COUNT, answerLines } from './answer.js'
+import AnswerHeadline from './AnswerHeadline.jsx'
 import CityList from './CityList.jsx'
 import Credits from './Credits.jsx'
 
-// The cities (as they are right now), what this is, and the credits the data asks for, over the last
-// frame. Opened from the final screen's links at their `section`. Focus moves into it and back to the
+// The answer again, the cities (as they are right now), what this is, and the credits the data asks
+// for, over the last frame. Opened from the final screen's links at their `section`. Focus moves into it and back to the
 // link that opened it; Escape closes; Tab stays inside. It is its own scroll area (data-lenis-prevent),
 // and sits in a portal so no stacking context of the ending's column can put it under the sound switch.
 export default function CitySheet({ clips, rainCity, section = 'cities', onClose }) {
   const ref = useRef()
+  const city = CITIES.find((c) => c.id === rainCity?.city)
+  const [headline, meta, rate] = answerLines(rainCity, city, city ? clips?.find((c) => c.city === city.id)?.localTime : '', clips)
 
   useEffect(() => {
     const el = ref.current
@@ -40,11 +44,22 @@ export default function CitySheet({ clips, rainCity, section = 'cities', onClose
   return createPortal(
     <div ref={ref} className="sheet" role="dialog" aria-modal="true" aria-label="Cities, about and credits" tabIndex={-1} data-lenis-prevent>
       <div className="sheet__bar">
-        <button type="button" className="text-link sheet__close" onClick={onClose}>
+        <button type="button" className="sheet__close" onClick={onClose}>
+          <svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" aria-hidden="true">
+            <path d="M3.5 3.5l9 9m0-9l-9 9" />
+          </svg>
           close
         </button>
       </div>
       <div className="sheet__body">
+        {headline && (
+          <section className="sheet__recap" aria-label="The answer">
+            <p className="sheet__recap-headline">
+              <AnswerHeadline text={headline} name={city?.name} />
+            </p>
+            {meta && <p className="meta">{[meta, rate].filter(Boolean).join(' · ')}</p>}
+          </section>
+        )}
         <h2 className="sheet__title" id="sheet-cities">
           cities
         </h2>
@@ -63,7 +78,7 @@ export default function CitySheet({ clips, rainCity, section = 'cities', onClose
         <h2 className="sheet__title" id="sheet-credits">
           credits
         </h2>
-        <Credits className="sheet__credit" />
+        <Credits />
       </div>
     </div>,
     document.body

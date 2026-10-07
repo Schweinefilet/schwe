@@ -25,24 +25,26 @@ export default function StillPage({ clips, rainCity }) {
             <p className="still__headline">
               <AnswerHeadline text={headline} name={answerCity?.name} />
             </p>
-            {meta && (
-              <p className="still__meta">
-                {meta}
-                {rate && (
-                  <>
-                    {' · '}
-                    <span className="still__unit">{rate}</span>
-                  </>
-                )}
-              </p>
-            )}
+            {meta && <p className="still__meta meta">{[meta, rate].filter(Boolean).join(' · ')}</p>}
           </>
         ) : (
-          <p className="still__meta">reading the weather…</p>
+          <p className="still__meta meta">reading the weather…</p>
         )}
       </section>
-      <CityList clips={clips} rainCity={rainCity} />
-      <Credits className="still__credit" />
+      <div className="still__columns">
+        <section aria-labelledby="still-cities">
+          <h2 className="still__heading" id="still-cities">
+            cities
+          </h2>
+          <CityList clips={clips} rainCity={rainCity} />
+        </section>
+        <section aria-labelledby="still-credits">
+          <h2 className="still__heading" id="still-credits">
+            credits
+          </h2>
+          <Credits />
+        </section>
+      </div>
     </main>
   )
 }

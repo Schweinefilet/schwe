@@ -1,10 +1,10 @@
 import gsap from 'gsap'
 import { ScrollTrigger } from 'gsap/ScrollTrigger'
 import Lenis from 'lenis'
-import { ALIGN, CAMERA_KEYS, DEFAULT_DIVE_CITY, DIVE, DRIFT_PASSES, HERO, PACE, SNAP, SPLASH, TIMELINE_END, TIMELINE_START, heroDropsFor, visibleDrops } from '../config.js'
+import { ALIGN, DEFAULT_DIVE_CITY, DIVE, HERO, PACE, SNAP, SPLASH, TIMELINE_END, TIMELINE_START, heroDropsFor, visibleDrops } from '../config.js'
 import { setLenis, setStep } from './loop.js'
 import { buildMasterTimeline } from './timeline.js'
-import { createCameraPath } from './cameraPath.js'
+import { tierPath } from './tierPath.js'
 import { buildPaceTable, rateAt, smoothDamp } from './pace.js'
 import { landing } from './snap.js'
 import { resetRig } from './rig.js'
@@ -12,6 +12,7 @@ import { globalUniforms, resetUniforms } from './uniforms.js'
 import { state } from './state.js'
 import { onTierChange, quality } from './quality.js'
 import { liveCount } from '../content/videoManager.js'
+import { MOTION } from '../ui/motion.js'
 
 gsap.registerPlugin(ScrollTrigger)
 
@@ -21,9 +22,9 @@ const EASE_K = 1 / (1 - EASE_FROM * EASE_FROM)
 const endingEase = (x) => (x <= EASE_FROM ? 2 * EASE_K * (1 - EASE_FROM) * x : 1 - EASE_K * (1 - x) ** 2)
 
 // The speed limit along the timeline (PACE in config.js): slower where the camera passes the drops
-// this tier shows. Positions do not depend on which city is in which drop.
+// this tier shows, along the path this tier flies. Positions do not depend on which city is in which drop.
 function paceTable() {
-  const path = createCameraPath(CAMERA_KEYS)
+  const { path } = tierPath()
   const out = { pos: null, look: null }
   // The dive drop slows the camera until it starts pulling out: its city has been named by then, and
   // leaving it at a city drop's pace was dead time before the word.
@@ -57,10 +58,27 @@ function paceTable() {
 }
 
 // Where a swift scroll may come to rest (SNAP in config.js): the slow point of each drift drop this tier
-// shows (the dive drop comes first in visibleDrops), and inside the dive drop.
+// shows (as this tier's camera times them), and inside the dive drop.
 function landingPoints() {
-  const shown = visibleDrops(heroDropsFor(DEFAULT_DIVE_CITY), quality.heroDrops).length - 1
-  return [...DRIFT_PASSES.slice(0, shown).map((at) => ({ at, capture: SNAP.capture })), SNAP.dive]
+  return [...tierPath().passes.map((at) => ({ at, capture: SNAP.capture })), SNAP.dive]
+}
+
+// Where the drift's camera is on `path` at time t (its distance along the line, which only ever falls),
+// and the time another path is there: a tier that drops mid-drift flies another timing of the same
+// path, so the picture moves to the same place on it rather than jumping.
+const DRIFT_UNTIL = 9.4 // the camera comes to rest inside the dive drop (config.js driftFor)
+const _at = { pos: null, look: null }
+function sameMoment(from, to, t) {
+  if (t <= TIMELINE_START || t >= DRIFT_UNTIL) return t
+  const z = from.sample(t, _at).pos[2]
+  let lo = TIMELINE_START
+  let hi = DRIFT_UNTIL
+  for (let i = 0; i < 40; i++) {
+    const mid = (lo + hi) / 2
+    if (to.sample(mid, _at).pos[2] > z) lo = mid
+    else hi = mid
+  }
+  return (lo + hi) / 2
 }
 
 // `onTop`: runs under the black when a cut lands at the top ("back to top", the Home key): the first
@@ -84,9 +102,22 @@ export function initScroll({ onTop } = {}) {
   // the scroll position stands for. Scroll stays the one source of truth; only the rate is time-based.
   let table = paceTable()
   let points = landingPoints()
+  let flying = tierPath().path
   const offTier = onTierChange(() => {
     table = paceTable()
     points = landingPoints()
+    // The camera rig reads tierPath() each frame, so from the next frame it flies the new timing: keep
+    // the picture where it was, and the scroll as far ahead of it as it was.
+    const before = flying
+    flying = tierPath().path
+    const t = sameMoment(before, flying, pace.time)
+    if (Math.abs(t - pace.time) > 1e-4 && !lenis.isStopped) {
+      const ahead = pace.lastTarget - pace.time
+      pace.time = t
+      tl.time(t)
+      lenis.scrollTo(timeToScroll(t + ahead), { immediate: true, force: true })
+      pace.lastTarget = t + ahead
+    }
   })
   const pace = { time: TIMELINE_START, velocity: 0, arrived: null, lastTarget: TIMELINE_START, ending: false }
   // The visitor's current gesture: when its last input came, how far the scroll ran ahead of the picture
@@ -268,14 +299,14 @@ export function initScroll({ onTop } = {}) {
   const cut = (t, after) =>
     gsap.to('#fade', {
       opacity: 1,
-      duration: 0.6,
-      ease: 'power1.in',
+      duration: MOTION.base,
+      ease: MOTION.easeIn,
       overwrite: true,
       onComplete: () => {
         lenis.scrollTo(timeToScroll(t), { immediate: true, force: true })
         snap(t)
         after?.()
-        gsap.to('#fade', { opacity: 0, duration: 1, delay: 0.15, ease: 'power1.out' })
+        gsap.to('#fade', { opacity: 0, duration: MOTION.slow, delay: 0.15, ease: MOTION.easeOut })
       },
     })
 
@@ -313,6 +344,7 @@ export function initScroll({ onTop } = {}) {
       pace,
       word,
       splash: SPLASH,
+      driftPasses: () => tierPath().passes,
       goto: (t) => {
         lenis.scrollTo(timeToScroll(t), { immediate: true, force: true })
         snap(scrollToTime(lenis.scroll))

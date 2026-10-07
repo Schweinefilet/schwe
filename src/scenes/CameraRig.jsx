@@ -1,9 +1,9 @@
 import { useMemo } from 'react'
 import { useFrame, useThree } from '@react-three/fiber'
 import * as THREE from 'three'
-import { BACKDROP, CAMERA_FOV, CAMERA_KEYS, DEFAULT_DIVE_CITY, DIVE_DROP, DRIFT_PASSES, HERO, heroDropsFor } from '../config.js'
+import { BACKDROP, CAMERA_FOV, DEFAULT_DIVE_CITY, DIVE_DROP, HERO, heroDropsFor, visibleDrops } from '../config.js'
 import { envUniforms } from '../content/backdrop.js'
-import { createCameraPath } from '../core/cameraPath.js'
+import { tierPath } from '../core/tierPath.js'
 import { applyTurn, createFraming } from '../core/framing.js'
 import { quality } from '../core/quality.js'
 import { useTier } from '../core/useTier.js'
@@ -21,23 +21,23 @@ const NEAR = 0.02
 const PROXY_RADIUS = 1.06 * HERO.radius
 
 export default function CameraRig() {
-  const path = useMemo(() => createCameraPath(CAMERA_KEYS), [])
   const out = useMemo(() => ({ pos: _pos, look: _look }), [])
   // On narrow screens the view turns a little toward each drift drop this tier shows as it comes up,
   // so the drop is fully in frame where its city shows (core/framing.js). Nothing on wide screens.
   const size = useThree((s) => s.size)
   const tier = useTier()
   const framing = useMemo(() => {
-    const drops = heroDropsFor(DEFAULT_DIVE_CITY)
+    const { path, passes } = tierPath()
+    const drops = visibleDrops(heroDropsFor(DEFAULT_DIVE_CITY), quality.heroDrops)
       .filter((d) => !d.dive)
-      .slice(0, quality.heroDrops - 1)
-      .map((d, i) => ({ pos: d.pos, at: DRIFT_PASSES[i] }))
+      .map((d, i) => ({ pos: d.pos, at: passes[i] }))
     return createFraming(path, drops, { fov: CAMERA_FOV, aspect: size.width / size.height, height: size.height, radius: HERO.radius })
-  }, [path, size.width, size.height, tier])
+  }, [size.width, size.height, tier])
 
   useFrame(({ camera }) => {
-    // Position and look are functions of timeline time, so scrolling back retraces them exactly.
-    path.sample(state.time, out)
+    // Position and look are functions of timeline time, so scrolling back retraces them exactly. The
+    // path is this tier's (it slows only at the drops the tier shows).
+    tierPath().path.sample(state.time, out)
     applyTurn(_pos, _look, framing(state.time))
 
     // Beat 7: turn toward the falling drop and keep it framed on the way down.

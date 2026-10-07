@@ -53,11 +53,12 @@ function quinticToRest(u, v0, length) {
 
 // from: { at, pos, look } (the top, at rest), start: { z } (where the height has settled to `y`),
 // end: { at, pos, look } (the dive's approach), arrive: { at, pos, look } (inside the drop, at rest),
-// passes: the moments the camera is slowest, one per drop, drops: { zOffset?, pass, around, lead },
+// passes: the moments the camera is slowest, one per drop, show: which of the drops are shown (indices;
+// all by default; the camera slows only for these, at the same places), drops: { pass, around, lead },
 // timing: { ease, sigma, rampIn, blendOut, approach }, curve(distance) → [dx, dy], fade: [in, out]
 // (distance over which the bend comes and goes), gaze: { ahead, lookToward, sway, swayPeriod },
 // step: key spacing in timeline units.
-export function buildDrift({ from, start, end, arrive, y, passes, drops, timing, curve, fade, gaze, step = 0.02 }) {
+export function buildDrift({ from, start, end, arrive, y, passes, show = null, drops, timing, curve, fade, gaze, step = 0.02 }) {
   const z0 = from.pos[2]
   const zEnd = end.pos[2]
   // Fades are smootherstep, not smoothstep: the latter's curvature jumps at its ends, a jolt in the path.
@@ -76,41 +77,72 @@ export function buildDrift({ from, start, end, arrive, y, passes, drops, timing,
   }
 
   // Speed (distance per unit of time) from the top to the approach: ramp × (cruise with dips, blended
-  // into the approach speed). The cruise level is solved so the distance comes out exactly.
+  // into the approach speed). The cruise level is solved so the distance comes out exactly. `dipsAt`:
+  // the moments the camera is slowest.
   const approachLength = zEnd - arrive.pos[2]
   const approachTime = arrive.at - end.at
   const vEnd = (timing.approach * approachLength) / approachTime // the quintic's start speed
-  const dips = (t) => 1 - (1 - timing.ease) * passes.reduce((s, p) => s + Math.exp(-0.5 * ((t - p) / timing.sigma) ** 2), 0)
   const ramp = (t) => smootherstep(from.at, from.at + timing.rampIn, t)
   const out = (t) => smootherstep(end.at - timing.blendOut, end.at, t)
   const dt = 0.001
   const n = Math.round((end.at - from.at) / dt)
-  let cruiseArea = 0
-  let endArea = 0
-  for (let i = 0; i < n; i++) {
-    const t = from.at + (i + 0.5) * dt
-    cruiseArea += ramp(t) * (1 - out(t)) * dips(t) * dt
-    endArea += ramp(t) * out(t) * vEnd * dt
-  }
-  const cruise = (z0 - zEnd - endArea) / cruiseArea
-  const zTable = new Float64Array(n + 1)
-  zTable[0] = z0
-  for (let i = 0; i < n; i++) {
-    const t = from.at + (i + 0.5) * dt
-    zTable[i + 1] = zTable[i] - ramp(t) * ((1 - out(t)) * cruise * dips(t) + out(t) * vEnd) * dt
-  }
-  const zAt = (t) => {
-    const x = Math.min(Math.max((t - from.at) / dt, 0), n)
-    const i = Math.min(Math.floor(x), n - 1)
-    return zTable[i] + (zTable[i + 1] - zTable[i]) * (x - i)
+  const timed = (dipsAt) => {
+    const dips = (t) => 1 - (1 - timing.ease) * dipsAt.reduce((s, p) => s + Math.exp(-0.5 * ((t - p) / timing.sigma) ** 2), 0)
+    let cruiseArea = 0
+    let endArea = 0
+    for (let i = 0; i < n; i++) {
+      const t = from.at + (i + 0.5) * dt
+      cruiseArea += ramp(t) * (1 - out(t)) * dips(t) * dt
+      endArea += ramp(t) * out(t) * vEnd * dt
+    }
+    const cruise = (z0 - zEnd - endArea) / cruiseArea
+    const zTable = new Float64Array(n + 1)
+    zTable[0] = z0
+    for (let i = 0; i < n; i++) {
+      const t = from.at + (i + 0.5) * dt
+      zTable[i + 1] = zTable[i] - ramp(t) * ((1 - out(t)) * cruise * dips(t) + out(t) * vEnd) * dt
+    }
+    const zAt = (t) => {
+      const x = Math.min(Math.max((t - from.at) / dt, 0), n)
+      const i = Math.min(Math.floor(x), n - 1)
+      return zTable[i] + (zTable[i + 1] - zTable[i]) * (x - i)
+    }
+    // When the camera reaches z (it only ever moves toward -z).
+    const timeAt = (z) => {
+      let lo = 0
+      let hi = n
+      while (hi - lo > 1) {
+        const mid = (lo + hi) >> 1
+        if (zTable[mid] > z) lo = mid
+        else hi = mid
+      }
+      return from.at + (lo + (zTable[lo] - z) / (zTable[lo] - zTable[hi] || 1)) * dt
+    }
+    return { zAt, timeAt }
   }
 
-  const dropZ = passes.map((t) => zAt(t) - drops.lead)
+  // The drops sit where the full drift (a dip at every pass) is slowest, whichever of them are shown.
+  const full = timed(passes)
+  const dropZ = passes.map((t) => full.zAt(t) - drops.lead)
   const dropPos = dropZ.map((z, i) => {
     const a = (drops.around[i % drops.around.length] * Math.PI) / 180
     const { right, up } = frame(z)
     return add(centre(z), add(scale(right, drops.pass * Math.cos(a)), scale(up, drops.pass * Math.sin(a))))
   })
+
+  // `show`: the drops a tier shows (indices into passes). The camera slows only for those, and still at
+  // the same distance before each: without the other dips the timing changes, so each slow moment is
+  // found again where the new timing reaches its drop (a few rounds settle it to well under a frame).
+  const shown = show ?? passes.map((_, i) => i)
+  let slow = shown.map((i) => passes[i])
+  let { zAt, timeAt } = full
+  if (shown.length !== passes.length) {
+    for (let round = 0; round < 8; round++) {
+      ;({ zAt, timeAt } = timed(slow))
+      slow = shown.map((i) => timeAt(dropZ[i] + drops.lead))
+    }
+    ;({ zAt } = timed(slow))
+  }
 
   const keys = []
   const count = Math.round((arrive.at - from.at) / step)
@@ -131,8 +163,8 @@ export function buildDrift({ from, start, end, arrive, y, passes, drops, timing,
     const phase = (period, offset = 0) => Math.sin((2 * Math.PI * (at - from.at)) / period + offset)
     dir = turn(dir, w * gaze.sway[0] * phase(gaze.swayPeriod[0]), w * gaze.sway[1] * phase(gaze.swayPeriod[1], 1.3))
     // A glance toward each drop as it comes up, back ahead before it slides past.
-    dropZ.forEach((dz, i) => {
-      const before = z - dz
+    shown.forEach((i) => {
+      const before = z - dropZ[i]
       const g = gaze.lookToward * smootherstep(3.5, 1.8, before) * smootherstep(0.25, 1.3, before)
       if (g > 0) dir = mixDir(dir, norm(sub(dropPos[i], pos)), g)
     })
@@ -142,5 +174,6 @@ export function buildDrift({ from, start, end, arrive, y, passes, drops, timing,
     look = look.map((v, j) => mix(v, end.look[j], smootherstep(end.at - 0.6, end.at, at)))
     keys.push({ at, pos: k === 0 ? from.pos : pos, look: k === 0 ? from.look : look, sampled: true })
   }
-  return { keys, drops: dropPos }
+  // passes: when the camera is slowest at each shown drop.
+  return { keys, drops: dropPos, passes: slow }
 }

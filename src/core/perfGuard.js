@@ -1,7 +1,8 @@
 import gsap from 'gsap'
-import { ALIGN, DIVE, DRIFT_PASSES, SPLASH } from '../config.js'
+import { ALIGN, DIVE, SPLASH } from '../config.js'
 import { quality, stepDownTier } from './quality.js'
 import { state } from './state.js'
+import { tierPath } from './tierPath.js'
 
 // Live safety net (bible): if frames average over 20 ms for two seconds, drop one quality tier.
 // Stalls longer than 250 ms (loading, tab switches) are ignored rather than counted, and after a
@@ -15,14 +16,14 @@ const STALL_MS = 250
 const COOLDOWN_MS = 4000
 const DEFER_MS = 5000
 
-// Timeline windows where a change would be seen: each drift drop's pass, the dive, the word, the impact.
+// Timeline windows where a change would be seen: each drift drop's pass (as this tier times them), the
+// dive, the word, the impact.
 const MOMENTS = [
-  ...DRIFT_PASSES.map((t) => [t - 0.3, t + 0.15]),
   [DIVE.inStart - 0.4, DIVE.outEnd],
   [ALIGN.arrive - 0.4, ALIGN.arrive + 0.2],
   [SPLASH.impactAt - 0.3, SPLASH.impactAt + 1.2],
 ]
-const inMoment = (t) => MOMENTS.some(([a, b]) => t > a && t < b)
+const inMoment = (t) => MOMENTS.some(([a, b]) => t > a && t < b) || tierPath().passes.some((p) => t > p - 0.3 && t < p + 0.15)
 let pending = null // ms the drop has waited, once one is due
 
 let windowTime = 0

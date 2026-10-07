@@ -1,14 +1,38 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { state } from '../core/state.js'
 import { globalUniforms } from '../core/uniforms.js'
 import { liveCount } from '../content/videoManager.js'
 
 const WINDOW_MS = 250
+// "h" shows and hides the overlay; the choice is kept for the next visit.
+const KEY = 'schwe.devOverlay'
+const readShown = () => {
+  try {
+    return localStorage.getItem(KEY) !== 'hidden'
+  } catch {
+    return true
+  }
+}
 
 // Dev only (imported behind import.meta.env.DEV). Writes to the DOM directly, no React renders.
 // Frame time = interval between animation frames, which is the site's real frame pacing.
 export default function DevOverlay() {
   const ref = useRef()
+  const [shown, setShown] = useState(readShown)
+
+  useEffect(() => {
+    const onKey = (e) => {
+      if (e.key !== 'h' || e.metaKey || e.ctrlKey || e.altKey || e.target.closest?.('input, textarea, [contenteditable]')) return
+      setShown((v) => {
+        try {
+          localStorage.setItem(KEY, v ? 'hidden' : 'shown')
+        } catch {}
+        return !v
+      })
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [])
 
   useEffect(() => {
     let raf
@@ -44,7 +68,7 @@ export default function DevOverlay() {
     return () => cancelAnimationFrame(raf)
   }, [])
 
-  return <pre ref={ref} className="dev-overlay" />
+  return <pre ref={ref} className="dev-overlay" hidden={!shown} />
 }
 
 function rainLine(r) {

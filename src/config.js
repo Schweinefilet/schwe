@@ -4,7 +4,7 @@ import cityGlowAtlas from './content/cityGlow.json'
 import vantages from './content/vantages.json'
 import { buildDrift } from './core/drift.js'
 import { smoothKeys } from './core/cameraPath.js'
-import { visibleDrops } from './core/visibleDrops.js'
+import { driftSlots, visibleDrops } from './core/visibleDrops.js'
 
 export const CITIES = cities
 
@@ -162,7 +162,7 @@ const DIVE_AIM = [DIVE_DROP_POS[0], DIVE_DROP_POS[1], DIVE_DROP_POS[2] - 6] // f
 // When the camera is slowest at each drift drop.
 export const DRIFT_PASSES = Array.from({ length: DRIFT_DROPS }, (_, i) => DRIFT.start + ((i + 1) * (DRIFT.end - DRIFT.start)) / (DRIFT_DROPS + 1))
 const TAU = 2 * Math.PI
-const drift = buildDrift({
+const DRIFT_ARGS = {
   from: { at: 1, pos: [0, 5, 14], look: [0, 4, 0] }, // the top: the rain, at rest
   start: { z: 10 }, // the height has settled to DRIFT.y by here
   end: { at: DRIFT.end, pos: [DIVE_DROP_POS[0], DIVE_DROP_POS[1], DIVE_DROP_POS[2] + 2.5], look: DIVE_AIM }, // on its axis, the drop a bead dead ahead
@@ -174,7 +174,8 @@ const drift = buildDrift({
   curve: (s) => [DRIFT.weave[0] * Math.sin((TAU * s) / DRIFT.weave[1]), DRIFT.bob[0] * Math.sin((TAU * s) / DRIFT.bob[1] + 0.9)],
   fade: [6, 7], // the weave comes in over the first 6 units travelled and goes over the last 7 before the approach
   gaze: { ahead: DRIFT.ahead, lookToward: DRIFT.lookToward, sway: DRIFT.sway, swayPeriod: DRIFT.swayPeriod },
-})
+}
+const drift = buildDrift(DRIFT_ARGS)
 const HERO_POSITIONS = [...drift.drops, DIVE_DROP_POS]
 export const DIVE_DROP_INDEX = 9
 export const DEFAULT_DIVE_CITY = CITIES[DIVE_DROP_INDEX].id
@@ -378,10 +379,23 @@ const AFTER_DIVE = [
   // horizon: BACKDROP.ground).
   { at: TIMELINE_END, pos: inWordFrame(FALL_GROUND, [0.3, 0.06, 1.1]),    look: inWordFrame(FALL_GROUND, [-0.05, 0.165, -1.5]) }, // end
 ]
+const AFTER_DIVE_KEYS = smoothKeys(AFTER_DIVE, { sigma: 0.2, pins: [ALIGN_AT, TIMELINE_END] })
 export const CAMERA_KEYS = [
   ...drift.keys, // the rain (1) → the weave between the drops → the approach (8) → the drop fills the frame (9.4)
-  ...smoothKeys(AFTER_DIVE, { sigma: 0.2, pins: [ALIGN_AT, TIMELINE_END] }),
+  ...AFTER_DIVE_KEYS,
 ]
+// The camera as a tier showing `count` hero drops (the dive drop among them) flies it: the same path past
+// the same drops, but slowing only where one of the drops it shows is (core/visibleDrops.js driftSlots),
+// so no slow point is empty. { keys, passes }: passes are its slow points, one per drift drop shown.
+const driftByShown = new Map()
+export function driftFor(count) {
+  const shown = Math.min(Math.max(count - 1, 0), DRIFT_DROPS)
+  if (!driftByShown.has(shown)) {
+    const d = shown === DRIFT_DROPS ? drift : buildDrift({ ...DRIFT_ARGS, show: driftSlots(shown, DRIFT_DROPS) })
+    driftByShown.set(shown, { keys: shown === DRIFT_DROPS ? CAMERA_KEYS : [...d.keys, ...AFTER_DIVE_KEYS], passes: d.passes })
+  }
+  return driftByShown.get(shown)
+}
 
 // Beat 5 timing, in timeline units. The drop's optics morph from ball lens to plain window
 // (uDive 0 → 1) while it fills the frame, then back on the way out.

@@ -1,0 +1,14 @@
+{
+  "name": "schwe: where is it raining now?",
+  "short_name": "schwe",
+  "description": "Rain stops mid-air. Ten of the drops each hold a city as it is right now, and one of them falls.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#030307",
+  "theme_color": "#030307",
+  "icons": [
+    { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

@@ -179,6 +179,8 @@ function Site({ clips, device, diveCity, rainCity }) {
 
   // Back at the top the first shot plays again (initScroll's onTop).
   const handleTop = useCallback(() => scroll.current.toTop(), [])
+  // The expanded weather inside the dive drop holds the scroll while it is open.
+  const handleLock = useCallback((on) => scroll.current?.setLocked(on), [])
 
   return (
     <>
@@ -196,7 +198,7 @@ function Site({ clips, device, diveCity, rainCity }) {
       <div id="scroll-track" style={{ height: TRACK_HEIGHT }} />
       <DropLabels clips={clips} />
       <WordSketch />
-      <CityType clips={clips} cityId={diveCity ?? DEFAULT_DIVE_CITY} />
+      <CityType clips={clips} cityId={diveCity ?? DEFAULT_DIVE_CITY} onLock={handleLock} />
       {/* The answer and the final screen share one column, so the answer never overlaps the way back. */}
       <div className="ending-ui">
         <EndType clips={clips} rainCity={rainCity} />

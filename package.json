@@ -21,7 +21,9 @@
     "backdrop": "node scripts/build-backdrop.mjs",
     "ending:capture": "node scripts/ending-capture.mjs",
     "deploy": "npm run build && npx wrangler pages deploy dist --project-name schwe",
-    "skyline": "node scripts/skyline/build.mjs"
+    "skyline": "node scripts/skyline/build.mjs",
+    "ui:crawl": "node scripts/ui-crawl.mjs",
+    "brand": "node scripts/build-brand.mjs"
   },
   "dependencies": {
     "@react-three/drei": "^10.7.9",

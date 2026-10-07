@@ -9,6 +9,11 @@ import { overlay } from '../ui/overlay.js'
 const GAP = 14 // px between the drop's edge and its label
 const RISE = 8 // px the label settles by as it fades in
 const EDGE = 28 // px: a label fades out over its last EDGE px before an edge of the screen, never cut off
+const RAIL = 50 // px at the right edge that count as off screen: the progress rail's (styles.css .progress-rail)
+// On screens narrower than this (phones) there is no room beside a drop: the label sits above or below
+// it instead, centred on it and kept MARGIN px inside the screen.
+const NARROW = 600
+const MARGIN = 16
 const MEASURE_EVERY = 30 // frames between re-measuring the labels (their text changes once a minute)
 const _p = new THREE.Vector3()
 const _view = new THREE.Vector3()
@@ -17,8 +22,9 @@ const smoothstep = (a, b, x) => {
   return t * t * (3 - 2 * t)
 }
 
-// Places each drop's label (ui/DropLabels.jsx) beside it on screen, on the side toward the middle of
-// the screen, so it stays in view while the drop slides outward on a pass. It shows as the drop's city
+// Places each drop's label (ui/DropLabels.jsx) beside it on screen (above or below it on a phone), on the
+// side toward the middle of the screen, so it stays in view while the drop slides outward on a pass. The
+// gap between the drop's edge and its label is GAP for every drop. It shows as the drop's city
 // does (HERO.near, the fade the shader uses) and gives way to the corner type inside the dive; the dive
 // drop's label does not return on the way out, since the corner type has just named its city.
 export default function DropLabelAnchors({ drops }) {
@@ -52,22 +58,34 @@ export default function DropLabelAnchors({ drops }) {
       const x = ((_p.x + 1) / 2) * size.width
       const y = ((1 - _p.y) / 2) * size.height
       const r = (HERO.radius / Math.sqrt(Math.max(dist * dist - HERO.radius ** 2, 1e-6))) * focal // a sphere's true angular size, close up too
-      const toLeft = x > size.width / 2
-      const lx = toLeft ? x - r - GAP : x + r + GAP
-      const ly = y + (1 - a) * RISE
-      // As the drop slides off at the end of a pass, its label leaves before it reaches the edge.
       const [w, h] = sizes.current.get(el)
-      const left = toLeft ? lx - w : lx
-      const top = ly - h / 2
-      a *= smoothstep(0, EDGE, Math.min(left, top, size.width - left - w, size.height - top - h))
+      const rise = (1 - a) * RISE
+      let left
+      let top
+      let align
+      if (size.width < NARROW) {
+        // Below a drop in the upper half, above one in the lower half; the drop slides away from it.
+        const below = y < size.height / 2
+        top = (below ? y + r + GAP : y - r - GAP - h) + rise
+        left = Math.min(Math.max(x - w / 2, MARGIN), size.width - RAIL - w)
+        align = 'center'
+        // As the drop slides off at the end of a pass, its label leaves before it reaches the edge.
+        a *= smoothstep(0, EDGE, Math.min(top, size.height - top - h)) * smoothstep(-r, r, Math.min(x, size.width - x))
+      } else {
+        const toLeft = x > size.width / 2
+        left = toLeft ? x - r - GAP - w : x + r + GAP
+        top = y - h / 2 + rise
+        align = toLeft ? 'right' : 'left'
+        a *= smoothstep(0, EDGE, Math.min(left, top, size.width - RAIL - left - w, size.height - top - h))
+      }
       if (a < 0.002) {
         if (el.style.visibility !== 'hidden') el.style.visibility = 'hidden'
         continue
       }
       el.style.visibility = 'visible'
       el.style.opacity = a
-      el.style.textAlign = toLeft ? 'right' : 'left'
-      el.style.transform = `translate3d(${lx}px, ${ly}px, 0) translate(${toLeft ? '-100%' : '0'}, -50%)`
+      el.style.textAlign = align
+      el.style.transform = `translate3d(${left}px, ${top}px, 0)`
     }
   })
   return null

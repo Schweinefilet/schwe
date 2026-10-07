@@ -20,7 +20,7 @@ export default function DropLabels({ clips }) {
   return CITIES.map((c) => (
     <div key={c.id} ref={(el) => (el ? overlay.labels.set(c.id, el) : overlay.labels.delete(c.id))} className="drop-label" aria-hidden="true">
       <div className="drop-label__name">{c.name}</div>
-      <div className="drop-label__meta">
+      <div className="drop-label__meta meta">
         {time[c.id]}
         {byCity[c.id]?.weatherLabel ? ` · ${byCity[c.id].weatherLabel}` : ''}
       </div>

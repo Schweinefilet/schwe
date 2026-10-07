@@ -36,12 +36,11 @@ void main() {
   // what the drop disturbed is drawn: the crater, crown, jet. The crop edge fades out too.
   float disturbed = max(smoothstep(0.002, 0.004, abs(vLocalY - uSurface)), smoothstep(0.03, 0.1, 1.0 - abs(n.y)));
   float edge = 1.0 - smoothstep(0.55 * uCrop, 0.85 * uCrop, length(vLocalXZ));
-  // A thin sheet seen face-on lets some of what is behind it through; at a glancing angle it is a mirror.
-  float facing = pow(1.0 - clamp(dot(-v, n), 0.0, 1.0), 5.0);
-  float alpha = disturbed * edge * mix(0.85, 1.0, facing) * uFade;
+  // A thin sheet seen face-on lets what is behind it through; at a glancing angle it is a mirror.
+  float alpha = disturbed * edge * splashAlpha(v, n) * uFade;
   // Invisible calm water would still write depth and hide the rain's splashes drawn after it.
   if (alpha < 0.01) discard;
-  gl_FragColor = vec4(shadeWaterRough(v, n, uRough), alpha);
+  gl_FragColor = vec4(shadeSplash(v, n, uRough), alpha);
 }`
 
 function loadData(base) {

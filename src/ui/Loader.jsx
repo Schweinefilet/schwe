@@ -2,8 +2,10 @@ import { useEffect, useRef, useState } from 'react'
 import gsap from 'gsap'
 import { COUNT } from './answer.js'
 import { VERB } from './input.js'
+import { MOTION } from './motion.js'
+import DropMark from './DropMark.jsx'
 
-// The screen over the rain before it starts: the name, the question the site answers, a faint drop and
+// The screen over the rain before it starts: the name, the question the site answers, the drop (the mark) and
 // "enter". The click is the user gesture that unlocks audio and scrolling; the screen fades and the
 // page stays where it is, at the rain. "enter" appears once `ready` (the dive city is chosen and, with
 // the sky as the source, the city skies are prepared), so nothing changes after it. Until then the
@@ -23,13 +25,13 @@ export default function Loader({ onEnter, ready }) {
 
   const handleEnter = () => {
     onEnter()
-    gsap.to(ref.current, { autoAlpha: 0, duration: 1.2, ease: 'power1.out', onComplete: () => setGone(true) })
+    gsap.to(ref.current, { autoAlpha: 0, duration: MOTION.slow, ease: MOTION.easeOut, onComplete: () => setGone(true) })
   }
 
   if (gone) return null
   return (
     <div ref={ref} className="loader">
-      <div className="loader__drop" aria-hidden="true" />
+      <DropMark />
       <h1 className="loader__title">schwe</h1>
       <p className="loader__question">where is it raining now?</p>
       <div className="loader__action">
@@ -40,7 +42,13 @@ export default function Loader({ onEnter, ready }) {
           enter
         </button>
       </div>
-      <p className="loader__note">best with sound · {VERB} to move through the rain</p>
+      <p className="loader__note">
+        <span>best with sound</span>
+        <span className="loader__note-sep" aria-hidden="true">
+          {' · '}
+        </span>
+        <span>{VERB} to move through the rain</span>
+      </p>
     </div>
   )
 }

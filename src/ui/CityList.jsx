@@ -11,7 +11,7 @@ export default function CityList({ clips, rainCity }) {
         return (
           <li key={c.id} className={c.id === rainCity?.city ? 'is-answer' : undefined}>
             <span className="city-list__name">{c.name}</span>
-            <span className="city-list__meta">{row ? [row.localTime, row.weatherLabel].filter(Boolean).join(' · ') : ''}</span>
+            <span className="city-list__meta meta">{row ? [row.localTime, row.weatherLabel].filter(Boolean).join(' · ') : ''}</span>
           </li>
         )
       })}

@@ -1,6 +1,9 @@
-/* The UI over the night scene is white and pastel, dreamy and smooth: Playwrite AU VIC (a cursive hand) in thin weights,
-   lowercase, white type with soft glows, lavender for secondary lines, peach for the answer, indigo
-   (never neutral black) for every shadow. Text colours are solid tokens, not opacities, so contrast
+/* The UI over the night scene is white and pastel, dreamy and smooth. Two faces: Playwrite AU VIC (a
+   connected hand, never letter-spaced: tracking breaks its joins) for the name, the question, the
+   captions, the answer and the cities' names; Source Sans 3 (a quiet humanist sans, tabular figures)
+   for everything that is read rather than looked at: times and weather, buttons, the about text and the
+   credits. White type with soft glows, lavender for secondary lines, peach for the answer, indigo (never
+   neutral black) for every shadow and scrim. Text colours are solid tokens, not opacities, so contrast
    does not depend on what is behind them. */
 @font-face {
   font-family: 'Playwrite AU VIC';
@@ -10,25 +13,76 @@
   font-display: swap;
 }
 
+@font-face {
+  font-family: 'Source Sans 3';
+  src: url('./assets/source-sans-3-latin.woff2') format('woff2');
+  font-weight: 200 900;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
 :root {
   --ui-white: #fff;
   --ui-lavender: #e6e3ff;
   --ui-peach: #ffd2bd;
   --ui-mist: #d4e2ff;
+  --ui-night: #030307;
   --ui-glow: rgba(230, 227, 255, 0.35);
   /* Secondary and tertiary text: lavender mixed toward the night, ≥ 7:1 on #030307. */
   --ui-text-2: #d4d1ee;
-  --ui-text-3: #aeabcb;
+  --ui-text-3: #b4b1d0;
   /* Shadows are a deep indigo, so the halo under white type feels like dusk, not a black smudge. */
   --ui-ink: 8, 7, 28;
-  --ui-halo: 0 0 2px rgba(var(--ui-ink), 0.6), 0 0 10px rgba(var(--ui-ink), 0.5), 0 0 22px rgba(var(--ui-ink), 0.32);
-  --ui-font: 'Playwrite AU VIC', 'Snell Roundhand', 'Segoe Script', cursive, ui-sans-serif, system-ui, sans-serif;
-  /* One type scale. Nothing on screen is set below --t-fine (12 px). */
-  --t-name: 1.1rem;
-  --t-meta: 0.8rem;
-  --t-fine: 0.75rem;
-  --track-meta: 0.08em;
-  --track-chrome: 0.24em;
+  /* Tight: a wide glyph shadow merges, over a line of type, into a dark block. The scrim does the rest. */
+  --ui-halo: 0 0 2px rgba(var(--ui-ink), 0.75), 0 0 7px rgba(var(--ui-ink), 0.5), 0 0 14px rgba(var(--ui-ink), 0.2);
+  --ui-glow-white: 0 0 16px rgba(255, 255, 255, 0.2);
+
+  /* The two faces. */
+  --font-script: 'Playwrite AU VIC', 'Snell Roundhand', 'Segoe Script', cursive;
+  --font-text: 'Source Sans 3', 'Seravek', 'Gill Sans Nova', ui-sans-serif, system-ui, sans-serif;
+
+  /* One type scale. Nothing on screen is set below --t-fine (13 px). */
+  --t-fine: 0.8125rem; /* credits, notes */
+  --t-meta: 0.875rem; /* times and weather, buttons */
+  --t-body: 1rem; /* the about text */
+  --t-name: 1.125rem; /* a city's name */
+  --t-lead: clamp(1.15rem, 0.98rem + 0.8vw, 1.55rem); /* captions, the answer */
+  --t-sub: clamp(0.95rem, 0.88rem + 0.3vw, 1.05rem); /* a caption's second line, the question */
+  --t-heading: 1.375rem; /* the sheet's sections */
+  --t-title: clamp(2.4rem, 1.7rem + 2.6vw, 3.6rem); /* the name */
+  /* Tracking, for the text face only (lowercase chrome reads better a little open). */
+  --track-text: 0.01em;
+  --track-label: 0.12em;
+
+  /* Motion: every transition and entrance takes one of these. */
+  --dur-quick: 0.3s;
+  --dur-base: 0.6s;
+  --dur-slow: 1.2s;
+  --dur-slower: 1.6s;
+  --dur-enter: 1.4s; /* type settling in: the loader, the hint */
+  /* Loops: the haze drifts, the drop breathes, a drop falls down the hint's line. */
+  --loop-haze: 22s;
+  --loop-breathe: 4s;
+  --loop-fall: 2.2s;
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-soft: cubic-bezier(0.45, 0, 0.55, 1);
+
+  /* The scrim: one recipe behind type that sits over the picture (labels, captions, hint, the ending,
+     the sheet's bar). Indigo falling off along a cosine, flat at both ends, so it has no edge to read
+     as a shape. Its strength is the element's opacity. */
+  --scrim: rgba(var(--ui-ink), 1) 0%, rgba(var(--ui-ink), 0.976) 10%, rgba(var(--ui-ink), 0.905) 20%, rgba(var(--ui-ink), 0.794) 30%,
+    rgba(var(--ui-ink), 0.655) 40%, rgba(var(--ui-ink), 0.5) 50%, rgba(var(--ui-ink), 0.345) 60%, rgba(var(--ui-ink), 0.206) 70%,
+    rgba(var(--ui-ink), 0.095) 80%, rgba(var(--ui-ink), 0.024) 90%, rgba(var(--ui-ink), 0) 100%;
+
+  /* Focus: one soft lavender ring that follows the control's own rounding. */
+  --focus-ring: 2px solid var(--ui-lavender);
+  --focus-glow: 0 0 0 5px rgba(230, 227, 255, 0.14), 0 0 22px rgba(230, 227, 255, 0.4);
+}
+
+/* Lenis stopped (the loader, the expanded weather): native touch scrolling holds too. */
+html.lenis-stopped {
+  overflow: hidden;
 }
 
 html,
@@ -39,7 +93,7 @@ body {
 }
 
 body {
-  font-family: var(--ui-font);
+  font-family: var(--font-text);
   -webkit-font-smoothing: antialiased;
   overscroll-behavior: none;
 }
@@ -64,26 +118,47 @@ button {
 
 /* Shared pieces ---------------------------------------------------------------------------------- */
 
+/* The connected hand: never tracked. */
+.script {
+  font-family: var(--font-script);
+  letter-spacing: normal;
+}
+
+/* Times and weather: the text face, tabular figures so a minute's change never shifts the line. */
+.meta {
+  font-family: var(--font-text);
+  font-size: var(--t-meta);
+  font-weight: 400;
+  letter-spacing: var(--track-text);
+  font-variant-numeric: tabular-nums;
+}
+
 /* The pill: "enter" and "back to top". */
 .pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   min-height: 44px;
-  padding: 0.8rem 1.9rem;
+  /* The tracking trails the last letter; the same extra before the first keeps the word centred. */
+  padding: 0.75rem 1.9rem 0.75rem calc(1.9rem + var(--track-label));
   border: 1px solid rgba(255, 255, 255, 0.45);
   border-radius: 999px;
   background: rgba(230, 227, 255, 0.06);
   box-shadow: 0 0 18px rgba(230, 227, 255, 0.22), inset 0 0 10px rgba(230, 227, 255, 0.08);
   color: var(--ui-white);
-  font: inherit;
+  font-family: var(--font-text);
   font-size: var(--t-meta);
-  letter-spacing: var(--track-chrome);
+  font-weight: 400;
+  letter-spacing: var(--track-label);
+  line-height: 1;
   text-shadow: 0 0 10px rgba(255, 255, 255, 0.35);
   cursor: pointer;
-  transition: border-color 0.4s ease, box-shadow 0.4s ease;
+  transition: border-color var(--dur-quick) ease, box-shadow var(--dur-quick) ease;
 }
 
 .pill--lg {
-  padding: 0.9rem 2.4rem;
-  font-size: 0.85rem;
+  padding: 0.9rem 2.4rem 0.9rem calc(2.4rem + var(--track-label));
+  font-size: 0.9375rem;
 }
 
 .pill:hover {
@@ -91,50 +166,70 @@ button {
   box-shadow: 0 0 24px rgba(230, 227, 255, 0.4), inset 0 0 12px rgba(230, 227, 255, 0.14);
 }
 
-/* A quiet text button: "cities", "credits", "close". */
+/* A quiet text button: "cities", "about", "share". Rounded like the pill, so its focus ring is too. */
 .text-link {
+  display: inline-flex;
+  align-items: center;
   min-height: 44px;
-  padding: 0 0.7rem;
+  padding: 0 0.8rem;
   border: 0;
+  border-radius: 999px;
   background: none;
   color: var(--ui-text-2);
-  font: inherit;
+  font-family: var(--font-text);
   font-size: var(--t-meta);
-  letter-spacing: 0.12em;
+  letter-spacing: var(--track-label);
   text-shadow: var(--ui-halo);
   cursor: pointer;
-  transition: color 0.3s ease;
+  transition: color var(--dur-quick) ease;
 }
 
 .text-link:hover {
   color: var(--ui-white);
 }
 
-/* One visible focus ring for everything that takes the keyboard. */
+/* One focus ring for everything that takes the keyboard. */
 .pill:focus-visible,
 .text-link:focus-visible,
 .sound-toggle:focus-visible,
-.sheet a:focus-visible {
-  outline: 2px solid var(--ui-lavender);
-  outline-offset: 4px;
+.sheet__close:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: 3px;
+  box-shadow: var(--focus-glow);
+}
+
+/* A text button has room inside its padding: the ring sits there, clear of its neighbours. */
+.text-link:focus-visible {
+  outline-offset: -4px;
+}
+
+.sheet a:focus-visible,
+.still a:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: 3px;
+  border-radius: 4px;
+  box-shadow: var(--focus-glow);
+}
+
+:focus:not(:focus-visible) {
+  outline: none;
 }
 
 /* A city's name, and the line under it (local time and weather). */
 .city-type__name,
 .drop-label__name {
+  font-family: var(--font-script);
   font-size: var(--t-name);
   font-weight: 300;
-  letter-spacing: 0.03em;
+  line-height: 1.5;
 }
 
 .city-type__meta,
 .drop-label__meta,
 .end-type__meta,
 .still__meta {
-  margin-top: 0.35em;
+  margin-top: 0.25em;
   color: var(--ui-text-2);
-  font-size: var(--t-meta);
-  letter-spacing: var(--track-meta);
 }
 
 /* The city the answer names: peach, wherever the answer is set. */
@@ -143,9 +238,18 @@ button {
   text-shadow: var(--ui-halo), 0 0 18px rgba(255, 228, 216, 0.5);
 }
 
-/* The screen before "enter": the name, the question, a faint drop, and "enter" (or, while it loads,
-   what is being waited for) in one place. A dark night with a slowly drifting pastel haze: lavender,
-   peach and mist, enough to be seen, not a black void. */
+/* The drop: the favicon's mark (DropMark.jsx), above the name on the loader and the still page. */
+.drop-mark {
+  display: block;
+  width: 30px;
+  height: 30px;
+  filter: drop-shadow(0 0 14px rgba(230, 227, 255, 0.3));
+}
+
+/* The screen before "enter" ---------------------------------------------------------------------- */
+
+/* The name, the question, the drop, and "enter" (or, while it loads, what is being waited for) in one
+   place. A dark night with a slowly drifting pastel haze: lavender, peach and mist. */
 .loader {
   position: fixed;
   inset: 0;
@@ -155,7 +259,7 @@ button {
   align-content: center;
   padding: 24px 16px;
   overflow: hidden;
-  background: #030307;
+  background: var(--ui-night);
   text-align: center;
 }
 
@@ -168,7 +272,7 @@ button {
     radial-gradient(48% 38% at 50% 44%, rgba(190, 178, 255, 0.22), transparent 72%),
     radial-gradient(36% 30% at 62% 62%, rgba(255, 196, 172, 0.15), transparent 70%),
     radial-gradient(42% 34% at 36% 34%, rgba(164, 202, 255, 0.14), transparent 70%);
-  animation: loader-haze 22s ease-in-out infinite alternate;
+  animation: loader-haze var(--loop-haze) ease-in-out infinite alternate;
   will-change: transform;
 }
 
@@ -178,14 +282,9 @@ button {
   }
 }
 
-.loader__drop {
-  width: 14px;
-  height: 14px;
-  margin-bottom: 2.4rem;
-  border-radius: 50%;
-  background: radial-gradient(circle at 38% 30%, rgba(255, 255, 255, 0.75) 0 12%, rgba(214, 226, 255, 0.16) 42%, rgba(255, 200, 176, 0.22) 78%, rgba(255, 255, 255, 0.35) 100%);
-  box-shadow: 0 0 22px rgba(230, 227, 255, 0.28), 0 0 60px rgba(230, 227, 255, 0.12);
-  animation: loader-in 1.4s ease both, loader-drop 4s ease-in-out 1.4s infinite;
+.loader .drop-mark {
+  margin-bottom: 1.6rem;
+  animation: loader-in var(--dur-enter) ease both, loader-drop var(--loop-breathe) ease-in-out var(--dur-enter) infinite;
 }
 
 /* The type settles in over the haze index.html has already painted: up a few pixels, out of a blur. */
@@ -199,36 +298,35 @@ button {
 
 @keyframes loader-drop {
   50% {
-    opacity: 0.55;
+    opacity: 0.7;
     transform: translateY(3px);
   }
 }
 
 .loader__title {
   margin: 0;
-  /* The letter spacing trails the last letter; the same padding before the first keeps it centred. */
-  padding-left: 0.34em;
-  font-size: clamp(1.9rem, 1.3rem + 2.2vw, 2.9rem);
+  font-family: var(--font-script);
+  font-size: var(--t-title);
   font-weight: 200;
-  letter-spacing: 0.34em;
+  line-height: 1.3;
   text-shadow: 0 0 28px var(--ui-glow);
-  animation: loader-in 1.4s cubic-bezier(0.22, 1, 0.36, 1) 0.1s both;
+  animation: loader-in var(--dur-enter) var(--ease-out) 0.1s both;
 }
 
 .loader__question {
-  margin: 0.9rem 0 0;
-  animation: loader-in 1.4s cubic-bezier(0.22, 1, 0.36, 1) 0.3s both;
+  margin: 0.6rem 0 0;
+  animation: loader-in var(--dur-enter) var(--ease-out) 0.3s both;
   color: var(--ui-text-2);
-  font-size: clamp(0.95rem, 0.86rem + 0.35vw, 1.1rem);
+  font-family: var(--font-script);
+  font-size: var(--t-sub);
   font-weight: 300;
-  letter-spacing: 0.05em;
 }
 
 .loader__action {
   display: grid;
   place-items: center;
-  margin-top: 2.8rem;
-  min-height: 48px;
+  margin-top: 2.6rem;
+  min-height: 52px;
 }
 
 .loader__action > * {
@@ -240,14 +338,14 @@ button {
   pointer-events: none; /* shares its cell with "enter", and paints above it while fading */
   color: var(--ui-text-2);
   font-size: var(--t-meta);
-  letter-spacing: 0.14em;
+  letter-spacing: var(--track-label);
   opacity: 0;
-  transition: opacity 0.8s ease;
+  transition: opacity var(--dur-base) ease;
 }
 
 .loader__status.is-shown {
   opacity: 1;
-  animation: loader-status 2.4s ease-in-out 0.8s infinite;
+  animation: loader-status var(--loop-fall) ease-in-out 0.8s infinite;
 }
 
 @keyframes loader-status {
@@ -262,15 +360,15 @@ button {
   z-index: 1;
   opacity: 0;
   visibility: hidden;
-  transition: opacity 0.8s ease, visibility 0s 0.8s, border-color 0.4s ease, box-shadow 0.4s ease;
+  transition: opacity var(--dur-base) ease, visibility 0s var(--dur-base), border-color var(--dur-quick) ease, box-shadow var(--dur-quick) ease;
 }
 
 .loader__enter.is-ready {
   opacity: 1;
   visibility: visible;
   border-color: rgba(255, 255, 255, 0.6);
-  animation: loader-arrive 2.2s ease-out 0.2s 1 both;
-  transition: opacity 0.8s ease, border-color 0.4s ease, box-shadow 0.4s ease;
+  animation: loader-arrive var(--loop-fall) ease-out 0.2s 1 both;
+  transition: opacity var(--dur-base) ease, border-color var(--dur-quick) ease, box-shadow var(--dur-quick) ease;
 }
 
 @keyframes loader-arrive {
@@ -283,6 +381,7 @@ button {
   border-color: rgba(255, 255, 255, 0.9);
 }
 
+/* Two phrases, each kept whole: on a phone they stack, with no dot between and no word left alone. */
 .loader__note {
   position: absolute;
   left: 16px;
@@ -291,8 +390,23 @@ button {
   margin: 0;
   color: var(--ui-text-3);
   font-size: var(--t-meta);
-  letter-spacing: 0.1em;
-  animation: loader-in 1.4s ease 0.7s both;
+  letter-spacing: var(--track-text);
+  line-height: 1.6;
+  animation: loader-in var(--dur-enter) ease 0.7s both;
+}
+
+.loader__note > span {
+  white-space: nowrap;
+}
+
+@media (max-width: 520px) {
+  .loader__note > span {
+    display: block;
+  }
+
+  .loader__note-sep {
+    display: none !important;
+  }
 }
 
 .dev-overlay {
@@ -309,21 +423,1019 @@ button {
   pointer-events: none;
 }
 
-/* Beat 5: the city inside the dive drop, in the corner, set like a drop's label. */
+/* Over the film ---------------------------------------------------------------------------------- */
+
+/* Beat 5: inside the dive drop. The city is the picture: the weather keeps to the edges (CityType.jsx),
+   small and translucent, over a vignette that darkens only the margins so the type holds over a bright
+   sky and the middle stays untouched. "more weather" opens the expanded view (.wx-panel, WeatherPanel
+   .jsx): frosted pastel glass over the whole frame. --in (0..1) is rig.cityType, written each frame by
+   CityType.jsx; in the panel each card rises in a little after the one before (--i). */
 .city-type {
+  --in: 0;
   position: fixed;
-  left: max(24px, env(safe-area-inset-left));
-  bottom: max(24px, env(safe-area-inset-bottom));
+  inset: 0;
   z-index: 1;
-  opacity: 0;
+  opacity: var(--in);
   visibility: hidden;
   pointer-events: none;
-  text-shadow: var(--ui-halo), 0 0 16px rgba(255, 255, 255, 0.2);
+  text-shadow: var(--ui-halo), var(--ui-glow-white);
+}
+
+.city-type::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  opacity: 0;
+  background:
+    linear-gradient(to bottom, rgba(var(--ui-ink), 0.5), rgba(var(--ui-ink), 0) 19%),
+    linear-gradient(to top, rgba(var(--ui-ink), 0.55), rgba(var(--ui-ink), 0) 23%),
+    linear-gradient(to right, rgba(var(--ui-ink), 0.42), rgba(var(--ui-ink), 0) 17%),
+    linear-gradient(to left, rgba(var(--ui-ink), 0.42), rgba(var(--ui-ink), 0) 19%);
+  transition: opacity var(--dur-base) var(--ease-soft);
+}
+
+.city-type.has-detail::before {
+  opacity: 1;
+}
+
+/* Before the full weather is read, only the corner shows, on a drop label's scrim. */
+.city-type:not(.has-detail) .wx-corner::before {
+  content: '';
+  position: absolute;
+  inset: -2.4em -3.2em;
+  z-index: -1;
+  background: radial-gradient(closest-side, var(--scrim));
+  opacity: 0.55;
+}
+
+/* The expanded view dims the whole frame instead: one soft pool of dusk behind the glass. */
+.city-type.is-open::before {
+  opacity: 1;
+  background: radial-gradient(ellipse 75% 70% at 50% 50%, rgba(var(--ui-ink), 0.5), rgba(var(--ui-ink), 0.22) 70%, rgba(var(--ui-ink), 0.12) 100%);
+}
+
+.wx-corner {
+  position: absolute;
+  left: max(24px, env(safe-area-inset-left));
+  bottom: max(24px, env(safe-area-inset-bottom));
+}
+
+.wx-corner__temp {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  margin-top: 0.35rem;
+}
+
+.wx-corner__temp .meta {
+  color: var(--ui-text-2);
+  line-height: 1.35;
+}
+
+.wx-corner__deg,
+.wx-head__deg {
+  font-weight: 200;
+  line-height: 0.9;
+  letter-spacing: -0.03em;
+  font-variant-numeric: tabular-nums;
+  background: linear-gradient(170deg, #fff 30%, var(--ui-peach) 75%, var(--ui-lavender));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  text-shadow: none;
+  filter: drop-shadow(0 0 2px rgba(var(--ui-ink), 0.7)) drop-shadow(0 0 14px rgba(255, 210, 189, 0.25));
+}
+
+.wx-corner__deg {
+  font-size: 2.6rem;
+}
+
+.wx-edge {
+  position: absolute;
+  opacity: 0.92;
+}
+
+.wx-edge__label {
+  font-size: var(--t-fine);
+  letter-spacing: var(--track-label);
+  color: var(--ui-text-3);
+}
+
+.wx-edge--top,
+.wx-edge--bottom {
+  left: 50%;
+  width: min(48vw, 760px);
+  transform: translateX(-50%);
+  text-align: center;
+}
+
+.wx-edge--top {
+  top: max(20px, env(safe-area-inset-top));
+}
+
+.wx-edge--bottom {
+  bottom: max(20px, env(safe-area-inset-bottom));
+}
+
+.wx-ribbon__plot {
+  height: 52px;
+  margin: 1.4rem 0 0.2rem;
+}
+
+.wx-ribbon__bars {
+  height: 30px;
+  margin: 0.45rem 0 0;
+  border-bottom: 1px solid rgba(230, 227, 255, 0.18);
+}
+
+.wx-line--soft {
+  stroke-width: 1.5;
+  opacity: 0.85;
+}
+
+.wx-dot--small {
+  width: 6px;
+  height: 6px;
+  margin: -3px 0 0 -3px;
+}
+
+.wx-bar--thin {
+  width: 1.4%;
+  max-width: 5px;
+  border-radius: 3px 3px 0 0;
+  opacity: 0.6;
+}
+
+.wx-edge--left {
+  left: max(24px, env(safe-area-inset-left));
+  top: 50%;
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+  margin: 0;
+  transform: translateY(-50%);
+}
+
+.wx-reading {
+  display: grid;
+  grid-template-columns: 28px auto;
+  grid-template-rows: auto auto;
+  column-gap: 0.6rem;
+  align-items: center;
+}
+
+.wx-reading__glyph {
+  grid-row: span 2;
+  width: 28px;
+  height: 28px;
+}
+
+.wx-reading__glyph .wx-ring,
+.wx-reading__glyph .wx-compass {
+  width: 28px;
+  height: 28px;
+}
+
+.wx-reading__glyph .wx-ring__value {
+  display: none;
+}
+
+.wx-reading dt {
+  grid-column: 2;
+  font-size: var(--t-fine);
+  line-height: 1.2;
+  color: var(--ui-text-3);
+}
+
+.wx-reading dd {
+  grid-column: 2;
+  margin: 0;
+  font-size: 0.9375rem;
+  line-height: 1.3;
+  font-variant-numeric: tabular-nums;
+}
+
+.wx-reading small,
+.wx-reading dd small {
+  font-size: var(--t-fine);
+  color: var(--ui-text-2);
+}
+
+.wx-compass--bare .wx-ring__track {
+  stroke-width: 6;
+}
+
+.wx-compass--bare .wx-compass__shaft {
+  stroke-width: 7;
+}
+
+.wx-compass--bare .wx-compass__head {
+  transform: scale(1.5);
+  transform-origin: 50px 30px;
+}
+
+.wx-compass--bare .wx-compass__tail {
+  display: none;
+}
+
+.wx-edge--right {
+  right: max(72px, env(safe-area-inset-right));
+  top: 50%;
+  width: 190px;
+  transform: translateY(-50%);
+}
+
+.wx-miniweek {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin: 0.6rem 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.wx-miniweek li {
+  display: grid;
+  grid-template-columns: 3em 2em 1fr 2em;
+  align-items: center;
+  gap: 0.4rem;
+  color: var(--ui-text-2);
+}
+
+.wx-miniweek__day {
+  color: var(--ui-white);
+}
+
+.wx-miniweek__t {
+  text-align: right;
+}
+
+.wx-miniweek__track {
+  position: relative;
+  height: 4px;
+  border-radius: 2px;
+  background: rgba(230, 227, 255, 0.12);
+}
+
+.wx-miniweek__track span {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  min-width: 4px;
+  border-radius: 2px;
+  background: linear-gradient(90deg, var(--ui-mist), var(--ui-lavender), var(--ui-peach));
+  opacity: 0.85;
+}
+
+.wx-edge__sun {
+  margin-top: 0.8rem;
+  color: var(--ui-text-2);
+}
+
+/* The two controls: "more weather" at the edges, "close" in the expanded view. */
+.wx-more,
+.wx-close {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-height: 44px;
+  padding: 0 1.1rem;
+  border: 1px solid rgba(230, 227, 255, 0.32);
+  border-radius: 999px;
+  background: rgba(var(--ui-ink), 0.35);
+  color: var(--ui-white);
+  font-size: var(--t-meta);
+  letter-spacing: var(--track-text);
+  text-shadow: var(--ui-halo);
+  cursor: pointer;
+  pointer-events: auto;
+  transition: background var(--dur-quick) var(--ease-out), border-color var(--dur-quick) var(--ease-out), box-shadow var(--dur-quick) var(--ease-out);
+}
+
+.wx-more:hover,
+.wx-close:hover {
+  background: rgba(230, 227, 255, 0.14);
+  border-color: rgba(230, 227, 255, 0.6);
+  box-shadow: 0 0 22px rgba(230, 227, 255, 0.25);
+}
+
+.wx-more:focus-visible,
+.wx-close:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: 3px;
+  box-shadow: var(--focus-glow);
+}
+
+.wx-more,
+.wx-close {
+  position: fixed;
+  right: max(72px, env(safe-area-inset-right));
+  bottom: max(20px, env(safe-area-inset-bottom));
+}
+
+/* The expanded view. */
+.wx-panel {
+  --gap: clamp(10px, 1.1vw, 16px);
+  --glass: rgba(var(--ui-ink), 0.38);
+  --edge: rgba(230, 227, 255, 0.2);
+  position: absolute;
+  top: max(clamp(20px, 4vh, 44px), env(safe-area-inset-top));
+  right: max(72px, env(safe-area-inset-right));
+  bottom: max(80px, env(safe-area-inset-bottom));
+  left: max(clamp(20px, 3vw, 44px), env(safe-area-inset-left));
+  display: grid;
+  grid-template-columns: 1.05fr 1fr 1fr 1.05fr;
+  grid-template-rows: minmax(0, 1.25fr) minmax(0, 1fr) auto;
+  grid-template-areas:
+    'head  hours hours week'
+    'wind  rain  sun   week'
+    'stats stats stats stats';
+  gap: var(--gap);
+  max-width: 1500px;
+  margin: 0 auto;
+  pointer-events: auto;
+  text-shadow: 0 0 2px rgba(var(--ui-ink), 0.6), 0 0 10px rgba(var(--ui-ink), 0.35);
+  animation: wx-panel-in var(--dur-base) var(--ease-out) both;
+}
+
+/* Opacity only: a transform here would hold the fixed "close" inside the panel. */
+@keyframes wx-panel-in {
+  from {
+    opacity: 0;
+  }
+}
+
+.wx-card {
+  --rise: calc((1 - var(--in)) * (14px + var(--i, 0) * 6px));
+  position: relative;
+  min-width: 0;
+  min-height: 0;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  padding: clamp(12px, 1.3vw, 20px);
+  border-radius: 22px;
+  background:
+    radial-gradient(120% 80% at 0% 0%, rgba(230, 227, 255, 0.13), rgba(230, 227, 255, 0) 60%),
+    radial-gradient(90% 70% at 100% 100%, rgba(255, 210, 189, 0.08), rgba(255, 210, 189, 0) 60%),
+    var(--glass);
+  border: 1px solid var(--edge);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12), 0 18px 50px -20px rgba(var(--ui-ink), 0.7);
+  -webkit-backdrop-filter: blur(18px) saturate(1.15);
+  backdrop-filter: blur(18px) saturate(1.15);
+  transform: translateY(var(--rise));
+}
+
+.wx-head {
+  grid-area: head;
+  justify-content: flex-end;
+}
+
+.wx-panel .wx-head .city-type__name {
+  font-size: clamp(1.7rem, 1.1rem + 1.6vw, 2.6rem);
+  font-weight: 200;
+  line-height: 1.6;
+  text-shadow: 0 0 2px rgba(var(--ui-ink), 0.6), 0 0 26px var(--ui-glow);
+}
+
+.wx-panel .wx-head .city-type__meta {
+  margin-top: 0.7em;
+}
+
+.wx-head__outlook {
+  margin: 0.9rem 0 0;
+  max-width: 26ch;
+  font-size: var(--t-body);
+  line-height: 1.5;
+  color: var(--ui-text-2);
+}
+
+.wx-head__temp {
+  display: flex;
+  align-items: flex-end;
+  gap: 0.9rem;
+  margin-top: auto;
+  padding-top: 0.6rem;
+}
+
+.wx-head__deg {
+  font-size: clamp(3.4rem, 2.2rem + 3.6vw, 5.8rem);
+}
+
+.wx-head__aside {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  padding-bottom: 0.35rem;
+  color: var(--ui-text-2);
+}
+
+.wx-card--hours { grid-area: hours; }
+.wx-card--week { grid-area: week; }
+.wx-card--rain { grid-area: rain; }
+.wx-card--wind { grid-area: wind; }
+.wx-card--sun { grid-area: sun; }
+
+.wx-card__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 0.6rem;
+}
+
+.wx-card__title {
+  margin: 0;
+  font-family: var(--font-text);
+  font-size: var(--t-fine);
+  font-weight: 600;
+  letter-spacing: var(--track-label);
+  text-transform: lowercase;
+  color: var(--ui-lavender);
+}
+
+.wx-card__note {
+  color: var(--ui-text-3);
+  font-size: var(--t-fine);
+}
+
+/* Charts. Grid lines and axes stay recessive; the data wears the pastels. */
+.wx-grid {
+  stroke: rgba(230, 227, 255, 0.12);
+  stroke-width: 1;
+}
+
+.wx-line {
+  fill: none;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.wx-line--temp {
+  stroke: var(--ui-peach);
+  filter: drop-shadow(0 0 6px rgba(255, 210, 189, 0.55));
+}
+
+.wx-cross {
+  stroke: rgba(255, 255, 255, 0.55);
+  stroke-width: 1;
+  stroke-dasharray: 2 3;
+}
+
+.wx-hours {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+@media (hover: hover) {
+  .wx-hours {
+    pointer-events: auto;
+    cursor: crosshair;
+  }
+}
+
+.wx-plot {
+  position: relative;
+}
+
+.wx-plot svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+
+.wx-plot--temp {
+  flex: 1;
+  min-height: 60px;
+  margin: 1.1rem 0.4rem 0.5rem;
+}
+
+.wx-plot--chance {
+  height: 22%;
+  min-height: 26px;
+  margin: 0 0.4rem;
+  border-bottom: 1px solid rgba(230, 227, 255, 0.16);
+}
+
+.wx-dot {
+  position: absolute;
+  width: 8px;
+  height: 8px;
+  margin: -4px 0 0 -4px;
+  border-radius: 50%;
+  background: var(--ui-peach);
+  box-shadow: 0 0 0 2px rgba(var(--ui-ink), 0.55), 0 0 12px rgba(255, 210, 189, 0.7);
+}
+
+.wx-dot--now {
+  background: #fff;
+}
+
+.wx-dot--hover {
+  width: 10px;
+  height: 10px;
+  margin: -5px 0 0 -5px;
+  background: #fff;
+}
+
+.wx-dot__label {
+  position: absolute;
+  left: 50%;
+  bottom: 12px;
+  transform: translateX(-50%);
+  font-size: var(--t-fine);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  color: var(--ui-white);
+}
+
+.wx-dot__label.is-start {
+  left: -3px;
+  transform: none;
+}
+
+.wx-dot__label.is-end {
+  left: auto;
+  right: -3px;
+  transform: none;
+}
+
+.wx-dot__label.is-below {
+  bottom: auto;
+  top: 12px;
+}
+
+.wx-bar {
+  position: absolute;
+  bottom: 0;
+  width: 2.6%;
+  max-width: 10px;
+  transform: translateX(-50%);
+  border-radius: 4px 4px 1px 1px;
+  background: linear-gradient(to top, rgba(212, 226, 255, 0.45), var(--ui-mist));
+  opacity: 0.8;
+}
+
+.wx-bar.is-on {
+  opacity: 1;
+  box-shadow: 0 0 10px rgba(212, 226, 255, 0.7);
+}
+
+.wx-axis {
+  position: relative;
+  height: 1.4em;
+  margin: 0.35rem 0.4rem 0;
+  color: var(--ui-text-3);
+  font-size: var(--t-fine);
+}
+
+.wx-axis span {
+  position: absolute;
+  transform: translateX(-50%);
+  white-space: nowrap;
+}
+
+.wx-axis span:first-child {
+  transform: none;
+}
+
+.wx-axis--even {
+  display: flex;
+  justify-content: space-between;
+}
+
+.wx-axis--even span {
+  position: static;
+  transform: none;
+}
+
+.wx-tip {
+  position: absolute;
+  top: 0;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  margin-left: 12px;
+  padding: 0.5rem 0.7rem;
+  border-radius: 12px;
+  background: rgba(var(--ui-ink), 0.82);
+  border: 1px solid var(--edge);
+  color: var(--ui-text-2);
+  font-size: var(--t-fine);
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+.wx-tip.is-left {
+  transform: translateX(calc(-100% - 24px));
+}
+
+.wx-tip strong {
+  color: var(--ui-white);
+  font-weight: 600;
+}
+
+.wx-nowcast {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.wx-plot--nowcast {
+  flex: 1;
+  min-height: 36px;
+  display: flex;
+  align-items: flex-end;
+  gap: 4px;
+  border-bottom: 1px solid rgba(230, 227, 255, 0.16);
+}
+
+.wx-col {
+  flex: 1;
+  border-radius: 4px 4px 1px 1px;
+  background: linear-gradient(to top, rgba(212, 226, 255, 0.35), var(--ui-mist));
+  box-shadow: 0 0 10px rgba(212, 226, 255, 0.25);
+}
+
+.wx-plot__note {
+  position: absolute;
+  inset: 0 0 auto;
+  top: 30%;
+  text-align: center;
+  color: var(--ui-text-2);
+}
+
+.wx-week {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.wx-week__row {
+  display: grid;
+  grid-template-columns: 3.2em 2.6em 2em 1fr 2em;
+  align-items: center;
+  gap: 0.45rem;
+  color: var(--ui-text-2);
+}
+
+.wx-week__day {
+  color: var(--ui-white);
+}
+
+.wx-week__rain {
+  color: var(--ui-mist);
+  font-size: var(--t-fine);
+}
+
+.wx-week__lo {
+  text-align: right;
+  color: var(--ui-text-3);
+}
+
+.wx-week__track {
+  position: relative;
+  height: 6px;
+  border-radius: 3px;
+  background: rgba(230, 227, 255, 0.1);
+}
+
+.wx-week__range {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  min-width: 6px;
+  border-radius: 3px;
+  background: linear-gradient(90deg, var(--ui-mist), var(--ui-lavender), var(--ui-peach));
+  box-shadow: 0 0 10px rgba(230, 227, 255, 0.35);
+}
+
+.wx-week__now {
+  position: absolute;
+  top: 50%;
+  width: 10px;
+  height: 10px;
+  margin: -5px 0 0 -5px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 0 0 2px rgba(var(--ui-ink), 0.6), 0 0 10px #fff;
+}
+
+.wx-wind {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.wx-compass {
+  position: relative;
+  flex: none;
+  height: 100%;
+  max-height: 128px;
+  aspect-ratio: 1;
+}
+
+.wx-compass svg {
+  width: 100%;
+  height: 100%;
+}
+
+.wx-tick {
+  stroke: rgba(230, 227, 255, 0.35);
+  stroke-width: 1;
+}
+
+.wx-compass__shaft {
+  stroke: var(--ui-lavender);
+  stroke-width: 2;
+  stroke-linecap: round;
+}
+
+.wx-compass__head {
+  fill: #fff;
+  filter: drop-shadow(0 0 4px rgba(230, 227, 255, 0.9));
+}
+
+.wx-compass__tail {
+  fill: none;
+  stroke: var(--ui-lavender);
+  stroke-width: 1.5;
+}
+
+.wx-compass__pt {
+  position: absolute;
+  font-size: var(--t-fine);
+  color: var(--ui-text-3);
+  transform: translate(-50%, -50%);
+}
+
+.wx-compass__pt--N { left: 50%; top: 2%; }
+.wx-compass__pt--S { left: 50%; top: 98%; }
+.wx-compass__pt--E { left: 98%; top: 50%; }
+.wx-compass__pt--W { left: 2%; top: 50%; }
+
+.wx-facts {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  margin: 0;
+}
+
+.wx-fact dt {
+  color: var(--ui-text-3);
+  font-size: var(--t-fine);
+}
+
+.wx-fact dd {
+  margin: 0;
+  font-size: 1.05rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.wx-ring__track {
+  fill: none;
+  stroke: rgba(230, 227, 255, 0.14);
+  stroke-width: 4;
+}
+
+.wx-ring__fill {
+  fill: none;
+  stroke: var(--ui-lavender);
+  stroke-width: 4;
+  stroke-linecap: round;
+  filter: drop-shadow(0 0 4px rgba(230, 227, 255, 0.7));
+}
+
+.wx-sun {
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+  overflow: visible;
+}
+
+.wx-sun__path {
+  fill: none;
+  stroke: rgba(230, 227, 255, 0.25);
+  stroke-width: 1.5;
+  stroke-dasharray: 3 5;
+}
+
+.wx-sun__note {
+  margin: -2.6rem 0 1.4rem;
+  text-align: center;
+  color: var(--ui-text-2);
+}
+
+.wx-sun__times {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 0.3rem;
+  color: var(--ui-text-2);
+}
+
+.wx-stats {
+  grid-area: stats;
+  display: grid;
+  grid-template-columns: repeat(8, minmax(0, 1fr));
+  gap: var(--gap);
+}
+
+.wx-stat {
+  --rise: calc((1 - var(--in)) * 50px);
+  gap: 0.35rem;
+  padding: clamp(10px, 1vw, 16px);
+  border-radius: 18px;
+}
+
+.wx-stat .wx-card__note {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.wx-stat__big {
+  font-size: clamp(1.5rem, 1.1rem + 1vw, 2.1rem);
+  font-weight: 300;
+  line-height: 1.1;
+  font-variant-numeric: tabular-nums;
+}
+
+.wx-stat__big small {
+  margin-left: 0.25em;
+  font-size: var(--t-fine);
+  font-weight: 400;
+  color: var(--ui-text-2);
+}
+
+.wx-ring {
+  position: relative;
+  display: block;
+  width: clamp(44px, 3.6vw, 56px);
+  aspect-ratio: 1;
+}
+
+.wx-ring svg {
+  width: 100%;
+  height: 100%;
+}
+
+.wx-ring__value {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  font-size: 0.9375rem;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Below the desktop grid: the head and the day on top, the week beside the readings. */
+@media (max-width: 1100px) {
+  .wx-panel {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-rows: auto minmax(0, 1fr) minmax(0, 0.8fr) auto;
+    grid-template-areas:
+      'head  head  week'
+      'hours hours week'
+      'wind  rain  sun'
+      'stats stats stats';
+  }
+
+  .wx-stats {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+/* Phones: what fits one screen. The head, the day, the next two hours and four readings. */
+/* Phones: the edges are the top and the bottom only. The day's line at the top with three readings
+   under it; the chance of rain above the corner; the week and the rest are in "more weather". */
+@media (max-width: 640px) {
+  .city-type::before {
+    background:
+      linear-gradient(to bottom, rgba(var(--ui-ink), 0.55), rgba(var(--ui-ink), 0) 26%),
+      linear-gradient(to top, rgba(var(--ui-ink), 0.6), rgba(var(--ui-ink), 0) 34%);
+  }
+
+  /* Clear of the progress rail on the right. */
+  .wx-edge--top,
+  .wx-edge--bottom {
+    left: max(16px, env(safe-area-inset-left));
+    right: max(52px, env(safe-area-inset-right));
+    width: auto;
+    transform: none;
+  }
+
+  .wx-edge--top {
+    top: max(76px, env(safe-area-inset-top));
+  }
+
+  .wx-edge--bottom {
+    bottom: calc(max(20px, env(safe-area-inset-bottom)) + 128px);
+  }
+
+  .wx-ribbon__plot {
+    height: 44px;
+  }
+
+  .wx-edge--left {
+    top: max(190px, env(safe-area-inset-top));
+    left: max(16px, env(safe-area-inset-left));
+    right: max(52px, env(safe-area-inset-right));
+    flex-direction: row;
+    justify-content: space-between;
+    transform: none;
+  }
+
+  .wx-reading:nth-child(n + 4),
+  .wx-edge--right {
+    display: none;
+  }
+
+  .wx-more,
+  .wx-close {
+    right: max(16px, env(safe-area-inset-right));
+  }
+}
+
+@media (max-width: 640px) {
+  .wx-panel {
+    --gap: 8px;
+    right: max(44px, env(safe-area-inset-right));
+    left: max(14px, env(safe-area-inset-left));
+    top: max(64px, env(safe-area-inset-top));
+    bottom: max(76px, env(safe-area-inset-bottom));
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto minmax(0, 1fr) auto auto;
+    grid-template-areas: 'head' 'hours' 'rain' 'stats';
+  }
+
+  .wx-card--week,
+  .wx-card--wind,
+  .wx-card--sun {
+    display: none;
+  }
+
+  .wx-card {
+    padding: 12px 14px;
+    border-radius: 18px;
+  }
+
+  .wx-card--rain .wx-plot--nowcast {
+    min-height: 28px;
+    max-height: 44px;
+  }
+
+  .wx-stats {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .wx-stat:nth-child(n + 5),
+  .wx-head__outlook,
+  .wx-axis .is-minor,
+  .wx-wide {
+    display: none;
+  }
+
+  .wx-stat {
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+    column-gap: 0.6rem;
+  }
+
+  .wx-stat .wx-card__title {
+    flex-basis: 100%;
+  }
+
+  .wx-stat .wx-card__note {
+    flex: 1;
+    min-width: 0;
+  }
+}
+
+@media (max-height: 700px) and (min-width: 641px) {
+  .wx-stat .wx-card__note {
+    display: none;
+  }
 }
 
 /* City drop labels. Placed beside each drop from the render loop (DropLabelAnchors.jsx), which sets
-   transform, opacity and alignment. A dark halo and a soft scrim behind keep them legible when a drop
-   passes in front of the square's brightest lamps. */
+   transform, opacity and alignment. The scrim behind is wide and falls off with no edge, so over the
+   square's brightest lamps the type holds and the dark never reads as a box. */
 .drop-label {
   position: fixed;
   left: 0;
@@ -334,24 +1446,22 @@ button {
   pointer-events: none;
   white-space: nowrap;
   color: var(--ui-white);
-  text-shadow: var(--ui-halo), 0 0 16px rgba(255, 255, 255, 0.2);
+  text-shadow: var(--ui-halo);
   will-change: transform, opacity;
 }
 
-/* An indigo haze, deep at the type and gone at its edge: drops pass in front of the square's brightest
-   lamps, and the meta line has to hold up over a cream-white bokeh disc, not only over the dark. */
 .drop-label::before {
   content: '';
   position: absolute;
-  inset: -1.5em -2.2em;
+  inset: -3em -3.8em;
   z-index: -1;
-  border-radius: 50%;
-  background: radial-gradient(closest-side, rgba(var(--ui-ink), 0.66), rgba(var(--ui-ink), 0.5) 45%, rgba(var(--ui-ink), 0.2) 75%, rgba(var(--ui-ink), 0) 100%);
+  background: radial-gradient(closest-side, var(--scrim));
+  opacity: 0.78;
 }
 
 .drop-label__meta {
   color: var(--ui-lavender);
-  text-shadow: 0 0 3px rgba(var(--ui-ink), 0.9), var(--ui-halo);
+  text-shadow: 0 0 3px rgba(var(--ui-ink), 0.95), var(--ui-halo);
 }
 
 /* The word's pencil sketch: a canvas the size of the word's area, moved and drawn from the render loop
@@ -369,6 +1479,20 @@ button {
   filter: drop-shadow(0 0 4px rgba(230, 227, 255, 0.55));
 }
 
+/* The ending: a title card over whatever frame the rain makes. A scrim rises from the bottom as the
+   answer comes in (EndType.jsx) and stays under the final screen. */
+.ending-scrim {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: min(78vh, 46rem);
+  z-index: -1; /* behind the answer and the final screen, in .ending-ui's stacking context */
+  opacity: 0;
+  pointer-events: none;
+  background: radial-gradient(85% 100% at 50% 100%, var(--scrim));
+}
+
 /* Beat 7 and the final screen in one column at the bottom: the answer (EndType.jsx), which comes in as
    the rings spread and stays, above the way back and the links (BackToTop.jsx), which come once the
    picture holds. The final screen's space is kept from the start, so the answer never moves. Under
@@ -377,7 +1501,7 @@ button {
   position: fixed;
   left: 0;
   right: 0;
-  bottom: max(3.5vh, calc(env(safe-area-inset-bottom) + 10px));
+  bottom: max(4vh, calc(env(safe-area-inset-bottom) + 12px));
   z-index: 1;
   display: flex;
   flex-direction: column;
@@ -388,7 +1512,7 @@ button {
 }
 
 .end-type {
-  max-width: 38rem;
+  max-width: 36rem;
   opacity: 0;
   visibility: hidden;
   text-align: center;
@@ -396,16 +1520,15 @@ button {
 }
 
 .end-type__headline {
-  font-size: clamp(1.2rem, 1rem + 1vw, 1.7rem);
+  font-family: var(--font-script);
+  font-size: var(--t-lead);
   font-weight: 300;
-  line-height: 1.35;
-  letter-spacing: 0.02em;
+  line-height: 1.55;
   text-wrap: balance;
 }
 
 .end-type__meta {
-  margin-top: 0.7rem;
-  font-size: 0.85rem;
+  margin-top: 0.6rem;
   line-height: 1.6;
 }
 
@@ -413,18 +1536,18 @@ button {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 0.4rem;
+  gap: 0.5rem;
   width: 100%;
   opacity: 0;
   visibility: hidden;
   pointer-events: auto;
-  transition: opacity 0.6s ease, visibility 0s 0.6s;
+  transition: opacity var(--dur-base) ease, visibility 0s var(--dur-base);
 }
 
 .final-screen.is-shown {
   opacity: 1;
   visibility: visible;
-  transition: opacity 1.2s ease 0.3s;
+  transition: opacity var(--dur-slow) ease 0.3s;
 }
 
 .final-screen__links {
@@ -457,28 +1580,37 @@ button {
   text-shadow: var(--ui-halo), 0 0 18px rgba(255, 255, 255, 0.2);
 }
 
+.caption::before {
+  content: '';
+  position: absolute;
+  inset: -3em -4em;
+  z-index: -1;
+  background: radial-gradient(closest-side, var(--scrim));
+  opacity: 0.5;
+}
+
 .caption__headline {
   margin: 0;
-  font-size: clamp(1.15rem, 0.98rem + 0.8vw, 1.55rem);
+  font-family: var(--font-script);
+  font-size: var(--t-lead);
   font-weight: 300;
-  line-height: 1.35;
-  letter-spacing: 0.02em;
+  line-height: 1.55;
   text-wrap: balance;
 }
 
 .caption__sub {
-  margin: 0.6rem 0 0;
+  margin: 0.5rem 0 0;
   color: var(--ui-text-2);
-  font-size: clamp(0.88rem, 0.8rem + 0.25vw, 0.98rem);
+  font-family: var(--font-script);
+  font-size: var(--t-sub);
   font-weight: 300;
-  line-height: 1.5;
-  letter-spacing: 0.03em;
+  line-height: 1.6;
   text-wrap: balance;
 }
 
 /* After "enter", until the first scroll, and again while the picture holds on the word: a drop falling
-   down a thin line, and the words. A soft lavender haze behind keeps it legible on any frame. While held,
-   the line fills from the top as the visitor's push counts toward letting go. */
+   down a thin line, and the words. While held, the line fills from the top as the visitor's push
+   counts toward letting go. */
 .scroll-hint {
   position: fixed;
   left: 50%;
@@ -491,22 +1623,22 @@ button {
   transform: translate(-50%, 6px);
   opacity: 0;
   pointer-events: none;
-  transition: opacity 0.6s ease, transform 0.6s ease;
+  transition: opacity var(--dur-base) ease, transform var(--dur-base) ease;
 }
 
 .scroll-hint::before {
   content: '';
   position: absolute;
-  inset: -1.4em -2.6em;
+  inset: -2em -3.4em;
   z-index: -1;
-  border-radius: 50%;
-  background: radial-gradient(closest-side, rgba(var(--ui-ink), 0.42), rgba(var(--ui-ink), 0) 100%);
+  background: radial-gradient(closest-side, var(--scrim));
+  opacity: 0.5;
 }
 
 .scroll-hint.is-shown {
   opacity: 1;
   transform: translate(-50%, 0);
-  transition: opacity 1.4s ease, transform 1.4s cubic-bezier(0.22, 1, 0.36, 1);
+  transition: opacity var(--dur-enter) ease, transform var(--dur-enter) var(--ease-out);
 }
 
 .scroll-hint__line {
@@ -524,7 +1656,7 @@ button {
   box-shadow: 0 0 6px rgba(255, 210, 189, 0.8);
   transform: scaleY(0);
   transform-origin: top;
-  transition: transform 0.25s ease-out;
+  transition: transform var(--dur-quick) ease-out;
 }
 
 .scroll-hint__drop {
@@ -536,7 +1668,7 @@ button {
   border-radius: 50%;
   background: #fff;
   box-shadow: 0 0 8px rgba(230, 227, 255, 0.9);
-  animation: scroll-hint-drop 2.2s cubic-bezier(0.5, 0, 0.75, 0) infinite;
+  animation: scroll-hint-drop var(--loop-fall) cubic-bezier(0.5, 0, 0.75, 0) infinite;
 }
 
 @keyframes scroll-hint-drop {
@@ -546,38 +1678,41 @@ button {
 }
 
 .scroll-hint__label {
-  padding-left: var(--track-chrome); /* the tracking trails the last letter: keep the word centred */
+  padding-left: var(--track-label); /* the tracking trails the last letter: keep the word centred */
   color: var(--ui-lavender);
   font-size: var(--t-meta);
-  letter-spacing: var(--track-chrome);
+  letter-spacing: var(--track-label);
   text-shadow: var(--ui-halo), 0 0 14px rgba(230, 227, 255, 0.45);
   white-space: nowrap;
 }
 
 /* Held on the word: the drop falls a little faster, like a nudge. */
 .scroll-hint.is-hold .scroll-hint__drop {
-  animation-duration: 1.6s;
+  animation-duration: var(--dur-slower);
 }
 
-/* The way through, on the right edge under the sound switch: a thin line that fills as the page is
-   scrolled, with a drop at its head. It shows how long the fall is, and where you are in it. */
+/* The way through, on the right edge under the sound switch: a line that fills as the page is scrolled,
+   a drop at its head, and a soft tick at each part of the film (the cities, the dive, the word), which
+   brightens once passed. Full as the answer comes in, and gone with it. On an indigo halo, so it holds
+   over bright frames. */
 .progress-rail {
   position: fixed;
-  top: 22vh;
-  bottom: 22vh;
+  top: 24vh;
+  bottom: 24vh;
   right: calc(max(14px, env(safe-area-inset-right)) + 22px);
   z-index: 1;
   width: 1px;
   transform: translateX(50%);
-  background: linear-gradient(rgba(230, 227, 255, 0), rgba(230, 227, 255, 0.2) 14%, rgba(230, 227, 255, 0.2) 86%, rgba(230, 227, 255, 0));
+  background: linear-gradient(rgba(230, 227, 255, 0), rgba(230, 227, 255, 0.32) 10%, rgba(230, 227, 255, 0.32) 90%, rgba(230, 227, 255, 0));
+  box-shadow: 0 0 0 1px rgba(var(--ui-ink), 0.35), 0 0 8px rgba(var(--ui-ink), 0.6);
   opacity: 0;
   pointer-events: none;
-  transition: opacity 0.6s ease;
+  transition: opacity var(--dur-base) ease;
 }
 
 .progress-rail.is-shown {
   opacity: 1;
-  transition: opacity 1.6s ease 0.8s;
+  transition: opacity var(--dur-slower) ease 0.8s;
 }
 
 .progress-rail__fill {
@@ -586,19 +1721,35 @@ button {
   top: 0;
   width: 1px;
   height: 0;
-  background: linear-gradient(rgba(230, 227, 255, 0), rgba(230, 227, 255, 0.75));
+  background: linear-gradient(rgba(230, 227, 255, 0), rgba(230, 227, 255, 0.85));
+}
+
+.progress-rail__tick {
+  position: absolute;
+  left: -3px;
+  width: 7px;
+  height: 1px;
+  margin-top: -0.5px;
+  background: rgba(230, 227, 255, 0.45);
+  box-shadow: 0 0 3px rgba(var(--ui-ink), 0.9);
+  transition: background-color var(--dur-base) ease, box-shadow var(--dur-base) ease;
+}
+
+.progress-rail__tick.is-passed {
+  background: var(--ui-lavender);
+  box-shadow: 0 0 3px rgba(var(--ui-ink), 0.9), 0 0 6px rgba(230, 227, 255, 0.7);
 }
 
 .progress-rail__drop {
   position: absolute;
-  left: -2px;
+  left: -2.5px;
   top: 0;
-  width: 5px;
-  height: 5px;
-  margin-top: -2px;
+  width: 6px;
+  height: 6px;
+  margin-top: -3px;
   border-radius: 50%;
   background: #fff;
-  box-shadow: 0 0 8px rgba(230, 227, 255, 0.9), 0 0 2px rgba(var(--ui-ink), 0.6);
+  box-shadow: 0 0 8px rgba(230, 227, 255, 0.9), 0 0 2px rgba(var(--ui-ink), 0.8);
 }
 
 /* Sound on and off, top right, from "enter" on. A faint ring so it reads as a button on any frame. */
@@ -620,38 +1771,40 @@ button {
   opacity: 0;
   visibility: hidden;
   filter: drop-shadow(0 0 6px rgba(230, 227, 255, 0.5)) drop-shadow(0 0 2px rgba(var(--ui-ink), 0.6));
-  transition: opacity 0.6s ease, border-color 0.4s ease, visibility 0s 0.6s;
+  transition: opacity var(--dur-base) ease, border-color var(--dur-quick) ease, visibility 0s var(--dur-base);
 }
 
 .sound-toggle.is-shown {
   opacity: 0.85;
   visibility: visible;
-  transition: opacity 1.2s ease 0.6s, border-color 0.4s ease;
+  transition: opacity var(--dur-slow) ease var(--dur-base), border-color var(--dur-quick) ease;
 }
 
 .sound-toggle.is-shown:hover,
 .sound-toggle.is-shown:focus-visible {
   border-color: rgba(255, 255, 255, 0.5);
   opacity: 1;
-  transition: opacity 0.3s ease, border-color 0.4s ease;
+  transition: opacity var(--dur-quick) ease, border-color var(--dur-quick) ease;
 }
 
-/* The cities and the credits, over the last frame (CitySheet.jsx). Indigo night with the pastel haze
-   again; its own scroll area (Lenis leaves it alone: data-lenis-prevent). */
+/* The sheet ------------------------------------------------------------------------------------- */
+
+/* The answer again, the cities, what this is, and the credits, over the last frame (CitySheet.jsx).
+   Indigo night with the pastel haze; its own scroll area (Lenis leaves it alone: data-lenis-prevent). */
 .sheet {
   position: fixed;
   inset: 0;
   z-index: 5;
   overflow-y: auto;
   overscroll-behavior: contain;
-  padding: 0 16px max(48px, env(safe-area-inset-bottom));
+  padding: 0 20px max(56px, env(safe-area-inset-bottom));
   background:
     radial-gradient(60% 40% at 50% 20%, rgba(230, 227, 255, 0.12), transparent 72%),
     radial-gradient(46% 34% at 66% 70%, rgba(255, 220, 204, 0.07), transparent 70%),
     rgb(var(--ui-ink)); /* opaque: the answer and the links under it must not show through */
   color: var(--ui-white);
-  scroll-padding-top: 72px; /* a section opened from a link clears the close button */
-  animation: sheet-in 0.5s ease both;
+  scroll-padding-top: 84px; /* a section opened from a link clears the close button */
+  animation: sheet-in var(--dur-base) ease both;
 }
 
 .sheet:focus {
@@ -665,76 +1818,134 @@ button {
 }
 
 .sheet__body {
-  width: min(34rem, 100%);
+  width: min(36rem, 100%);
   margin: 0 auto;
 }
 
 /* "close", on a bar that stays at the top as the sheet scrolls; the night fades in under it, so the
-   list never runs beneath the word. */
+   list never runs beneath the button. */
 .sheet__bar {
   position: sticky;
   top: 0;
   z-index: 1;
   display: flex;
   justify-content: flex-end;
-  margin: 0 -16px;
-  padding: max(10px, env(safe-area-inset-top)) max(10px, env(safe-area-inset-right)) 12px;
-  background: linear-gradient(rgb(var(--ui-ink)) 62%, rgba(var(--ui-ink), 0));
+  margin: 0 -20px;
+  padding: max(12px, env(safe-area-inset-top)) max(12px, env(safe-area-inset-right)) 28px;
+  background: linear-gradient(to bottom, rgb(var(--ui-ink)) 55%, rgba(var(--ui-ink), 0));
   pointer-events: none;
 }
 
 .sheet__close {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  min-height: 44px;
+  padding: 0 1rem 0 0.8rem;
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  border-radius: 999px;
+  background: rgba(230, 227, 255, 0.05);
+  color: var(--ui-text-2);
+  font-family: var(--font-text);
+  font-size: var(--t-meta);
+  letter-spacing: var(--track-label);
   pointer-events: auto;
+  cursor: pointer;
+  transition: color var(--dur-quick) ease, border-color var(--dur-quick) ease;
+}
+
+.sheet__close:hover {
+  color: var(--ui-white);
+  border-color: rgba(255, 255, 255, 0.5);
+}
+
+.sheet__close svg {
+  flex: none;
+}
+
+/* The answer, at the top, as the film left it. */
+.sheet__recap {
+  margin: 0.5rem 0 0;
+  padding-bottom: 2.4rem;
+  border-bottom: 1px solid rgba(230, 227, 255, 0.12);
+  text-align: center;
+}
+
+.sheet__recap-headline {
+  margin: 0;
+  font-family: var(--font-script);
+  font-size: var(--t-lead);
+  font-weight: 300;
+  line-height: 1.55;
+  text-wrap: balance;
+}
+
+.sheet__recap .meta {
+  margin: 0.6rem 0 0;
+  color: var(--ui-text-2);
 }
 
 .sheet__title {
-  margin: 0 0 1.6rem;
-  padding-left: 0.34em;
-  font-size: 1.1rem;
+  margin: 2.8rem 0 1.1rem;
+  font-family: var(--font-script);
+  font-size: var(--t-heading);
   font-weight: 200;
-  letter-spacing: 0.34em;
+  line-height: 1.5;
   text-align: center;
   text-shadow: 0 0 28px var(--ui-glow);
 }
 
-.sheet__title:not(:first-child) {
-  margin-top: 3.4rem;
-}
-
-/* What this is: set like the answer's meta, larger, in a comfortable measure. */
+/* What this is: the text face at reading size, in a comfortable measure. */
 .sheet__about {
+  max-width: 34rem;
+  margin: 0 auto;
   color: var(--ui-text-2);
-  font-size: 0.95rem;
-  font-weight: 300;
-  line-height: 1.75;
-  letter-spacing: 0.02em;
+  font-size: var(--t-body);
+  font-weight: 400;
+  line-height: 1.7;
+  letter-spacing: var(--track-text);
   text-wrap: pretty;
 }
 
 .sheet__about p {
-  margin: 0 0 1.1em;
+  margin: 0 0 1em;
 }
 
-.sheet__credit {
+/* The credits: a quiet list, each line what it is (lowercase, like the meta lines), then its source with
+   the source's own capitals, as a city keeps its name. */
+.credits {
+  display: grid;
+  gap: 1.1rem;
+  margin: 0;
   color: var(--ui-text-3);
   font-size: var(--t-fine);
-  line-height: 1.7;
-  letter-spacing: 0.04em;
+  line-height: 1.65;
+  letter-spacing: var(--track-text);
 }
 
-.sheet__credit p {
-  margin: 0 0 1.1em;
-}
-
-.sheet__credit a {
+.credits dt {
   color: var(--ui-text-2);
-  text-underline-offset: 2px;
+  letter-spacing: var(--track-label);
+}
+
+.credits dd {
+  margin: 0.1rem 0 0;
+}
+
+.credits a {
+  color: var(--ui-text-2);
+  text-decoration-color: rgba(212, 209, 238, 0.45);
+  text-underline-offset: 3px;
+  transition: color var(--dur-quick) ease;
+}
+
+.credits a:hover {
+  color: var(--ui-white);
 }
 
 /* The ten cities, as they are right now: the sheet's list and the still page's. */
 .city-list {
   display: grid;
-  gap: 0.2rem;
   margin: 0;
   padding: 0;
   list-style: none;
@@ -746,18 +1957,22 @@ button {
   align-items: baseline;
   gap: 0.2rem 1.2rem;
   padding: 0.55rem 0;
+  border-bottom: 1px solid rgba(230, 227, 255, 0.07);
+}
+
+.city-list li:last-child {
+  border-bottom: 0;
 }
 
 .city-list__name {
-  font-size: 1rem;
+  font-family: var(--font-script);
+  font-size: var(--t-name);
   font-weight: 300;
-  letter-spacing: 0.03em;
+  line-height: 1.5;
 }
 
 .city-list__meta {
   color: var(--ui-text-2);
-  font-size: var(--t-meta);
-  letter-spacing: var(--track-meta);
   text-align: right;
 }
 
@@ -766,90 +1981,105 @@ button {
   text-shadow: 0 0 14px rgba(255, 228, 216, 0.45);
 }
 
-/* The still page (prefers-reduced-motion, no WebGL): the frame, the question and its answer, the cities. */
+/* The still page (prefers-reduced-motion, no WebGL) ---------------------------------------------- */
+
+/* Laid out like an editorial page: the frame full width, fading into the night it came from; the name
+   and the question over that fade; the answer; then the cities and the credits, side by side when
+   there is room. */
 .still {
   min-height: 100vh;
   padding-bottom: 12vh;
-  background: radial-gradient(70% 40% at 50% 78vh, rgba(230, 227, 255, 0.1), transparent 70%), #030307;
+  background: radial-gradient(70% 40% at 50% 70vh, rgba(230, 227, 255, 0.08), transparent 70%), var(--ui-night);
 }
 
 .still__frame {
+  position: relative;
   margin: 0;
 }
 
 .still__frame img {
   display: block;
   width: 100%;
-  height: 72vh;
+  height: min(78vh, 56vw + 20rem);
   object-fit: cover;
   object-position: 50% 30%; /* the drop sits in the upper third: keep it clear of the top edge */
+  -webkit-mask-image: linear-gradient(to bottom, #000 0%, #000 45%, rgba(0, 0, 0, 0.75) 65%, rgba(0, 0, 0, 0.32) 82%, rgba(0, 0, 0, 0.08) 93%, transparent 100%);
+  mask-image: linear-gradient(to bottom, #000 0%, #000 45%, rgba(0, 0, 0, 0.75) 65%, rgba(0, 0, 0, 0.32) 82%, rgba(0, 0, 0, 0.08) 93%, transparent 100%);
 }
 
 .still__head {
-  margin: 8vh 16px 0;
+  position: relative;
+  margin: -9rem 16px 0;
   text-align: center;
 }
 
 .still__word {
   margin: 0;
-  padding-left: 0.34em;
-  font-size: clamp(1.6rem, 1.2rem + 1.6vw, 2.3rem);
+  font-family: var(--font-script);
+  font-size: var(--t-title);
   font-weight: 200;
-  letter-spacing: 0.34em;
-  text-shadow: 0 0 28px var(--ui-glow);
+  line-height: 1.3;
+  text-shadow: 0 0 28px var(--ui-glow), var(--ui-halo);
 }
 
 .still__question {
-  margin: 0.8rem 0 0;
+  margin: 0.5rem 0 0;
   color: var(--ui-text-2);
+  font-family: var(--font-script);
+  font-size: var(--t-sub);
   font-weight: 300;
-  letter-spacing: 0.05em;
+  text-shadow: var(--ui-halo);
 }
 
 .still__answer {
-  width: min(34rem, calc(100% - 32px));
-  margin: 5vh auto 6vh;
+  width: min(36rem, calc(100% - 32px));
+  margin: 3.2rem auto 0;
+  padding: 2.2rem 0;
+  border-top: 1px solid rgba(230, 227, 255, 0.12);
+  border-bottom: 1px solid rgba(230, 227, 255, 0.12);
   text-align: center;
 }
 
 .still__headline {
   margin: 0;
-  font-size: clamp(1.15rem, 0.98rem + 0.8vw, 1.5rem);
+  font-family: var(--font-script);
+  font-size: var(--t-lead);
   font-weight: 300;
-  line-height: 1.35;
+  line-height: 1.55;
   text-wrap: balance;
 }
 
 .still__meta {
-  margin: 0.8rem 0 0;
-  font-size: 0.85rem;
+  margin: 0.6rem 0 0;
 }
 
-.still .city-list {
-  width: min(420px, calc(100% - 32px));
-  margin: 0 auto;
+.still__columns {
+  display: grid;
+  gap: 3rem;
+  width: min(36rem, calc(100% - 40px));
+  margin: 3rem auto 0;
 }
 
-.still__credit {
-  width: min(420px, calc(100% - 32px));
-  margin: 8vh auto 0;
-  color: var(--ui-text-3);
-  font-size: var(--t-fine);
-  line-height: 1.7;
-  letter-spacing: 0.04em;
+.still__heading {
+  margin: 0 0 0.8rem;
+  font-family: var(--font-script);
+  font-size: var(--t-heading);
+  font-weight: 200;
+  line-height: 1.5;
+  text-shadow: 0 0 28px var(--ui-glow);
 }
 
-.still__credit p {
-  margin: 0 0 1.2em;
-}
-
-.still__credit a {
-  color: inherit;
+@media (min-width: 960px) {
+  .still__columns {
+    grid-template-columns: 1.15fr 1fr;
+    gap: 5rem;
+    width: min(64rem, calc(100% - 96px));
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
   .loader::before,
-  .loader__drop,
+  .loader .drop-mark,
   .loader__status.is-shown,
   .loader__enter.is-ready,
   .scroll-hint__drop,
