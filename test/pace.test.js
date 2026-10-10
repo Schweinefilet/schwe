@@ -101,17 +101,14 @@ test('pace table: a drop with `until` stops slowing the camera after that time',
   assert.ok(Math.abs(rateAt(always, 5.9) - 0.45) < 1e-9)
 })
 
-test('pace table: a hold slows to its rate at `at`, and frees the limit soon after', () => {
-  const line = (t) => [0, 0, -t] // no drops near: the limit is max everywhere but the hold
+test('pace table: a cap holds the limit under its rate there, braked into and out of', () => {
+  const line = (t) => [0, 0, -t] // no drops near: the limit is max everywhere but the cap
   const opts = { from: 0, to: 20, near: [0.5, 1], max: 1.5, nearDrop: 0.45, brake: 2.5, round: 0.5 }
-  const table = buildPaceTable(line, [], { ...opts, holds: [{ from: 12.6, at: 13, rate: 0.05 }] })
+  const table = buildPaceTable(line, [], { ...opts, caps: [{ from: 13, to: 20, rate: 0.8 }] })
   const plain = buildPaceTable(line, [], opts)
-  assert.ok(Math.abs(rateAt(table, 13) - 0.05) < 1e-9, `at the eye ${rateAt(table, 13)}`)
-  assert.ok(rateAt(table, 12.8) < rateAt(plain, 12.8) && rateAt(table, 12.8) > 0.05) // falling
+  for (let t = 13; t <= 20; t += 0.01) assert.ok(rateAt(table, t) <= 0.8 + 1e-9, `capped at ${t.toFixed(2)}`)
+  assert.ok(rateAt(table, 12.9) < 1.5 && rateAt(table, 12.9) > 0.8) // braking into it
   assert.ok(rateAt(table, 11) === rateAt(plain, 11)) // untouched well before
-  assert.ok(rateAt(table, 13.3) > 1) // free again within a few tenths after the eye
-  for (let t = 12; t <= 14; t += 0.01) assert.ok(rateAt(table, t) <= rateAt(plain, t) + 1e-9, `never raised at ${t.toFixed(2)}`)
-  // Still braked: never falls or rises faster than the brake allows.
   const { rate, step } = table
   for (let i = 1; i < rate.length; i++) assert.ok(Math.abs(rate[i] ** 2 - rate[i - 1] ** 2) <= 2 * 2.5 * step + 1e-9, `step ${i}`)
 })

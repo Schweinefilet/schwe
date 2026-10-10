@@ -1,9 +1,9 @@
-// Scroll pacing: how fast the picture may follow the scroll. Pure functions (tested); scroll.js runs
-// them once a frame.
+// Pacing: how fast the picture may travel. Pure functions (tested); film.js runs them once a frame.
 //
-// The timeline's time chases the time the scroll position stands for, like a critically damped spring
-// (smoothDamp), with a speed limit that depends on where the camera is: lower while a city drop is
-// near. The limit table brakes ahead of each slow stretch, so the camera never has to slow abruptly.
+// The film travels between stops (core/stops.js) under a speed limit that depends on where the camera
+// is: lower while a city drop is near. The limit table brakes ahead of each slow stretch, so the camera
+// never has to slow abruptly. The picture follows the travel like a critically damped spring
+// (smoothDamp), which rounds off the corners of its acceleration.
 
 // Unity's SmoothDamp (Game Programming Gems 4, 1.10): eases `current` toward `target` over about
 // `smoothTime` seconds without overshooting, never faster than `maxSpeed`. Returns [position, velocity].
@@ -62,16 +62,15 @@ function envelope(a, r, pick = null) {
 //   max, nearDrop: the limit away from drops and at them
 //   brake: the most the limit may fall per second of travel at it (units/s²), in either direction
 //   turnAt(t), maxTurn (optional): how fast the view turns per unit of time at t (radians), and the most
-//     it may turn per second, so no scroll swings the view faster than that
+//     it may turn per second, so no travel swings the view faster than that
 //   turnWindow (optional): units of time over which the turn rate is averaged first, so its limit
 //     changes smoothly (maxTurn then holds on average over that span, not at every instant); it joins
 //     the drops' limit by a smooth minimum
 //   round (optional): units of time over which the result's corners are rounded off (never raising
 //     it), so the picture never has to change its acceleration abruptly to follow it
-//   holds (optional): [{ from, at, rate }]: stretches where the limit falls, geometrically, from what
-//     it would be at `from` to `rate` at `at` (a near stop), and is free again after `at` (the brake
-//     brings it back up)
-export function buildPaceTable(cameraAt, drops, { from, to, step = 0.01, near, max, nearDrop, brake, turnAt = null, maxTurn = Infinity, turnWindow = 0, round = 0, holds = [] }) {
+//   caps (optional): [{ from, to, rate }]: stretches where the limit is at most `rate` (the ending's
+//     own pace, a caption read on the way), braked into and out of like a drop
+export function buildPaceTable(cameraAt, drops, { from, to, step = 0.01, near, max, nearDrop, brake, turnAt = null, maxTurn = Infinity, turnWindow = 0, round = 0, caps = [] }) {
   const n = Math.round((to - from) / step) + 1
   let turn = turnAt ? Float64Array.from({ length: n }, (_, i) => turnAt(from + i * step)) : null
   if (turn && turnWindow > 0) turn = envelope(turn, Math.max(1, Math.round(turnWindow / step)))
@@ -91,29 +90,16 @@ export function buildPaceTable(cameraAt, drops, { from, to, step = 0.01, near, m
       // Smooth minimum (a 4-norm): never above either, no corner where they cross.
       rate[i] = turnWindow > 0 ? (rate[i] ** -4 + byTurn ** -4) ** -0.25 : Math.min(rate[i], byTurn)
     }
+    for (const cap of caps) if (t >= cap.from && t <= cap.to) rate[i] = Math.min(rate[i], cap.rate)
   }
   // A speed v can come down to u within (v² − u²) / 2·brake: cap each entry by what its neighbours
-  // allow, forward (for scrolling down) and backward (for scrolling up).
+  // allow, forward and backward (the film travels both ways).
   const braked = () => {
     for (let i = n - 2; i >= 0; i--) rate[i] = Math.min(rate[i], Math.sqrt(rate[i + 1] ** 2 + 2 * brake * step))
     for (let i = 1; i < n; i++) rate[i] = Math.min(rate[i], Math.sqrt(rate[i - 1] ** 2 + 2 * brake * step))
   }
   braked()
   if (round > 0) rate.set(envelope(rate, Math.max(1, Math.round(round / step)), Math.min))
-  // Holds last, after the rounding (which takes the least value within its span, and would spread the
-  // near stop to both sides of it), and braked again so the limit comes back up without a jump.
-  if (holds.length) {
-    for (const hold of holds) {
-      const i0 = Math.max(0, Math.round((hold.from - from) / step))
-      const i1 = Math.min(n - 1, Math.round((hold.at - from) / step))
-      const top = rate[i0]
-      for (let i = i0; i <= i1; i++) {
-        const x = smoothstep(hold.from, hold.at, from + i * step)
-        rate[i] = Math.min(rate[i], top * (hold.rate / top) ** x)
-      }
-    }
-    braked()
-  }
   return { from, step, rate }
 }
 

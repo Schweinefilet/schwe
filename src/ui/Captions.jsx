@@ -16,7 +16,7 @@ const smoothstep = (a, b, x) => {
 }
 
 // The captions (CAPTIONS in config.js), centred low, set like the answer. Their opacity follows the
-// timeline's time on the shared ticker, so they come and go with the scroll in either direction.
+// timeline's time on the shared ticker, so they come and go with the film in either direction.
 export default function Captions() {
   const ref = useRef()
 

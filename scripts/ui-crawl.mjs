@@ -3,7 +3,7 @@
 // touch, mobile UA), on this machine's GPU (headless Chrome over Metal, like ending-capture.mjs). Starts
 // the dev server and walks the film as a visitor would: the loader (waiting, ready, hover), "enter", the
 // intro hint, both captions, every drift drop's slow point, the dive, the word's hold reached by real
-// wheel or touch input (so its sketch and "keep scrolling" show), the ending, the final screen, the
+// click or tap (so its sketch and "… to go on" show), the ending, the final screen, the
 // sheet's three sections, keyboard focus on every control, and the still page. Also writes console.txt
 // (every warning and error the page logged) and text.json (every visible text box, its font and whether
 // it is clipped or overlaps another), which `--check` reads for the done-when list.
@@ -47,7 +47,7 @@ const DEVICES = {
 const server = await createServer({ server: { port: 0, host: '127.0.0.1' }, logLevel: 'error' })
 await server.listen()
 const base = server.resolvedUrls.local[0]
-const { DRIFT_PASSES, DIVE, TIMELINE_END } = await server.ssrLoadModule('/src/config.js')
+const { ALIGN, DRIFT_PASSES, DIVE, TIMELINE_END } = await server.ssrLoadModule('/src/config.js')
 const browser = await puppeteer.launch({
   executablePath: CHROME,
   headless: 'new',
@@ -183,19 +183,6 @@ const enter = async (page, size) => {
   else await page.click('.loader__enter')
   await page.waitForFunction(() => window.__schwe?.state.beat === 'rain', { timeout: 15000 })
 }
-// Drags the page up by `dy` px, as a finger does (CDP's synthesized touch scroll).
-const swipe = async (page, size, dy) => {
-  const client = await page.createCDPSession()
-  const { width, height } = DEVICES[size]
-  await client.send('Input.synthesizeScrollGesture', { x: width / 2, y: height * 0.7, yDistance: -dy, speed: 2400, gestureSourceType: 'touch' })
-}
-const wheel = async (page, n, delta = 120) => {
-  for (let i = 0; i < n; i++) {
-    await page.mouse.wheel({ deltaY: delta })
-    await sleep(60)
-  }
-}
-
 async function crawl(size) {
   const touch = size === 'phone'
   if (want('loader')) {
@@ -240,7 +227,7 @@ async function crawl(size) {
   await run('enter', async () => {
     await sleep(1400)
     await shot(page, size, 'enter-1-after')
-    await page.waitForSelector('.scroll-hint.is-shown', { timeout: 10000 })
+    await page.waitForSelector('.move-hint.is-shown', { timeout: 10000 })
     await sleep(1600)
     await shot(page, size, 'enter-2-intro-hint')
   })
@@ -265,13 +252,13 @@ async function crawl(size) {
       await sleep(1500)
       await shot(page, size, `dive-${name}`)
     }
-    // Inside the drop, "more weather" opens the expanded view and holds the scroll; hovering the day's
+    // Inside the drop, "more weather" opens the expanded view and holds the film; hovering the day's
     // chart shows one hour in full (pointer devices); Escape closes it.
     if (await page.$('.wx-more')) {
       if (DEVICES[size].hasTouch) await page.tap('.wx-more')
       else await page.click('.wx-more')
       await sleep(900)
-      const held = await page.evaluate(() => document.documentElement.classList.contains('lenis-stopped'))
+      const held = await page.evaluate(() => window.__schwe.drive.locked)
       await shot(page, size, 'dive-weather-open')
       const hours = await page.$('.wx-hours')
       if (hours && !DEVICES[size].hasTouch) {
@@ -283,8 +270,8 @@ async function crawl(size) {
       }
       await page.keyboard.press('Escape')
       await sleep(300)
-      const closed = await page.evaluate(() => !document.querySelector('.wx-panel') && !document.documentElement.classList.contains('lenis-stopped'))
-      console.log(`more weather (${size}): scroll held ${held}, Escape closes ${closed}`)
+      const closed = await page.evaluate(() => !document.querySelector('.wx-panel') && !window.__schwe.drive.locked)
+      console.log(`more weather (${size}): film held ${held}, Escape closes ${closed}`)
     }
     // "h" hides the dev overlay and brings it back.
     const hidden = () => page.evaluate(() => document.querySelector('.dev-overlay')?.hidden)
@@ -300,25 +287,19 @@ async function crawl(size) {
     await shot(page, size, 'caption-2-fall')
   })
   await run('word', async () => {
-    // The word reached by real input: the hold, its sketch, "keep scrolling".
+    // The word reached by real input: one click or tap from before it, a hard stop, its sketch, and
+    // after a moment "… to go on".
     await goto(page, 12.3)
     await sleep(2000)
-    await page.mouse.move(DEVICES[size].width / 2, DEVICES[size].height / 2)
-    for (let i = 0; i < 12; i++) {
-      if (await page.evaluate(() => window.__schwe.word.holding)) break
-      if (touch) await swipe(page, size, 260)
-      else await wheel(page, 3)
-      await sleep(500)
-    }
-    const held = await page.evaluate(() => window.__schwe.word.holding)
-    if (!held) console.log(`  ${size}: the word did not hold`)
-    await sleep(2600)
-    await shot(page, size, 'word-hold')
-    // Part of the push that lets go: the hint's line fills (a wheel notch; on touch, an arrow key's worth).
-    if (touch) await page.keyboard.press('ArrowDown')
-    else await wheel(page, 1)
-    await sleep(500)
-    await shot(page, size, 'word-hold-push')
+    const { width, height } = DEVICES[size]
+    if (touch) await page.touchscreen.tap(width / 2, height / 2)
+    else await page.mouse.click(width / 2, height / 2)
+    await page.waitForFunction((at) => Math.abs((window.__schwe.state.stop ?? -1) - at) < 0.003, { timeout: 15000 }, ALIGN.arrive).catch(() => console.log(`  ${size}: the word did not stop the film`))
+    await sleep(600)
+    await shot(page, size, 'word-stop')
+    await page.waitForSelector('.move-hint.is-shown.is-on', { timeout: 5000 }).catch(() => console.log(`  ${size}: no "go on" hint at the word`))
+    await sleep(900)
+    await shot(page, size, 'word-stop-hint')
   })
   await run('ending', async () => {
     for (const t of [15, 16.5, 19.5, 21.5]) {

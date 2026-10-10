@@ -55,7 +55,7 @@ export function buildMasterTimeline() {
   // The hero's settled swell (its held last frame) gives way to the rain.
   tl.to(rig, { heroGone: 1, duration: 1.0, ease: 'sine.inOut' }, SPLASH.splashEnd - 0.2)
 
-  // Pin total duration so scroll maps 1:1 to units even if the last tween ends early.
+  // Pin total duration so the timeline runs exactly to TIMELINE_END even if the last tween ends early.
   tl.set({}, {}, TIMELINE_END)
   return tl
 }

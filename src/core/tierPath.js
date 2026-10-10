@@ -5,7 +5,7 @@ import { quality } from './quality.js'
 const paths = new Map()
 
 // The camera path for the tier now showing (config.js driftFor: it slows only at the drops this tier
-// shows), and its drift's slow points. Shared by the camera rig and the scroll's pacing, so both swap
+// shows), and its drift's slow points. Shared by the camera rig and the film's pacing, so both swap
 // paths on the same frame when a tier drops.
 export function tierPath() {
   const count = quality.heroDrops

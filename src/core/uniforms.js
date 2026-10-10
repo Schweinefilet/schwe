@@ -17,8 +17,8 @@ export const globalUniforms = {
 
 let target = 1
 
-// Called from the master timeline on every update with the time scale the scroll position calls for
-// (1 falling, 0 frozen, a slow fall again at the end). The target is a pure function of scroll; only
+// Called from the master timeline on every update with the time scale the timeline position calls for
+// (1 falling, 0 frozen, a slow fall again at the end). The target is a pure function of timeline time; only
 // the rate of change is time-based (`seconds`, `ease`), so rewinding always restores it.
 export function setTimeTarget(value, seconds = FREEZE_SECONDS, ease = 'power2.inOut') {
   if (value === target) return

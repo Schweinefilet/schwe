@@ -14,6 +14,24 @@ import { fallPosition } from '../core/fall.js'
 const _pos = new THREE.Vector3()
 const _look = new THREE.Vector3()
 const _dive = new THREE.Vector3(...DIVE_DROP)
+const _dir = new THREE.Vector3()
+const _side = new THREE.Vector3()
+const UP = new THREE.Vector3(0, 1, 0)
+
+// Resting on a stop (core/film.js) the frame breathes: the view turns a fraction of a degree, slowly,
+// about the camera's own position (so the word, which lines up only from the eye, stays whole), on two
+// sines per axis so it never reads as a loop. Radians, and periods in seconds.
+const BREATH = { yaw: 0.004, pitch: 0.0028, periods: [11, 4.7, 8.3, 3.9] }
+const smooth = (x) => x * x * (3 - 2 * x)
+function breathe(pos, look, amount, seconds) {
+  if (amount <= 0) return
+  const [a, b, c, d] = BREATH.periods.map((p) => (2 * Math.PI * seconds) / p)
+  const yaw = amount * BREATH.yaw * (0.7 * Math.sin(a) + 0.3 * Math.sin(b + 1.3))
+  const pitch = amount * BREATH.pitch * (0.7 * Math.sin(c + 0.4) + 0.3 * Math.sin(d + 2.1))
+  _dir.subVectors(look, pos).applyAxisAngle(UP, yaw)
+  _side.crossVectors(_dir, UP).normalize()
+  look.copy(pos).add(_dir.applyAxisAngle(_side, pitch))
+}
 
 const PORTRAIT_PULLBACK = 1.1 // at 390×844 the camera stands ~1.6× farther from the splash
 const NEAR = 0.02
@@ -34,8 +52,8 @@ export default function CameraRig() {
     return createFraming(path, drops, { fov: CAMERA_FOV, aspect: size.width / size.height, height: size.height, radius: HERO.radius })
   }, [size.width, size.height, tier])
 
-  useFrame(({ camera }) => {
-    // Position and look are functions of timeline time, so scrolling back retraces them exactly. The
+  useFrame(({ camera, clock }) => {
+    // Position and look are functions of timeline time, so travelling back retraces them exactly. The
     // path is this tier's (it slows only at the drops the tier shows).
     tierPath().path.sample(state.time, out)
     applyTurn(_pos, _look, framing(state.time))
@@ -55,6 +73,7 @@ export default function CameraRig() {
       }
       _look.lerp(drop, rig.follow * (1 - rig.lookFree))
     }
+    breathe(_pos, _look, smooth(state.rest), clock.elapsedTime)
     camera.position.copy(_pos)
     camera.lookAt(_look)
     // Down at the puddle the square behind rises, as it would for an eye at its ground (BACKDROP.ground).

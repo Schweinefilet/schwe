@@ -6,7 +6,7 @@ import { MOTION } from './motion.js'
 import DropMark from './DropMark.jsx'
 
 // The screen over the rain before it starts: the name, the question the site answers, the drop (the mark) and
-// "enter". The click is the user gesture that unlocks audio and scrolling; the screen fades and the
+// "enter". The click is the user gesture that unlocks audio and the film; the screen fades and the
 // page stays where it is, at the rain. "enter" appears once `ready` (the dive city is chosen and, with
 // the sky as the source, the city skies are prepared), so nothing changes after it. Until then the
 // same place says what is being waited for (after SLOW_MS: a quick load never flashes it), so a slow

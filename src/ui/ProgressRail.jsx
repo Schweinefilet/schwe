@@ -10,7 +10,7 @@ const END = SPLASH.answerAt
 const TICKS = [DRIFT_PASSES[0], (DIVE.inEnd + DIVE.outStart) / 2, ALIGN.arrive]
 const at = (t) => Math.min(Math.max((t - TIMELINE_START) / (END - TIMELINE_START), 0), 1)
 
-// The way through, on the right edge: a thin line that fills as the page is scrolled, a drop at its
+// The way through, on the right edge: a thin line that fills as the film goes on, a drop at its
 // head, a tick at each part of the film that brightens once passed. Full as the answer comes in. Shown from "enter" until the
 // answer. Set on the shared ticker, so it never re-renders React.
 export default function ProgressRail() {

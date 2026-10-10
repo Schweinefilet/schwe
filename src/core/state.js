@@ -7,6 +7,12 @@ export const state = {
   unlocked: false,
   clips: null, // result of selectClips()
   diveCity: null, // chosen once per visit from the first selection
-  word: null, // the word's hold, from core/scroll.js: { holding, since (performance.now ms), push (units) }
+  // The film at rest (core/film.js): `stop` the stop it rests on (null while travelling), since
+  // `restSince` (performance.now ms); `rest` eases 0 → 1 as it settles (the camera breathes, CameraRig);
+  // `moves` counts the visitor's steps and holds.
+  stop: 1,
+  restSince: 0,
+  rest: 0,
+  moves: 0,
   rainCity: null, // the ending's answer, chosen with it: { kind: 'now' | 'soon' | 'none' | 'unknown', city?, … }
 }

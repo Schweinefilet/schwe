@@ -81,25 +81,17 @@ try {
     await sleep(every * 1000)
     await shot(`end+${s.toFixed(1)}s`)
   }
-  // --auto N: from the word, one wheel turn sets the ending playing itself (as a visitor's scroll does);
-  // record N seconds of it, from the fall through the hold.
+  // --auto N: from just before the word, one click comes to rest on it (a hard stop), and after a rest
+  // another plays the ending, as a visitor's would; record N seconds of it, from the word through the hold.
   const auto = Number(arg('auto', '0'))
   if (auto > 0) {
-    await goto(12.9)
+    await goto(12.6)
     await sleep(2500)
-    await page.mouse.move(w / 2, h / 2)
     const recording = record(`${out}/auto`, auto)
-    const wheel = async (n) => {
-      for (let i = 0; i < n; i++) {
-        await page.mouse.wheel({ deltaY: 120 })
-        await sleep(60)
-      }
-    }
-    // Into the word, where the scroll holds (ALIGN.hold); after a rest, on past it and into the ending.
-    await wheel(6)
-    await page.waitForFunction(() => window.__schwe.word?.holding, { timeout: 10000 }).catch(() => {})
+    await page.mouse.click(w / 2, h / 2)
+    await page.waitForFunction(() => window.__schwe.state.stop !== null && window.__schwe.state.stop > 12.9, { timeout: 15000 }).catch(() => {})
     await sleep(2500)
-    await wheel(6)
+    await page.mouse.click(w / 2, h / 2)
     await recording
   }
   if (video > 0) await record(out, video)

@@ -52,7 +52,7 @@ export default function DevOverlay() {
         ref.current.textContent =
           `fps    ${fps.toFixed(0)}\n` +
           `frame  ${(elapsed / frames).toFixed(1)} ms  (worst ${worst.toFixed(1)})\n` +
-          `scroll ${(state.progress * 100).toFixed(1)} %\n` +
+          `film   ${(state.progress * 100).toFixed(1)} %\n` +
           `beat   ${state.beat}\n` +
           `time×  ${globalUniforms.uTimeScale.value.toFixed(2)}\n` +
           `video  ${liveCount()} live\n` +

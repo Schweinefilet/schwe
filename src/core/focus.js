@@ -3,7 +3,7 @@ import { DRIFT, FOCUS, TIMELINE_START } from '../config.js'
 import { globalUniforms } from './uniforms.js'
 
 // The first shot's focus pull (FOCUS in config.js). `pull` is real-time: it drops to 0 on "enter"
-// (while the loader is still opaque) and eases back to 1. Scrolling from the top toward the drift pulls
+// (while the loader is still opaque) and eases back to 1. Moving on from the top toward the drift pulls
 // focus too, so whichever is further along wins. Pages without "enter" (the drop lab) stay at 1.
 const run = { pull: 1 }
 

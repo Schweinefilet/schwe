@@ -80,31 +80,38 @@
   --focus-glow: 0 0 0 5px rgba(230, 227, 255, 0.14), 0 0 22px rgba(230, 227, 255, 0.4);
 }
 
-/* Lenis stopped (the loader, the expanded weather): native touch scrolling holds too. */
-html.lenis-stopped {
-  overflow: hidden;
-}
-
 html,
 body {
   margin: 0;
+  height: 100%;
+  overflow: hidden;
   background: #000;
   color: var(--ui-white);
 }
 
+/* The page never scrolls: the film moves by stops (core/gestures.js), so presses, swipes and long
+   presses on it are the film's, not the browser's (no panning, zooming, selecting or callout). The
+   sheet and the expanded weather scroll on their own. */
 body {
   font-family: var(--font-text);
   -webkit-font-smoothing: antialiased;
   overscroll-behavior: none;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+}
+
+.sheet,
+.wx-panel,
+.bench-panel {
+  touch-action: pan-y;
+  user-select: text;
+  -webkit-user-select: text;
 }
 
 button {
   font-family: inherit;
-}
-
-#scroll-track {
-  position: relative;
-  width: 100%;
 }
 
 #fade {
@@ -1608,10 +1615,9 @@ button {
   text-wrap: balance;
 }
 
-/* After "enter", until the first scroll, and again while the picture holds on the word: a drop falling
-   down a thin line, and the words. While held, the line fills from the top as the visitor's push
-   counts toward letting go. */
-.scroll-hint {
+/* After "enter", until the first move, on the word, and as a reminder (MoveHint.jsx): a drop falling
+   down a thin line, and the words. */
+.move-hint {
   position: fixed;
   left: 50%;
   bottom: max(5vh, calc(env(safe-area-inset-bottom) + 18px));
@@ -1626,7 +1632,7 @@ button {
   transition: opacity var(--dur-base) ease, transform var(--dur-base) ease;
 }
 
-.scroll-hint::before {
+.move-hint::before {
   content: '';
   position: absolute;
   inset: -2em -3.4em;
@@ -1635,13 +1641,13 @@ button {
   opacity: 0.5;
 }
 
-.scroll-hint.is-shown {
+.move-hint.is-shown {
   opacity: 1;
   transform: translate(-50%, 0);
   transition: opacity var(--dur-enter) ease, transform var(--dur-enter) var(--ease-out);
 }
 
-.scroll-hint__line {
+.move-hint__line {
   position: relative;
   width: 1px;
   height: 48px;
@@ -1649,17 +1655,7 @@ button {
   background: linear-gradient(rgba(230, 227, 255, 0), rgba(230, 227, 255, 0.45));
 }
 
-.scroll-hint__fill {
-  position: absolute;
-  inset: 0;
-  background: linear-gradient(rgba(255, 210, 189, 0.4), var(--ui-peach));
-  box-shadow: 0 0 6px rgba(255, 210, 189, 0.8);
-  transform: scaleY(0);
-  transform-origin: top;
-  transition: transform var(--dur-quick) ease-out;
-}
-
-.scroll-hint__drop {
+.move-hint__drop {
   position: absolute;
   left: -2px;
   top: -6px;
@@ -1668,16 +1664,16 @@ button {
   border-radius: 50%;
   background: #fff;
   box-shadow: 0 0 8px rgba(230, 227, 255, 0.9);
-  animation: scroll-hint-drop var(--loop-fall) cubic-bezier(0.5, 0, 0.75, 0) infinite;
+  animation: move-hint-drop var(--loop-fall) cubic-bezier(0.5, 0, 0.75, 0) infinite;
 }
 
-@keyframes scroll-hint-drop {
+@keyframes move-hint-drop {
   to {
     transform: translateY(58px);
   }
 }
 
-.scroll-hint__label {
+.move-hint__label {
   padding-left: var(--track-label); /* the tracking trails the last letter: keep the word centred */
   color: var(--ui-lavender);
   font-size: var(--t-meta);
@@ -1686,8 +1682,8 @@ button {
   white-space: nowrap;
 }
 
-/* Held on the word: the drop falls a little faster, like a nudge. */
-.scroll-hint.is-hold .scroll-hint__drop {
+/* Resting on the word: the drop falls a little faster, like a nudge. */
+.move-hint.is-on .move-hint__drop {
   animation-duration: var(--dur-slower);
 }
 
@@ -1790,7 +1786,7 @@ button {
 /* The sheet ------------------------------------------------------------------------------------- */
 
 /* The answer again, the cities, what this is, and the credits, over the last frame (CitySheet.jsx).
-   Indigo night with the pastel haze; its own scroll area (Lenis leaves it alone: data-lenis-prevent). */
+   Indigo night with the pastel haze; its own scroll area (the film leaves input in it alone). */
 .sheet {
   position: fixed;
   inset: 0;
@@ -2082,7 +2078,7 @@ button {
   .loader .drop-mark,
   .loader__status.is-shown,
   .loader__enter.is-ready,
-  .scroll-hint__drop,
+  .move-hint__drop,
   .sheet {
     animation: none;
   }

@@ -16,7 +16,7 @@ const REFRESH_MS = 10 * 60 * 1000
 // edges: the name, local time, sky and temperature in the corner as a drop's label; the next 24 hours'
 // temperature as one soft line along the top and its chance of rain as hairline bars along the bottom;
 // a few readings down the left and the week down the right, translucent, on a vignette that leaves the
-// middle untouched. "more weather" opens everything (WeatherPanel.jsx) and holds the scroll until it
+// middle untouched. "more weather" opens everything (WeatherPanel.jsx) and holds the film until it
 // closes. Opacity follows rig.cityType on the shared ticker; the detail is fetched for the dive city
 // only, once it is known, and every ten minutes after. Whatever was not read is left out.
 export default function CityType({ clips, cityId, onLock }) {

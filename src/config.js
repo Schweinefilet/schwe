@@ -14,35 +14,42 @@ export const CITIES = cities
 // run only in this mode). The drop lab also takes ?clip= to show one clip.
 export const CONTENT = { source: 'sky' }
 
-// ---- Scroll ----------------------------------------------------------------
-// Timeline time is measured in "units". One unit = VH_PER_UNIT of scroll distance. 80 (was 100): the
-// whole film took about 140 wheel notches or 38 swipes; this takes a fifth off, and the pace limit
-// (PACE) still slows the picture at each drop however fast the scroll.
-export const VH_PER_UNIT = 80
+// ---- Moving through the film -------------------------------------------------
+// Timeline time is measured in "units" (the beats below). The visitor does not scrub it: the film rests
+// on stops (STOPS) and travels between them at its own pace (core/stops.js, core/film.js).
 export const FREEZE_SECONDS = 1.5 // real time for uTimeScale to ease 1 → 0 (and back on rewind)
-// How fast the picture follows the scroll (core/pace.js). It eases toward the scroll position over about
-// `smooth` seconds, never faster than `max` units (100vh each) per second, and at `nearDrop` while a
-// city drop is near (the camera within HERO.near of it, where its city shows), braking ahead of it at
-// most `brake` units/s². Wheel and trackpad input runs at most `bank` units ahead of the picture: the
-// rest of a hard flick is dropped instead of playing out for seconds after the hand has stopped.
-// `maxTurn`: the view turns no faster than about this many degrees per second, however fast the scroll
-// (averaged over `turnWindow` units, so the limit comes and goes smoothly). `round`: the
-// limit's corners are rounded off over this many units, so following it never makes the camera's
-// acceleration jump (kept under half the drops' spacing, so the camera still speeds up between them).
-export const PACE = { max: 1.5, nearDrop: 0.45, brake: 2.5, smooth: 0.1, bank: 0.5, maxTurn: 40, turnWindow: 0.5, round: 0.5 }
-// Soft landings (core/snap.js): after a swift scroll (it ran at least `swift` units ahead of the
-// picture) the picture comes to rest where a city drop can be seen, not wherever its speed ran out:
-// at a drift drop's slow point (DRIFT_PASSES, within `capture` of where the scroll would stop), or
-// inside the dive drop while its name shows (`dive`). Never behind the picture, never after slow
-// scrolling. (The word has its own hold, ALIGN.hold.) Decided once input has been quiet `idle` ms,
-// while the picture still glides: the scroll moves to the point and the picture glides on to rest there.
-export const SNAP = { swift: 0.12, capture: 0.3, dive: { at: 10.1, capture: 0.7 }, idle: 90 }
+// How fast the picture travels (core/pace.js): never faster than `max` units per second, and at
+// `nearDrop` while a city drop is near (the camera within HERO.near of it, where its city shows),
+// braking ahead of it at most `brake` units/s². The picture eases after the travel over about `smooth`
+// seconds, which rounds off the corners of its acceleration.
+// `maxTurn`: the view turns no faster than about this many degrees per second (averaged over
+// `turnWindow` units, so the limit comes and goes smoothly). `round`: the limit's corners are rounded
+// off over this many units, so following it never makes the camera's acceleration jump (kept under
+// half the drops' spacing, so the camera still speeds up between them).
+export const PACE = { max: 1.5, nearDrop: 0.45, brake: 2.5, smooth: 0.1, maxTurn: 40, turnWindow: 0.5, round: 0.5 }
+// The stops (core/stops.js). Besides the top and the end, the film rests: after the freeze, on the
+// first caption (`drops`); at each drift drop this tier shows, at its slow point (config driftFor);
+// inside the dive drop while its name shows (`dive`); and at the word's eye (ALIGN.arrive), a hard stop:
+// running on while held stops there too, so the word is never missed. From the word the next stop is
+// the end: the ending plays at its own pace (`ending`, units/s).
+// Travel: speeds up and brakes at `accel` units/s², settling onto a stop over its last `tail` s.
+// `reading`: the second caption (CAPTIONS 'fall') comes on the way to the word, so that stretch keeps
+// to `rate` units/s, enough to read it. `hold`: a press held this long (ms) lets time run on.
+export const STOPS = {
+  drops: 2.0,
+  dive: 10.1,
+  ending: 0.8,
+  accel: 1.2,
+  tail: 0.22,
+  reading: { from: 11.1, to: 12.3, rate: 0.55 },
+  hold: 280,
+}
 
 // The beats, in order. `at` is the label position in timeline units. The loader is a screen over the
 // first one, not a beat: "enter" only fades it, and the top of the page is the rain.
 export const BEATS = [
   { name: 'rain', at: 1 },
-  { name: 'freeze', at: 1.08 }, // just past rain, so the first scroll triggers the freeze
+  { name: 'freeze', at: 1.08 }, // just past rain, so the first move triggers the freeze
   { name: 'drift', at: 2.5 },
   { name: 'dive', at: 8 },
   { name: 'align', at: 11.5 },
@@ -92,7 +99,7 @@ export const BACKDROP = {
 }
 
 // The first shot. After "enter" the lens is focused on the square behind the rain; `delay` s later it
-// pulls focus forward onto the drops over `seconds` (the focus every later beat keeps). Scrolling on
+// pulls focus forward onto the drops over `seconds` (the focus every later beat keeps). Moving on
 // toward the drift completes the pull, so the drops are always sharp by the first pass.
 // `aperture`: a drop `d` units away is blurred by aperture / d radians while the lens is focused far;
 // `maxBlur`: CSS px cap on that blur (a drop that close has faded out anyway).
@@ -229,13 +236,7 @@ export const ALIGN = {
   arrive: 13, // camera passes the eye
   chimeAt: 13 - 0.02, // the word's shimmer plays crossing this forward, and its sketch starts drawing
   passSpeed: 0.45, // camera speed at the eye relative to its average (the camera path's own pace)
-  // The word is easy to miss in one scroll, so the scroll holds it (core/scroll.js). As its drops start to
-  // line up (`from`) the picture slows almost to a stop, `rate` units a second at the eye; reaching the
-  // eye going forward, it holds there, the word whole and its sketch drawing, and the rest of the
-  // gesture's momentum is dropped. After `dwell` s, scrolling on by `push` units more (about three
-  // wheel notches, a swipe, a page key) lets it go, and the ending plays itself from there. Jumps (Home,
-  // End, back to top) pass straight through.
-  hold: { from: 12.6, rate: 0.05, dwell: 1.0, push: 0.35 },
+  // The word is easy to miss, so the film rests at the eye: a hard stop (STOPS).
   // A pencil sketch around the word's silhouette (ui/pencilSketch.js): it draws in from chimeAt while the
   // camera is within `until` units past the eye, and retracts `retract` times as fast once it leaves
   // (either way). `margin`: how far the outline stands off the letters, px at the 240 px sampling size.
@@ -271,10 +272,6 @@ export const SPLASH = {
   // As the drop meets the water the frozen moment ends: the rain around eases to `timeScale` of its
   // speed over `seconds` (real time) and keeps falling slowly on the held last frame.
   rainAgain: { at: SPLASH_AT + 2.5, timeScale: 0.8, seconds: 3 },
-  // Once the scroll passes autoFrom going down, the ending plays itself (the scroll moves with it,
-  // locked) to the end at about autoRate units per second, then holds on the last frame.
-  autoFrom: SPLASH_AT + 0.1, // the drop leaves the word (fallAt)
-  autoRate: 0.8,
   fallPinFrom: 12.4, // the falling drop's clip starts decoding after the dive drop's pin ends (12)
   groundY: 0,
   puddleSize: 80, // the wet ground, fading into darkness with distance

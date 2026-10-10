@@ -6,8 +6,8 @@ import { effectiveTier } from '../core/gpuScore.js'
 import { liveCount } from '../content/videoManager.js'
 import { BUDGET_MS, report, toText } from './stats.js'
 
-// ?bench: after "enter", records the rain at rest, then scrolls the whole film at a constant speed and
-// back up, logging every frame. Ends with a table, a JSON download and a copyable summary to hand back.
+// ?bench: after "enter", records the rain at rest, then plays the whole film at a constant speed and
+// back, logging every frame. Ends with a table, a JSON download and a copyable summary to hand back.
 // Combine with ?tier=high|medium|low to measure one tier (the live tier guard is off when forced).
 const IDLE_MS = 4000
 const SECONDS_PER_UNIT = 1.6 // ≈ 28 s per pass; slower than a hurried visitor, faster than a lingering one
@@ -19,7 +19,7 @@ const until = async (fn) => {
   while (!fn()) await sleep(100)
 }
 
-export default function Bench({ scroll }) {
+export default function Bench({ film }) {
   const status = useRef()
   const [result, setResult] = useState(null)
 
@@ -57,7 +57,7 @@ export default function Bench({ scroll }) {
     })
 
     ;(async () => {
-      const s = scroll.current
+      const s = film.current
       await until(() => cancelled || (state.unlocked && Math.abs(state.time - s.labels.rain) < 0.005))
       if (cancelled) return
       s.setLocked(true) // no stray touches while measuring
@@ -67,11 +67,11 @@ export default function Bench({ scroll }) {
       const end = s.duration()
       const pass = (end - s.labels.rain) * SECONDS_PER_UNIT
       dir = 'forward'
-      await s.scrollToTime(end, pass)
+      await s.playTo(end, pass)
       dir = 'hold'
       await sleep(HOLD_MS)
       dir = 'back'
-      await s.scrollToTime(s.labels.rain, pass)
+      await s.playTo(s.labels.rain, pass)
       dir = null
       setFrameHook(null)
       s.setLocked(false)
@@ -114,7 +114,7 @@ export default function Bench({ scroll }) {
       offTier()
       document.removeEventListener('visibilitychange', onHidden)
     }
-  }, [scroll])
+  }, [film])
 
   return (
     <>
@@ -151,7 +151,7 @@ function Report({ result }) {
 
   const rows = [...summary.rows, summary.total]
   return (
-    <div className="bench-panel" data-lenis-prevent>
+    <div className="bench-panel">
       <h2>schwe bench</h2>
       <p>
         build {meta.build} · {meta.gpu ?? 'unknown GPU'} · {summary.displayHz ?? '?'} Hz · tier {meta.tierStart}

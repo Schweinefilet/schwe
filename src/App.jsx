@@ -8,11 +8,11 @@ import WordSketch from './ui/WordSketch.jsx'
 import EndType from './ui/EndType.jsx'
 import BackToTop from './ui/BackToTop.jsx'
 import StillPage from './ui/StillPage.jsx'
-import ScrollHint from './ui/ScrollHint.jsx'
+import MoveHint from './ui/MoveHint.jsx'
 import ProgressRail from './ui/ProgressRail.jsx'
 import Captions from './ui/Captions.jsx'
 import SoundToggle from './ui/SoundToggle.jsx'
-import { initScroll } from './core/scroll.js'
+import { initFilm } from './core/film.js'
 import { startFocusPull } from './core/focus.js'
 import { state } from './core/state.js'
 import { unlockAudio } from './audio/audioEngine.js'
@@ -27,7 +27,7 @@ import { usesFootage } from './content/contentSource.js'
 import { onSkyReady } from './sky/skyManager.js'
 import { onBackdropReady } from './content/backdrop.js'
 import { now } from './core/clock.js'
-import { CAMERA_FOV, CITIES, CONTENT, DEFAULT_DIVE_CITY, SPLASH, TIMELINE_END, TIMELINE_START, VH_PER_UNIT } from './config.js'
+import { CAMERA_FOV, CITIES, CONTENT, DEFAULT_DIVE_CITY, SPLASH } from './config.js'
 
 const NO_CLIPS = { version: 1, clips: [] }
 
@@ -52,9 +52,6 @@ const FORCE_WEATHER = import.meta.env.DEV ? new URLSearchParams(location.search)
 // Dev: ?still forces the still page.
 const FORCE_STILL = import.meta.env.DEV && new URLSearchParams(location.search).has('still')
 const REDUCED_MOTION = window.matchMedia('(prefers-reduced-motion: reduce)').matches
-
-// Scroll distance = track height − one viewport, so add 100vh to map exactly the timeline's units.
-const TRACK_HEIGHT = `${(TIMELINE_END - TIMELINE_START) * VH_PER_UNIT + 100}vh`
 
 export default function App() {
   const [clips, setClips] = useState(null)
@@ -135,7 +132,7 @@ export default function App() {
   }, [])
 
   // prefers-reduced-motion and no-WebGL visitors get the still page: a frame of the frozen rain and
-  // the cities as they are right now. No scroll animation.
+  // the cities as they are right now. No animation.
   if (still) return <StillPage clips={clips} rainCity={rainCity} />
   return <Site clips={clips} device={device} diveCity={diveCity} rainCity={rainCity} />
 }
@@ -162,25 +159,25 @@ function useScenePrepared() {
 }
 
 function Site({ clips, device, diveCity, rainCity }) {
-  const scroll = useRef(null)
+  const film = useRef(null)
   const scenePrepared = useScenePrepared()
 
   useEffect(() => {
-    scroll.current = initScroll({ onTop: startFocusPull })
-    return () => scroll.current.destroy()
+    film.current = initFilm({ onTop: startFocusPull })
+    return () => film.current.destroy()
   }, [])
 
   const handleEnter = useCallback(() => {
     unlockAudio()
     state.unlocked = true
-    scroll.current.enter()
+    film.current.enter()
     startFocusPull()
   }, [])
 
-  // Back at the top the first shot plays again (initScroll's onTop).
-  const handleTop = useCallback(() => scroll.current.toTop(), [])
-  // The expanded weather inside the dive drop holds the scroll while it is open.
-  const handleLock = useCallback((on) => scroll.current?.setLocked(on), [])
+  // Back at the top the first shot plays again (initFilm's onTop).
+  const handleTop = useCallback(() => film.current.toTop(), [])
+  // The expanded weather inside the dive drop holds the film while it is open.
+  const handleLock = useCallback((on) => film.current?.setLocked(on), [])
 
   return (
     <>
@@ -195,7 +192,6 @@ function Site({ clips, device, diveCity, rainCity }) {
           <Experience clips={clips} diveCity={diveCity ?? DEFAULT_DIVE_CITY} rainCity={rainCity} />
         </Canvas>
       )}
-      <div id="scroll-track" style={{ height: TRACK_HEIGHT }} />
       <DropLabels clips={clips} />
       <WordSketch />
       <CityType clips={clips} cityId={diveCity ?? DEFAULT_DIVE_CITY} onLock={handleLock} />
@@ -205,7 +201,7 @@ function Site({ clips, device, diveCity, rainCity }) {
         <BackToTop onTop={handleTop} clips={clips} rainCity={rainCity} />
       </div>
       <Captions />
-      <ScrollHint />
+      <MoveHint />
       <ProgressRail />
       <div id="fade" />
       <SoundToggle />
@@ -217,7 +213,7 @@ function Site({ clips, device, diveCity, rainCity }) {
       )}
       {Bench && (
         <Suspense fallback={null}>
-          <Bench scroll={scroll} />
+          <Bench film={film} />
         </Suspense>
       )}
     </>
