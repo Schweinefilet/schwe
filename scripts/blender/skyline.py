@@ -61,7 +61,13 @@ SITE = {
     # Waterloo Bridge's deck about 12.5 m above mid tide; nothing in the view rises above 16 degrees
     # (the Eye's top, 136 m at 570 m, is at 13).
     # Curtain walls' glass coated as office glass is (n 1.8 to 2.4: 8 to 17% at normal incidence), not clear.
-    'london': {'eye': 8.5, 'water': -4.0, 'deck': 5.5, 'el': (-20.0, 16.0), 'facade': {'glass_ior': (1.8, 2.4)}},
+    # Its lit windows as New York's (2026-10-03): dotted lines, not slabs (facade.py window_light: light at the
+    # head of each pane, a share of a lit run's windows dark, a long-tailed brightness); offices lit in runs of
+    # bays, homes window by window or two or three together; London's homelier warm-to-cool range. The
+    # evening's lit share stays about 18% (the user's choice of 2026-09-29; the dropout takes it to ~15%).
+    'london': {'eye': 8.5, 'water': -4.0, 'deck': 5.5, 'el': (-20.0, 16.0),
+               'facade': {'glass_ior': (1.8, 2.4), 'lit_run': (1, 6), 'blind_run': (1, 4), 'kelvin': (2600, 4800),
+                          'window_light': {'dropout': 0.18, 'fluorescent': 0.06, 'gain': 4.9}}},
     # z = 0 is the Lower Manhattan waterfront, 2.5 m above NAVD88 (extract.mjs TERRAIN; buildings stand on
     # the ground under them). The eye 1.6 m above the lowest Granite Prospect step at Pier 1's edge (about
     # 1.95 m NAVD88, USGS 3DEP lidar); the water at mean sea level, 0.063 m below NAVD88 (NOAA tide
@@ -99,6 +105,17 @@ SITE = {
                  # Elevated roads drawn from OSM's lines: the FDR Drive's viaduct along the waterfront (the deck
                  # height is SITE's default, 6 m: OSM gives none).
                  'viaducts': True},
+    # Paris: from the Trocadéro's parvis (IGN RGE ALTI: 59.8 m NGF-IGN69, 33.4 m above z = 0, the Seine at the
+    # Pont d'Iéna) down over the gardens to the Eiffel Tower. On its own ground (terrain.py, the IGN model);
+    # the eye 1.6 m above the parvis. The live water is the Warsaw fountains' basin (37.3 m NGF), which
+    # mirrors the tower as the rivers do London and New York; the Seine and the gardens' pools are baked.
+    # The tower's tip stands about 27 degrees up. Haussmann's city (filler.py 'paris').
+    'paris': {'eye': 1.6, 'eye_on_ground': True, 'terrain': True, 'live_water': 'way/79738429', 'el': (-20.0, 30.0),
+              'archetypes': 'paris', 'deck_above_ground': 0.6, 'tree_h': (12, 22),
+              # Apartments lit window by window (a flat's two or three French windows together), warm
+              # (2500 to 4200 K), curtains and shutters in about a third; dotted, as London's and New York's.
+              'facade': {'glass_ior': (1.6, 2.0), 'blinds': 0.3, 'kelvin': (2500, 4200), 'lit_run': (1, 3), 'blind_run': (1, 3),
+                         'window_light': {'dropout': 0.15, 'fluorescent': 0.04, 'gain': 4.9}}},
 }[CITY]
 PANO = {'span': 120.0, 'el': SITE.get('el', (-20.0, 36.0)), 'ppd': 32}  # degrees; pixels per degree at scale 1
 # Floodlit stone's emission per unit of the 'flood' attribute, relative to its albedo (lit windows run
@@ -118,6 +135,10 @@ REFS = {
         'ref4': {'pos': (-51, 100), 'eye': 10.0, 'heading': 205.38, 'hfov': 29.37, 'pitch': 3.12, 'size': (2000, 1331)},
         # From the same four landmarks across the frame; pitch from Elizabeth Tower's tip.
         'ref6': {'pos': (-77, 154), 'eye': 10.0, 'heading': 200.6, 'hfov': 30.2, 'pitch': 0.0, 'size': (1024, 768)},
+    },
+    'paris': {
+        # Not a photo: the tower close, from the gardens' foot, to check the lattice.
+        'tower': {'pos': (230, -230), 'eye': 12.0, 'heading': 134.0, 'hfov': 50.0, 'pitch': 18.0, 'size': (1200, 1600)},
     },
     'new-york': {
         # From Pier 1's west side (the eye pinned 1.6 m above the promenade), fitted to One WTC's mast tip and
@@ -242,6 +263,10 @@ MAT = {
     'bridge': simple_material('bridge', (0.16, 0.16, 0.15), 0.8),
     'bulb': emission_material('bulb', (1.0, 0.78, 0.52), 60.0, base=(0.5, 0.48, 0.42)),
 }
+if SITE.get('terrain'):
+    import ground
+    MAT['terrain'] = ground.ground_material(globals())
+    MAT['pool'] = ground.pool_material(globals())
 
 
 # ---- Geometry ---------------------------------------------------------------------------------------
@@ -435,7 +460,7 @@ def build_ground_and_water():
 def build_bridges():
     """Bridge decks from OSM bridge outlines (man_made=bridge), at deck height, the vantage's own excepted."""
     mb = MeshBuilder('bridges')
-    deck = SITE['deck']
+    deck = SITE.get('deck', 6.0)
     for br in scene_data['bridges']:
         if not br['area'] or br['id'] in LANDMARK_REPLACES:
             continue
@@ -444,6 +469,10 @@ def build_bridges():
         # in, or one passing within 40 m of it.
         if not ring or inside(ring, (0.0, 0.0)) or min(math.hypot(x, y) for x, y in ring) < 40:
             continue
+        if GROUND_AT:
+            # On its own ground: the deck level with the highest ground at its ends (the quays it spans).
+            hs = [h for h in (GROUND_AT(x, y) for x, y in ring) if h is not None]
+            deck = max(hs) + SITE.get('deck_above_ground', 0.5) if hs else SITE['deck']
         tris, flat = tessellate(ring)
         for t in tris:
             mb.face([(*flat[t[0]], deck), (*flat[t[1]], deck), (*flat[t[2]], deck)])
@@ -455,6 +484,7 @@ def build_bridges():
     # Elevated roads OSM maps as lines only (New York's FDR Drive along the Manhattan waterfront): a deck
     # along each, a carriageway's width (motorways and trunks 11 m, three lanes; the rest 7.5 m), at the deck
     # height (OSM gives none), on the ground under it. The great bridges (layer 3 and up) are not these.
+    deck = SITE.get('deck', 6.0)
     if SITE.get('viaducts'):
         widths = {'motorway': 11.0, 'trunk': 11.0, 'primary': 11.0}
         for br in scene_data['bridges']:
@@ -713,15 +743,28 @@ def setup_camera():
 
 setup_world()
 setup_render()
+GROUND_AT = None
+if SITE.get('terrain'):
+    # A city on its own ground (terrain.py): the live water's level, and the eye on the ground under it.
+    import terrain
+    SITE['water'], GROUND_AT = terrain.build(globals())
+    if SITE.get('eye_on_ground'):
+        # Standing on the highest ground within 6 m (Paris: the vantage is at the parvis's front wall, the
+        # gardens' terrace 13 m below it; the eye stands on the parvis behind its parapet).
+        ring = [(r * math.cos(a), r * math.sin(a)) for r in (0.0, 2.0, 4.0, 6.0) for a in [k * math.tau / 12 for k in range(12)]]
+        SITE['eye'] = max(h for h in (GROUND_AT(x, y) for x, y in ring) if h is not None) + SITE['eye']
+    print(f"eye at z {SITE['eye']:.2f}, live water at z {SITE['water']}")
 filler.setup(globals())
 filler.build_city()
 if not ONLY:
-    build_ground_and_water()
+    if not SITE.get('terrain'):
+        build_ground_and_water()
     build_bridges()
     build_trees()
-    build_lamps()
 if landmarks:
     landmarks.build(globals())
+if not ONLY:
+    build_lamps()  # after the landmarks, which may add their own (the Pont d'Iéna's)
 for ob in bpy.data.objects:
     if ob.name.startswith('buildings'):
         ob.lightgroup = 'city'  # the lit windows
@@ -768,13 +811,17 @@ for m in bpy.data.materials:
 LIGHTS = [o for o in bpy.data.objects if o.type == 'LIGHT']
 
 
-def set_lights(city=False, windows=False, late=False, sky=False):
+def set_lights(city=False, windows=False, late=False, sky=False, spark=False, tower=False):
     """What lights this render: the city's fixed lights (lamps, floodlights, landmarks' LEDs), its
-    windows (the evening's or the late night's), the sky."""
+    windows (the evening's or the late night's), the sky; or (Paris) the Eiffel Tower's sparkle alone."""
     for (mname, nname), v in EMISSION_STRENGTH.items():
         bpy.data.materials[mname].node_tree.nodes[nname].inputs['Strength'].default_value = v if city else 0.0
     for m in bpy.data.materials:
         nodes = m.node_tree.nodes if m.node_tree else {}
+        if 'spark_gain' in nodes:
+            nodes['spark_gain'].outputs[0].default_value = 1.0 if spark else 0.0
+        if 'tower_gain' in nodes:  # the Eiffel Tower's lighting: with the city's, and alone in the tower pass
+            nodes['tower_gain'].outputs[0].default_value = 1.0 if city or tower else 0.0
         if 'city_gain' in nodes:
             nodes['city_gain'].outputs[0].default_value = 1.0 if city else 0.0
         if 'window_gain' in nodes:
@@ -842,6 +889,11 @@ def clip_below_water():
         sep = node(nt, 'ShaderNodeSeparateXYZ')
         nt.links.new(geo.outputs['Position'], sep.inputs[0])
         below = math_node(nt, 'LESS_THAN', sep.outputs['Z'], wz)
+        # And the ground seen from behind: a ray leaving the water never meets it from below (Paris:
+        # the lawns a metre above the Trocadéro's narrow basin, which the mirror eye would see from beneath,
+        # black, where a wave-tilted reflection skims over them into the sky).
+        if m.name.split('.')[0] in ('terrain', 'pool', 'embankment', 'ground'):  # the ground only: leaves are one-sided cards
+            below = math_node(nt, 'MAXIMUM', below, geo.outputs['Backfacing'])
         camera = node(nt, 'ShaderNodeLightPath').outputs['Is Camera Ray']
         mix = node(nt, 'ShaderNodeMixShader')
         nt.links.new(math_node(nt, 'MULTIPLY', below, camera), mix.inputs['Fac'])
@@ -852,7 +904,8 @@ def clip_below_water():
 
 def render_set(prefix, passes):
     """The light renders (sky, city, windows, late windows) and the distance, with this camera."""
-    for name, lights in (('sky', dict(sky=True)), ('city', dict(city=True)), ('win', dict(windows=True)), ('late', dict(windows=True, late=True))):
+    for name, lights in (('sky', dict(sky=True)), ('city', dict(city=True)), ('win', dict(windows=True)), ('late', dict(windows=True, late=True)),
+                         ('spark', dict(spark=True)), ('tower', dict(tower=True))):
         if name in passes:
             set_lights(**lights)
             render(f'{prefix}-{name}')
@@ -883,7 +936,8 @@ def render_set(prefix, passes):
 # site mixes them by the live sky, the dark and the local hour.
 DEPTH = depth_material()
 TREES = tree_material()
-passes = arg('passes', 'sky,city,win,late,depth,trees').split(',')
+SPARK = any(o.get('spark') for o in bpy.data.objects)
+passes = arg('passes', 'sky,city,win,late,depth,trees' + (',spark,tower' if SPARK else '')).split(',')
 render_set(OUT, passes)
 mirror = None
 if VIEW == 'pano' and scene_data['water'] and arg('mirror', '1') == '1':
@@ -910,5 +964,7 @@ if VIEW == 'pano':
     # Where the panorama sits in the sky, for scripts/blender/encode.py.
     res_y = int((PANO['el'][1] - PANO['el'][0]) * PANO['ppd'] * SCALE)
     json.dump({'bearing': BEARING, 'centre': CENTRE, 'span': PANO['span'], 'elevation': list(PANO['el']), 'season': SEASON,
-               'size': [scene.render.resolution_x, res_y], 'mirror': mirror}, open(OUT + '.json', 'w'))
+               'size': [scene.render.resolution_x, res_y], 'mirror': mirror,
+               'beacon': [round(BEACON[0], 2), round(BEACON[1], 2), round(BEACON[2] - SITE['eye'], 2)] if 'BEACON' in globals() else None},
+              open(OUT + '.json', 'w'))
 print('done')

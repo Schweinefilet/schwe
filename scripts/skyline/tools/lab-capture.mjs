@@ -25,6 +25,9 @@ const CHROME = process.env.CHROME || '/Applications/Google Chrome.app/Contents/M
 const TIMES = {
   london: { night: '2026-09-29T21:30:00Z', dusk: '2026-09-29T18:10:00Z', day: '2026-09-29T12:00:00Z' },
   'new-york': { night: '2026-09-30T02:30:00Z', dusk: '2026-09-29T23:05:00Z', day: '2026-09-29T16:00:00Z' },
+  // Paris (CEST, UTC+2): night two minutes into the 22:00 sparkle, dusk 20:15 (the tower just lit), late
+  // after midnight (the tower dark), midday.
+  paris: { night: '2026-09-29T20:02:00Z', dusk: '2026-09-29T18:15:00Z', day: '2026-09-29T10:00:00Z', late: '2026-09-29T22:40:00Z', evening: '2026-09-29T19:40:00Z' },
 }[CITY]
 // Wind fixed too (from the south-west, London's prevailing), so the water is comparable between runs.
 const WEATHER = { rain: { cloud: 1, rain: 2, fog: false, wind: 6, windFrom: 225 }, clear: { cloud: 0, rain: 0, fog: false, wind: 3, windFrom: 225 } }

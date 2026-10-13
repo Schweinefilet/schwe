@@ -2,7 +2,8 @@ import { SKY } from '../config.js'
 
 // The data the site shows, credited as each license asks: the weather (Open-Meteo, CC BY 4.0), the
 // night-sky brightness (the World Atlas, CC BY-NC 4.0; only once its values light the skies) and the
-// skylines (OpenStreetMap, ODbL; terrain from the USGS, via Mapzen). Shown on the still page and in the
+// skylines (OpenStreetMap, ODbL; terrain from the USGS, via Mapzen, and in Paris from IGN, Licence Ouverte).
+// Shown on the still page and in the
 // final screen's sheet.
 const atlas = SKY.cityGlow.atlas
 const ATLAS = Object.keys(atlas.values).length > 0
@@ -39,7 +40,8 @@ export default function Credits({ className = '' }) {
         <dt>skylines</dt>
         <dd>
           building data © {link('https://www.openstreetmap.org/copyright', 'OpenStreetMap contributors')}, {link('https://opendatacommons.org/licenses/odbl/', 'ODbL')};
-          terrain data courtesy of the U.S. Geological Survey (3DEP), via Mapzen’s terrain tiles
+          terrain data courtesy of the U.S. Geological Survey (3DEP), via Mapzen’s terrain tiles; Paris’s terrain from {link('https://geoservices.ign.fr/rgealti', 'IGN')} (RGE ALTI),{' '}
+          {link('https://www.etalab.gouv.fr/licence-ouverte-open-licence/', 'Licence Ouverte\u00a02.0')}
         </dd>
       </div>
     </dl>

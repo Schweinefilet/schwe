@@ -262,3 +262,79 @@ def water_tank(mb, p, z, attrs, own):
     for i in range(sides):
         a, c = ring[i], ring[(i + 1) % sides]
         mb.face([(a[0], a[1], top), (c[0], c[1], top), apex], None, 1, **wood)
+
+
+def dormers(mb, ring, zw, roof_h, attrs, own):
+    """Paris's dormers: on each side of a mansard longer than 5 m, one over every bay of the facade below
+    (attrs' bay), set in the steep lower slope: a box 1.2 m wide and 1.8 m tall standing out of the slope, its
+    front a window of the facade (the facade material's own grid), under a small zinc roof."""
+    ring = _ccw(ring)
+    bay = attrs['bay']
+    front = dict(attrs, bay=bay, floorh=2.2)
+    side = dict(attrs, style=3)
+    n = 0
+    zb = zw + 0.35
+    zt = zb + min(1.8, roof_h * 0.55)
+    for i in range(len(ring)):
+        a, c = ring[i], ring[(i + 1) % len(ring)]
+        L = math.hypot(c[0] - a[0], c[1] - a[1])
+        if L < 5.0:
+            continue
+        ux, uy = (c[0] - a[0]) / L, (c[1] - a[1]) / L
+        nx, ny = uy, -ux  # outward for a counter-clockwise ring
+        k = int((L - 1.5) // bay)
+        if k < 1:
+            continue
+        start = (L - (k - 1) * bay) / 2
+        for j in range(k):
+            t = start + j * bay
+            px, py = a[0] + ux * t, a[1] + uy * t
+            # The front 0.15 m inside the eaves line, the back 1.3 m in, under the slope.
+            hw = 0.6
+            f0 = (px - ux * hw - nx * 0.15, py - uy * hw - ny * 0.15)
+            f1 = (px + ux * hw - nx * 0.15, py + uy * hw - ny * 0.15)
+            b0 = (f0[0] - nx * 1.15, f0[1] - ny * 1.15)
+            b1 = (f1[0] - nx * 1.15, f1[1] - ny * 1.15)
+            # Its front with a window: the facade grid's u along it, v from its sill.
+            mb.face([(f0[0], f0[1], zb), (f1[0], f1[1], zb), (f1[0], f1[1], zt), (f0[0], f0[1], zt)],
+                    [(0.0, 0.1), (1.2, 0.1), (1.2, zt - zb + 0.1), (0.0, zt - zb + 0.1)], 0, **dict(front, bay=1.2, win_w=0.3, win_h=0.36, floorh=zt - zb + 0.25))
+            mb.face([(b0[0], b0[1], zb), (f0[0], f0[1], zb), (f0[0], f0[1], zt), (b0[0], b0[1], zt)], None, 0, **side)
+            mb.face([(f1[0], f1[1], zb), (b1[0], b1[1], zb), (b1[0], b1[1], zt), (f1[0], f1[1], zt)], None, 0, **side)
+            # A small pitched zinc roof.
+            rz = zt + 0.45
+            mid_f = ((f0[0] + f1[0]) / 2, (f0[1] + f1[1]) / 2)
+            mid_b = ((b0[0] + b1[0]) / 2, (b0[1] + b1[1]) / 2)
+            mb.face([(f0[0], f0[1], zt), (b0[0], b0[1], zt), (mid_b[0], mid_b[1], rz), (mid_f[0], mid_f[1], rz)], None, 1, **attrs)
+            mb.face([(b1[0], b1[1], zt), (f1[0], f1[1], zt), (mid_f[0], mid_f[1], rz), (mid_b[0], mid_b[1], rz)], None, 1, **attrs)
+            mb.face([(f0[0], f0[1], zt), (mid_f[0], mid_f[1], rz), (f1[0], f1[1], zt)], None, 0, **side)
+            n += 1
+    return n
+
+
+def party_stacks(mb, ring, zw, roof_h, attrs, own):
+    """Paris's chimney stacks: tall rendered stacks along the party walls (the outline's shorter sides and
+    its back), rising from the mansard's top, each with a row of terracotta pots."""
+    ring = _ccw(ring)
+    u, c, long_, short = axes(ring)
+    render = dict(attrs, style=3, wall=tuple(min(0.55, x * 1.05) for x in attrs['wall']))
+    v = (-u[1], u[0])
+    n = 0
+    ztop = zw + roof_h
+    for side in (-1, 1):
+        if own.random() < 0.15:
+            continue
+        # A stack across the end of the roof, 0.8 m in from the party wall.
+        p = (c[0] + u[0] * side * (long_ / 2 - 0.9), c[1] + u[1] * side * (long_ / 2 - 0.9))
+        if not G['inside'](ring, p):
+            continue
+        hx = min(short * 0.32, own.uniform(1.4, 3.2))
+        z1 = ztop + own.uniform(0.9, 2.2)
+        box(mb, p, v, hx, 0.35, zw + roof_h * 0.5, z1, render)
+        pots = max(2, int(hx * 2.2))
+        pot = dict(attrs, style=3, wall=(0.2, 0.1, 0.065))
+        for k in range(pots):
+            t = (k + 0.5) / pots * 2 - 1
+            q = (p[0] + v[0] * t * (hx - 0.2), p[1] + v[1] * t * (hx - 0.2))
+            mast(mb, q, z1, z1 + own.uniform(0.4, 0.8), 0.11, pot, sides=5)
+        n += 1
+    return n

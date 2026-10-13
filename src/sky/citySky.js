@@ -6,6 +6,7 @@ import { loadCloudNoise } from './cloudNoise.js'
 import { createHillaire, lutTarget } from './hillaire.js'
 import { skylineVariant } from './skylineVariant.js'
 import { loadStarTexture } from './stars.js'
+import { eiffelLights } from './inputs.js'
 import { waveEnergy, waveTrains } from './waves.js'
 
 // Sky as a drop's content source. createSkyGlobals() builds what every city shares, once per visit:
@@ -139,13 +140,19 @@ function setUrls({ base, meta, variant, scale }, set) {
   if (meta.glow && scale.glow) Object.assign(urls, { glow: `${dir}-glow.png`, halo: `${dir}-halo.png` })
   if (meta.glow && scale.glow && scale.star) urls.star = `${dir}-star.png`
   if (scale.trees) urls.trees = `${dir}-trees.png`
+  // Paris: the Eiffel Tower's sparkle and its own light (and in the basin's reflection), its glow.
+  if (scale.spark) urls.spark = `${dir}-spark.png`
+  if (scale.mirror?.spark) urls.mirrorSpark = `${dir}-mirror-spark.png`
+  if (scale.tower) urls.towerLight = `${dir}-tower.png`
+  if (scale.mirror?.tower) urls.mirrorTowerLight = `${dir}-mirror-tower.png`
+  if (scale.towerglow) urls.towerGlow = `${dir}-towerglow.png`
   return urls
 }
 
 // Dev: ?reach=0 marches every step (mirrorHit), for before/after comparisons.
 const MIRROR_REACH = !(import.meta.env.DEV && new URLSearchParams(location.search).get('reach') === '0')
 
-const MIRRORS = new Set(['mirrorLight', 'mirrorNight', 'mirrorWindows']) // the water's streaks read these anisotropically
+const MIRRORS = new Set(['mirrorLight', 'mirrorNight', 'mirrorWindows', 'mirrorTowerLight']) // the water's streaks read these anisotropically
 
 async function loadSkylineSet(m, set, anisotropy) {
   const entries = Object.entries(setUrls(m, set))
@@ -247,7 +254,7 @@ export class CitySky {
       uSkyWaves: { value: Array.from({ length: WAVES }, () => new THREE.Vector4()) },
       uSkyWaveTail: { value: new THREE.Vector4() },
       uSkyGlitter: { value: new THREE.Vector3(1, 1, 1) },
-      uSkyWaterBody: { value: new THREE.Vector3(...SKY.water.body) },
+      uSkyWaterBody: { value: new THREE.Vector3(...(SKY.water.bodyOf?.[cityId] ?? SKY.water.body)) },
       uSkylineGlow: { value: NO_SKYLINE },
       uSkylineHalo: { value: NO_SKYLINE },
       uSkylineGlowRect: { value: new THREE.Vector4() },
@@ -257,11 +264,25 @@ export class CitySky {
       uSkylineTrees: { value: NO_SKYLINE },
       uSkylineTreeSway: { value: new THREE.Vector4() }, // sway at the crown's top (rad), lean across the view (-1..1), swing (rad/s), flutter share
       uSkylineStarGain: { value: 0 },
+      // The Eiffel Tower (Paris): its sparkle and its own light, in the view and in the basin's reflection;
+      // its glow; the lights on (0..1), the sparkle on, and the two sparkle scales; the glow's and the two
+      // lights' scales; the beacon's lantern (city frame, m) and on.
+      uSkylineSpark: { value: NO_SKYLINE },
+      uSkylineMirrorSpark: { value: NO_SKYLINE },
+      uSkylineTowerLight: { value: NO_SKYLINE },
+      uSkylineMirrorTowerLight: { value: NO_SKYLINE },
+      uSkylineTowerGlow: { value: NO_SKYLINE },
+      uSkylineTower: { value: new THREE.Vector4(1, 0, 0, 0) },
+      uSkylineTowerGlowScale: { value: 0 },
+      uSkylineTowerScale: { value: new THREE.Vector2() },
+      uSkyBeacon: { value: new THREE.Vector4() },
+      uSkyBeaconLook: { value: new THREE.Vector4(SKY.beacon.gain, SKY.beacon.period, SKY.beacon.width, SKY.beacon.spread) },
       uSkyLift: { value: new THREE.Vector3() },
       uSkyGain: { value: new THREE.Vector3(1, 1, 1) },
       uSkyLook: { value: new THREE.Vector2(1, 1) },
     }
     this.fetch = SKY.water.fetch[cityId] ?? SKY.water.defaultFetch
+    this.slopeScale = SKY.water.slopeScaleOf?.[cityId] ?? SKY.water.slopeScale
     this.waves = null // the trains, fixed once the wind is first known (src/sky/waves.js)
     this.wind = 0
     this.rain = 0
@@ -276,7 +297,7 @@ export class CitySky {
     this.skyline = null // the set shown: { meta, scale, detail, textures }
     this.settled = null
     // What HeroDrop needs to draw this sky: the shader code and the uniforms, shared by reference.
-    this.content = { glsl: `${globals.atmosphere.glsl}\n${skyChunk}`, uniforms: this.uniforms }
+    this.content = { glsl: `${globals.atmosphere.glsl}\n${skyChunk}`, uniforms: this.uniforms, cityId }
     this.setDetail(detail)
   }
 
@@ -333,6 +354,11 @@ export class CitySky {
     u.uSkylineHalo.value = t.halo ?? NO_SKYLINE
     u.uSkylineStar.value = t.star ?? NO_SKYLINE
     u.uSkylineTrees.value = t.trees ?? NO_SKYLINE
+    u.uSkylineSpark.value = t.spark ?? NO_SKYLINE
+    u.uSkylineMirrorSpark.value = t.mirrorSpark ?? NO_SKYLINE
+    u.uSkylineTowerLight.value = t.towerLight ?? NO_SKYLINE
+    u.uSkylineMirrorTowerLight.value = t.mirrorTowerLight ?? NO_SKYLINE
+    u.uSkylineTowerGlow.value = t.towerGlow ?? NO_SKYLINE
     u.uSkylineOn.value = s ? 1 : 0
     if (s && !old) {
       this.setTrees(this.wind) // its lean follows the panorama's bearing
@@ -353,6 +379,14 @@ export class CitySky {
         u.uSkylineGlowRect.value.set(meta.azimuth[0] * RAD, meta.azimuth[1] * RAD, g.elevation[0] * RAD, (g.elevation[1] - g.elevation[0]) * RAD)
         u.uSkylineStarGain.value = t.star ? scale.star * SKY.glow.star : 0
       }
+      u.uSkylineTower.value.z = scale.spark ?? 0
+      u.uSkylineTower.value.w = scale.mirror?.spark ?? 0
+      u.uSkylineTowerGlowScale.value = t.towerGlow ? scale.towerglow : 0
+      u.uSkylineTowerScale.value.set(t.towerLight ? scale.tower : 0, t.mirrorTowerLight ? scale.mirror.tower : 0)
+      // The beacon's lantern: east, north and up from the eye → the city frame (x east, y up, z south).
+      const b = meta.beacon
+      u.uSkyBeacon.value.set(b ? b[0] : 0, b ? b[2] : 0, b ? -b[1] : 0, b ? 1 : 0)
+      this.towerLights()
     }
     disposeAll(old?.textures)
   }
@@ -380,6 +414,7 @@ export class CitySky {
     u.uSkyCityGlow.value.fromArray(inputs.cityGlow)
     u.uSkyPreExposure.value = inputs.exposure
     u.uSkylineLit.value.set(1 - inputs.windows.late, inputs.windows.late, inputs.windows.dark)
+    this.towerLights()
     // The camera's look, day and night mixed by how dark it is.
     const { day, night } = SKY.grade
     const k = inputs.windows.dark
@@ -392,6 +427,17 @@ export class CitySky {
     const toward = inputs.wind.towardDeg
     if (!this.waves || (toward != null && angleBetween(toward, this.waves.towardDeg) > 45)) this.layWaves(inputs.wind.ms, toward ?? 0)
     this.setWeather(inputs.clouds, inputs.haze, inputs.rain, inputs.wind.ms)
+  }
+
+  // The Eiffel Tower's lights by the city's local time (inputs.js eiffelLights); its beacon with them.
+  towerLights() {
+    const w = this.inputs?.windows
+    if (!w) return
+    const { on, spark } = eiffelLights(w.hour ?? 12, w.month ?? 1, w.dark)
+    const u = this.uniforms
+    u.uSkylineTower.value.x = on
+    u.uSkylineTower.value.y = spark
+    u.uSkyBeacon.value.w = this.skyline?.meta.beacon ? on : 0
   }
 
   layWaves(windMs, towardDeg) {
@@ -407,7 +453,7 @@ export class CitySky {
     this.rain = rain
     if (!this.waves) return
     const w = SKY.water
-    const e = waveEnergy(this.waves, { windMs, fetchM: this.fetch, slopeScale: w.slopeScale, rainMmH: rain, rainSlope: w.rainSlope })
+    const e = waveEnergy(this.waves, { windMs, fetchM: this.fetch, slopeScale: this.slopeScale, rainMmH: rain, rainSlope: w.rainSlope })
     const u = this.uniforms
     this.waves.trains.forEach((t, i) => u.uSkyWaves.value[i].set(t.vector[0], t.vector[1], e.amplitudes[i], t.omega))
     u.uSkyWaveTail.value.set(this.waves.dir[0], this.waves.dir[1], e.tail[0], e.tail[1])

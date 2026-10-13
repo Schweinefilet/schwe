@@ -1,0 +1,118 @@
+{
+  "version": 2,
+  "city": "paris",
+  "from": "Parvis des Droits de l'Homme, Trocad\u00e9ro",
+  "bearing": 134.241,
+  "azimuth": [
+    74.241,
+    120.0
+  ],
+  "elevation": [
+    -20.0,
+    30.0
+  ],
+  "distance": [
+    20.0,
+    12000.0
+  ],
+  "size": [
+    3840,
+    1600
+  ],
+  "mirror": {
+    "elevation": [
+      0.0,
+      20.0
+    ],
+    "size": [
+      3840,
+      320
+    ],
+    "eyeAboveWater": 22.850280380249025
+  },
+  "glow": {
+    "elevation": [
+      -20.0,
+      40.0
+    ],
+    "lateShare": 0.3305,
+    "glowSize": [
+      1920,
+      960
+    ],
+    "haloSize": [
+      960,
+      480
+    ],
+    "starSize": [
+      3840,
+      1920
+    ]
+  },
+  "beacon": [
+    420.32,
+    -404.62,
+    265.53
+  ],
+  "source": "\u00a9 OpenStreetMap contributors, ODbL; terrain: IGN RGE ALTI (Licence Ouverte Etalab 2.0); rendered in Blender (Cycles) with hand-modelled landmarks",
+  "variants": {
+    "leaf": {
+      "months": [
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11
+      ],
+      "scale": {
+        "light": 1.0,
+        "night": 16.0,
+        "windows": 8.0,
+        "spark": 64.0,
+        "tower": 8.0,
+        "mirror": {
+          "light": 1.0,
+          "night": 16.0,
+          "windows": 16.0,
+          "spark": 64.0,
+          "tower": 8.0
+        },
+        "glow": 16.0,
+        "halo": 2.0,
+        "towerglow": 4.0,
+        "star": 1.0,
+        "trees": 1.0
+      }
+    },
+    "bare": {
+      "months": [
+        12,
+        1,
+        2,
+        3
+      ],
+      "scale": {
+        "light": 1.0,
+        "night": 16.0,
+        "windows": 8.0,
+        "spark": 64.0,
+        "tower": 8.0,
+        "mirror": {
+          "light": 1.0,
+          "night": 16.0,
+          "windows": 16.0,
+          "spark": 64.0,
+          "tower": 8.0
+        },
+        "glow": 16.0,
+        "halo": 0.5,
+        "towerglow": 4.0,
+        "star": 1.0,
+        "trees": 1.0
+      }
+    }
+  }
+}

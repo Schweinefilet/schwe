@@ -64,8 +64,11 @@ GLOW_TOP = 10.0  # degrees of sky above the panorama the glow is kept for
 # 2n spikes for an odd n. Set against set2/w0 at Pier 1 (the bridge's necklace and the waterfront's lamps):
 # 18 spikes, a nine-blade aperture, fading over about 0.3 degrees and gone by 1.2; the kernel sums to 1 and
 # the site gives it its strength (SKY.glow.star). Of the city's fixed lights only (lamps, the necklace,
-# beacons, floodlights): a lit window is far too dim to show a spike. Per city; London has none yet.
-STAR = {'new-york': {'spikes': 18, 'turn': 7.0, 'fade': 0.3, 'reach': 1.2, 'core': 0.05}}.get(CITY)
+# beacons, floodlights): a lit window is far too dim to show a spike. Per city (London's and Paris's since
+# 2026-10-13).
+STAR = {'new-york': {'spikes': 18, 'turn': 7.0, 'fade': 0.3, 'reach': 1.2, 'core': 0.05},
+        'london': {'spikes': 18, 'turn': 7.0, 'fade': 0.3, 'reach': 1.2, 'core': 0.05},
+        'paris': {'spikes': 18, 'turn': 7.0, 'fade': 0.3, 'reach': 1.2, 'core': 0.05}}.get(CITY)
 # The river's streaks, for their glow: the mirror blurred up and down as waves of this slope spread it
 # (sigma of the along-view slope at 4 m/s with SKY.water.slopeScale 0.15: about 0.042; the reflected ray
 # tilts twice the slope).
@@ -160,7 +163,21 @@ def encode_set(prefix, tag):
         scales[name] = scale_for(rgb, cover)
         write(os.path.join(out_dir, f'{VARIANT}{tag}-{name}.png'), rgb / scales[name], a)
     clear = np.exp(-np.where(cover > 1e-3, d, 0.0) / 1000.0 * HAZE_PER_KM)[..., None]
-    return scales, cover, city[..., :3] * clear, win[..., :3] * clear, late[..., :3] * clear, np.where(cover > 0.5, d, np.inf)
+    # The Eiffel Tower's own lighting (Paris; skyline.py's tower pass), which the site turns off at midnight
+    # by taking it out of the fixed lights: <tag>-tower.png, its light in RGB (/ scale 'tower'), exact per
+    # channel and averaging exactly over the mip levels (a share of the lights in an alpha, tried first,
+    # averaged wrongly and left 4 to 8% of the gold after midnight; the true remainder, the lamps and windows
+    # seen through the lattice, is 0.5%). And <tag>-spark.png: the sparkle's bulbs.
+    tower = None
+    if os.path.exists(f'{prefix}-tower.exr'):
+        tower_raw = read('tower', prefix)[..., :3]
+        spark = read('spark', prefix)[..., :3] if os.path.exists(f'{prefix}-spark.exr') else np.zeros_like(tower_raw)
+        scales['spark'] = scale_for(spark, np.ones(spark.shape[:2]))
+        write(os.path.join(out_dir, f'{VARIANT}{tag}-spark.png'), spark / scales['spark'], np.zeros(spark.shape[:2]))
+        scales['tower'] = scale_for(tower_raw, cover)
+        write(os.path.join(out_dir, f'{VARIANT}{tag}-tower.png'), tower_raw / scales['tower'], np.zeros(tower_raw.shape[:2]))
+        tower = tower_raw * clear
+    return scales, cover, city[..., :3] * clear, win[..., :3] * clear, late[..., :3] * clear, np.where(cover > 0.5, d, np.inf), tower
 
 
 def blur(img, sigma, axis):
@@ -186,15 +203,17 @@ def shrink(img, k):
     return img[:h, :w].reshape(h // k, k, w // k, k, -1).mean(axis=(1, 3))
 
 
-scales, cover, lights, windows, late_windows, _ = encode_set(SRC, '')
-city_lights = lights  # before the river's streaks are added (a smeared streak makes no star)
+scales, cover, lights, windows, late_windows, _, tower = encode_set(SRC, '')
+# Before the river's streaks are added (a smeared streak makes no star), and without the Eiffel Tower's
+# lattice (its own glow, below).
+city_lights = lights - tower if tower is not None else lights
 geometry = json.load(open(SRC + '.json'))  # written by skyline.py beside its renders
 mirror = geometry.get('mirror')
 el0, el1 = geometry['elevation']
 H, W = cover.shape
 ppd = H / (el1 - el0)
 if mirror:
-    scales['mirror'], _, m_lights, m_windows, _, m_dist = encode_set(SRC + '-mirror', '-mirror')
+    scales['mirror'], _, m_lights, m_windows, _, m_dist, m_tower = encode_set(SRC + '-mirror', '-mirror')
     # The river's lights as they average over the waves, read at the water's pixels, times the water's
     # reflectance there: each facet's reflected ray (Gaussian taps over the slopes, STREAK_SIGMA) traced
     # from where it leaves the water through the mirror's distances to the first surface it meets, as the
@@ -203,13 +222,13 @@ if mirror:
     m_top = mirror['elevation'][1]
     hE = mirror['eyeAboveWater']
     mppd = m_lights.shape[0] / (m_top - mirror['elevation'][0])
-    m = np.concatenate([m_lights, m_windows], axis=-1)
+    m = np.concatenate([m_lights, m_windows] + ([m_tower] if m_tower is not None else []), axis=-1)
     rows_el = el1 - (np.arange(H) + 0.5) / ppd  # each main row's elevation
     water = np.nonzero(rows_el < -0.05)[0]
     e = -rows_el[water]
     dw = hE / np.tan(np.radians(e))  # metres out to the water, per row
     cols = np.arange(W)[None, :]
-    streaks = np.zeros((H, W, 6))
+    streaks = np.zeros((H, W, m.shape[-1]))
     taps = np.linspace(-2.5, 2.5, 11)
     weights = np.exp(-0.5 * taps ** 2)
     weights /= weights.sum()
@@ -234,13 +253,16 @@ if mirror:
     fresnel = 0.02 + 0.98 * (1 - np.sin(np.radians(e))) ** 5
     wet = ((1 - cover) * (rows_el < 0)[:, None] * fresnel[:, None])[..., None]
     lights = lights + streaks[..., :3] * wet
-    windows = windows + streaks[..., 3:] * wet
+    windows = windows + streaks[..., 3:6] * wet
+    if m_tower is not None and tower is not None:
+        tower = tower + streaks[..., 6:9] * wet
 
 # The glow: the evening's lights and windows, spread by the point spread function, the sky above
 # padded so a halo is not cut off at the panorama's top.
 late_share = float(lum(late_windows).sum() / max(lum(windows).sum(), 1e-9))
 pad = int(round(GLOW_TOP * ppd))
-source = np.concatenate([lights + windows, lum(windows)[..., None]], axis=-1)
+# The Eiffel Tower's glow apart (it goes off at midnight with the tower: <variant>-towerglow.png).
+source = np.concatenate([lights - (tower if tower is not None else 0) + windows, lum(windows)[..., None]], axis=-1)
 source = np.concatenate([np.zeros((pad, W, 4)), source], axis=0)
 glow_meta = {'elevation': [el0, el1 + pad / ppd], 'lateShare': round(late_share, 4)}
 for name, parts, k in (('glow', GLOW_TIGHT, 2), ('halo', GLOW_WIDE, 4)):
@@ -253,6 +275,16 @@ for name, parts, k in (('glow', GLOW_TIGHT, 2), ('halo', GLOW_WIDE, 4)):
     write(os.path.join(out_dir, f'{VARIANT}-{name}.png'), g[..., :3] / scale, share)
     scales[name] = scale
     glow_meta[f'{name}Size'] = [g.shape[1], g.shape[0]]
+if tower is not None:
+    # Its bloom and halo in one, at the glow's size, weighted as the site weighs the city's (SKY.glow tight
+    # and wide; the halo's share that grows in haze left out).
+    src = np.concatenate([np.zeros((pad, W, 3)), tower], axis=0)
+    small = shrink(src, 2)
+    tg = 0.35 * sum(w * gauss(small, sigma * ppd / 2) for sigma, w in GLOW_TIGHT) + 0.25 * sum(w * gauss(small, sigma * ppd / 2) for sigma, w in GLOW_WIDE)
+    tg = np.maximum(tg, 0.0)
+    scale = float(2 ** math.ceil(math.log2(max(float(np.percentile(tg.max(axis=-1), 99.99)), 1e-6))))
+    write(os.path.join(out_dir, f'{VARIANT}-towerglow.png'), tg / scale, np.zeros(tg.shape[:2]))
+    scales['towerglow'] = scale
 
 
 def star_kernel(spikes, turn, fade, reach, core):
@@ -332,6 +364,8 @@ meta.update({
     # The glow textures: their elevations (the panorama's bottom to above its top) and the share of the
     # evening's windows' light still on late.
     'glow': glow_meta,
+    # The Eiffel Tower's beacon (Paris): its lantern from the eye, metres east, north and up.
+    'beacon': geometry.get('beacon'),
     'source': f"{scene.get('source', '© OpenStreetMap contributors, ODbL')}; rendered in Blender (Cycles) with hand-modelled landmarks",
 })
 meta.setdefault('variants', {})[VARIANT] = {'months': MONTHS, 'scale': scales}

@@ -82,9 +82,10 @@
   },
   "paris": {
     "from": {
-      "name": "Place du Trocadéro",
-      "at": [48.8623703, 2.2880959],
-      "osm": "way/595908371"
+      "name": "Parvis des Droits de l'Homme, Trocadéro",
+      "note": "The front edge of the parvis between the Palais de Chaillot's wings, on the palace's axis toward the Eiffel Tower (from the midpoint of its two IGN-surveyed flagpoles to the tower's centre, 134.0°), so the drop looks down over the Trocadéro gardens and the Warsaw fountains' basin to the tower, as the classic view does. Nominatim's point (Place du Trocadéro, 48.8623703, 2.2880959, way/595908371) is behind the palace. IGN RGE ALTI: the parvis about 59.8 m NGF-IGN69.",
+      "at": [48.8619289, 2.2887744],
+      "osm": "way/79749382"
     },
     "toward": [
       {

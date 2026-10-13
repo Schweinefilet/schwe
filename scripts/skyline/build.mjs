@@ -6,6 +6,7 @@
 // show less (scripts/skyline/sets.py → <city>/half/, <city>/small/). Needs Blender 5 on PATH (or BLENDER=…).
 //
 //   npm run skyline -- --city london [--fetch] [--samples 128] [--scale 1] [--only leaf]
+//   npm run skyline -- --city paris --pbf data/osm/pbf/ile-de-france-latest.osm.pbf
 //
 // Each variant renders five passes of 3840 × 1152 px at 128 samples: about ten minutes on an M-series GPU.
 
@@ -33,8 +34,14 @@ function run(cmd, args) {
   }
 }
 
-if (process.argv.includes('--fetch')) run('node', ['scripts/skyline/fetch.mjs', '--city', CITY])
+// --fetch asks Overpass for everything; --pbf <region.osm.pbf> cuts the buildings and the ground from a
+// Geofabrik extract instead (pbf.mjs; the water and extras still from Overpass, with --fetch --only ...).
+if (process.argv.includes('--fetch')) run('node', ['scripts/skyline/fetch.mjs', '--city', CITY, ...(arg('pbf') ? ['--only', 'water'] : [])])
+if (process.argv.includes('--fetch') && arg('pbf')) run('node', ['scripts/skyline/fetch.mjs', '--city', CITY, '--only', 'extra'])
+if (arg('pbf')) run('node', ['scripts/skyline/pbf.mjs', '--city', CITY, '--pbf', arg('pbf')])
 run('node', ['scripts/skyline/extract.mjs', '--city', CITY])
+// A city on its own ground (Paris): what its ground is made of, as maps (ground.py; skipped where none).
+run('python3', ['scripts/skyline/ground.py', '--city', CITY])
 for (const [variant, months] of Object.entries(VARIANTS)) {
   if (arg('only') && arg('only') !== variant) continue
   const out = `data/skyline/${CITY}/pano-${variant}`

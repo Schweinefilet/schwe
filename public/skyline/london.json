@@ -35,14 +35,15 @@
       "scale": {
         "light": 2.0,
         "night": 32.0,
-        "windows": 16.0,
+        "windows": 32.0,
         "mirror": {
           "light": 1.0,
           "night": 32.0,
-          "windows": 8.0
+          "windows": 16.0
         },
         "glow": 8.0,
         "halo": 1.0,
+        "star": 1.0,
         "trees": 1.0
       }
     },
@@ -56,14 +57,15 @@
       "scale": {
         "light": 2.0,
         "night": 32.0,
-        "windows": 16.0,
+        "windows": 32.0,
         "mirror": {
           "light": 2.0,
           "night": 32.0,
-          "windows": 16.0
+          "windows": 32.0
         },
-        "glow": 8.0,
-        "halo": 2.0,
+        "glow": 16.0,
+        "halo": 1.0,
+        "star": 1.0,
         "trees": 1.0
       }
     }
@@ -84,7 +86,7 @@
       -20.0,
       26.0
     ],
-    "lateShare": 0.28,
+    "lateShare": 0.2564,
     "glowSize": [
       1920,
       736
@@ -92,6 +94,11 @@
     "haloSize": [
       960,
       368
+    ],
+    "starSize": [
+      3840,
+      1472
     ]
-  }
+  },
+  "beacon": null
 }

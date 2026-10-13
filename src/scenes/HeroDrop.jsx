@@ -90,11 +90,12 @@ function coverTan(camera, out) {
 }
 
 // Sky content inside the drop: how much to narrow the camera's view so its wider side spans a normal
-// lens's DIVE.viewFov (never widened).
-function diveZoom(camera) {
+// lens's DIVE.viewFov, or the city's own (DIVE.viewFovOf; never widened).
+function diveZoom(camera, cityId) {
   const ty = Math.tan(THREE.MathUtils.degToRad(camera.fov / 2))
   const wide = ty * Math.max(camera.aspect, 1)
-  return Math.min(1, Math.tan(THREE.MathUtils.degToRad(DIVE.viewFov / 2)) / wide)
+  const fov = DIVE.viewFovOf?.[cityId] ?? DIVE.viewFov
+  return Math.min(1, Math.tan(THREE.MathUtils.degToRad(fov / 2)) / wide)
 }
 
 // One hero drop. `poster` + `rect`: its cell in the poster atlas. The video budget manager's record
@@ -142,7 +143,7 @@ export default function HeroDrop({
       u.uDive.value = rig.dive
       if (rig.dive > 0) {
         coverTan(camera, u.uCoverTan.value)
-        u.uDiveZoom.value = diveZoom(camera)
+        u.uDiveZoom.value = diveZoom(camera, sky?.cityId)
       }
     }
     if (sky) skyClock.value = Number.isNaN(HELD_CLOCK.value) ? (performance.now() / 1000) % 600 : HELD_CLOCK.value // the city's live rain (sky.glsl cityRain)

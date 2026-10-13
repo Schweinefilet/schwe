@@ -408,6 +408,10 @@ export const DIVE = {
   // Inside the drop the city shows through a normal lens: this many degrees across the screen's wider
   // side (a 35 mm lens on full frame), not the scene camera's wide angle, which stretches the edges.
   viewFov: 55,
+  // A city whose subject will not fit it: Paris's Eiffel Tower stands 27.5 degrees up from the Trocadéro,
+  // so its dive takes a slightly wider lens (64 degrees, about a 30 mm), pitched up a little more
+  // (SKY.facing.viewPitchOf), to hold the tower's tip and the basin's reflection of it.
+  viewFovOf: { paris: 64 },
 }
 
 // Sky in a drop (provisional, lab only: /?lab=drop). Each city's real sky, computed from the sun,
@@ -430,7 +434,7 @@ export const SKY = {
   // sun or moon). At night, a moon that is up and within
   // `halfWidth` degrees of that direction is tilted into frame: the view looks up to `below` degrees
   // under it (at most `max`), never lower than `pitch`. The sun and moon show only when on that side.
-  facing: { pitch: 15, viewPitch: 6, moonBelow: -12, moonTilt: { halfWidth: 40, below: 10, max: 60 }, views: vantages },
+  facing: { pitch: 15, viewPitch: 6, viewPitchOf: { paris: 9 }, moonBelow: -12, moonTilt: { halfWidth: 40, below: 10, max: 60 }, views: vantages },
   // Camera exposure: a metered sky luminance L (cd/m²) comes out at key × (L / ref)^range, so the
   // 18 stops between a clear noon and a city night compress to about 3.6.
   exposure: { key: 0.2, ref: 3000, range: 0.2 },
@@ -512,7 +516,18 @@ export const SKY = {
     day: { lift: [0, 0.003, 0.008], gain: [1.02, 1.0, 0.97], contrast: 1.1, saturation: 1.1 },
     night: { lift: [0, 0.015, 0.045], gain: [1.04, 1.0, 0.94], contrast: 1.2, saturation: 1.25 },
   },
-  water: { waves: 10, slopeScale: 0.15, fetch: { london: 290, 'new-york': 530 }, defaultFetch: 300, rainSlope: 0.002, body: [0.05, 0.05, 0.035], taps: { high: 8, medium: 6, low: 4 } },
+  // Paris's live water is the Trocadéro's basin (the Warsaw fountains', 54 m across the view and 250 m down
+  // it, OpenStreetMap): a short fetch and a calmer surface than a river's (`slopeScaleOf`, chosen by eye
+  // against refs c001 and c021, the tower's reflection whole but rippled); and its shallow, pale floor
+  // shows through green (`bodyOf`, against c031 and c034).
+  water: { waves: 10, slopeScale: 0.15, slopeScaleOf: { paris: 0.07 }, fetch: { london: 290, 'new-york': 530, paris: 120 }, defaultFetch: 300, rainSlope: 0.002, body: [0.05, 0.05, 0.035], bodyOf: { paris: [0.08, 0.13, 0.1] }, taps: { high: 8, medium: 6, low: 4 } },
+  // The Eiffel Tower's beacon (Paris; sky.glsl beacon): four projectors, each sweeping its quarter of the
+  // horizon, synchronised into a cross of beams pivoting through 360 degrees (the operator's description).
+  // No period is published for today's; the 1889 lantern's drum turned in about 90 s. `period` is the
+  // nearest to that whose quarter turn divides the sky clock's 600 s loop (600 × 4 / 27 = 88.9 s), so the
+  // cross never jumps when the clock wraps. Drawn as light scattered out of each beam, `width` m at the
+  // lantern, spreading `spread` rad, `gain` its brightness on screen (display-referred, like the lights).
+  beacon: { gain: 7.0, period: 2400 / 27, width: 1.2, spread: 0.003 },
 }
 
 // Sound. Every sound is synthesized until a licensed file fills its slot (paths under public/).

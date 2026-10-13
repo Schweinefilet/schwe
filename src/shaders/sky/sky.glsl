@@ -79,6 +79,21 @@ uniform sampler2D uSkylineTrees;  // r: how much each texel sways in the wind (t
 uniform vec4 uSkylineTreeSway;    // sway at a crown's top (rad), lean across the view (-1..1), swing (rad/s), flutter share
 uniform sampler2D uSkylineStar;   // the lens's starbursts round the brightest lights (over the glow's rect, full resolution)
 uniform float uSkylineStarGain;   // what it was divided by, times its on-screen gain (0: none)
+// The Eiffel Tower (Paris): its sparkle's bulbs and its own light, in the view and in the basin's
+// reflection; its glow (over the glow's rect); x: its lights on (0..1, off from midnight), y: the sparkle
+// on, z and w: what the two sparkle textures were divided by; the glow's; what the two light textures were.
+uniform sampler2D uSkylineSpark;
+uniform sampler2D uSkylineMirrorSpark;
+uniform sampler2D uSkylineTowerLight;
+uniform sampler2D uSkylineMirrorTowerLight;
+uniform sampler2D uSkylineTowerGlow;
+uniform vec4 uSkylineTower;
+uniform float uSkylineTowerGlowScale;
+uniform vec2 uSkylineTowerScale;
+// Its beacon: the lantern from the eye (city frame, m) and on; brightness, a turn's period (s), the beam's
+// width at the lantern (m) and its spread (rad).
+uniform vec4 uSkyBeacon;
+uniform vec4 uSkyBeaconLook;
 // The camera's look (SKY.grade, day and night mixed by how dark it is), applied in AgX's own space as
 // Blender applies its looks: lift and gain per channel, contrast (a power), saturation.
 uniform vec3 uSkyLift;
@@ -273,7 +288,9 @@ bool skylineUv(vec3 d, out vec2 uv, out float sides) {
 // (the light behind them), as rgb premultiplied, a: coverage; and `lights`, the city's own lights and
 // windows after dark, display-referred (added after the exposure: a real window, a hundred times brighter
 // than a city's night sky, would blow the skyline out). `sinEl`: the sine of the view's elevation there.
-vec4 skylineDecode(vec4 L, vec4 N, vec4 W, vec3 scale, vec3 fill, vec3 horizon, float sides, float sinEl, out vec3 lights) {
+// `S`: the Eiffel Tower's sparkle, flickered; `T`: its own light (in N's units), which goes out with its
+// lights at midnight, taken out of N.
+vec4 skylineDecode(vec4 L, vec4 N, vec4 W, vec3 S, vec3 T, vec3 scale, vec3 fill, vec3 horizon, float sides, float sinEl, out vec3 lights) {
   float cover = L.a * sides;
   float km = exp(uSkylineDist.x + (N.a / max(L.a, 1e-3)) * uSkylineDist.y) / 1000.0;
   // Aerial perspective: farther buildings fade into the light around them, faster in rain or fog. The
@@ -287,8 +304,25 @@ vec4 skylineDecode(vec4 L, vec4 N, vec4 W, vec3 scale, vec3 fill, vec3 horizon, 
   vec3 c = horizon * cover * (1.0 - clear) + lit * clear;
   // After dark: the fixed lights, and the windows, the evening's giving way to the few still lit late.
   vec3 windows = W.rgb * scale.z * (1.0 - uSkylineLit.y * (1.0 - W.a / max(L.a, 1e-3)));
-  lights = (N.rgb * scale.y * uSkylineGain.x + windows * uSkylineGain.y) * uSkylineLit.z * clear * sides;
+  vec3 fixedLights = max(N.rgb * scale.y - T * (1.0 - uSkylineTower.x), 0.0);
+  lights = ((fixedLights + S) * uSkylineGain.x + windows * uSkylineGain.y) * uSkylineLit.z * clear * sides;
   return vec4(c, cover);
+}
+
+// The sparkle: each bulb a white flash, about one in five lit at any instant, changing ten times a second,
+// as a cell of the texture at the level read; a coarse level (the drift's tiny drops) its steady average.
+float sparkHash(vec2 c, float t) {
+  vec3 p = fract(vec3(c.xyx * 0.1031 + t * 0.0973));
+  p += dot(p, p.yzx + 33.33);
+  return fract((p.x + p.y) * p.z);
+}
+vec3 sparkle(sampler2D tex, vec2 uv, float lod, float scale) {
+  if (uSkylineTower.y <= 0.0) return vec3(0.0);
+  vec3 S = textureLod(tex, uv, lod).rgb;
+  vec2 cells = vec2(textureSize(tex, 0)) / exp2(floor(max(lod, 0.0)));
+  float flash = step(0.8, sparkHash(floor(uv * cells), floor(uSkyTime * 10.0))) * 5.0;
+  flash = mix(flash, 1.0, clamp(lod - 1.0, 0.0, 1.0));
+  return S * scale * flash * uSkylineTower.y;
 }
 
 // The city's skyline in front of its sky (SKY.skyline, scripts/blender/), at uv (skylineUv): its colour
@@ -333,7 +367,9 @@ vec4 skyline(vec2 uv, float sides, float foot, vec3 fill, vec3 horizon, out vec3
   if (L.a * sides <= 1e-3) return vec4(0.0);
   vec4 N = textureLod(uSkylineNight, uv, lod);
   vec4 W = textureLod(uSkylineWindows, uv, lod);
-  return skylineDecode(L, N, W, uSkylineScale, fill, horizon, sides, sin(uSkylineRect.z + uv.y * uSkylineRect.w), lights);
+  vec3 S = sparkle(uSkylineSpark, uv, lod, uSkylineTower.z);
+  vec3 T = uSkylineTowerScale.x > 0.0 ? textureLod(uSkylineTowerLight, uv, lod).rgb * uSkylineTowerScale.x : vec3(0.0);
+  return skylineDecode(L, N, W, S, T, uSkylineScale, fill, horizon, sides, sin(uSkylineRect.z + uv.y * uSkylineRect.w), lights);
 }
 
 // Smooth sampling of a soft texture seen magnified: a cubic B-spline from four bilinear reads, so no
@@ -374,12 +410,56 @@ vec3 skylineGlow(vec3 d, float foot) {
   float air = 1.0 - exp(-(uSkylineGain.z + uSkyHaze));
   vec3 c = g.rgb * uSkylineGlowScale.x * uSkylineGlowGain.x * (1.0 - lateOff * g.a)
          + h.rgb * uSkylineGlowScale.y * (uSkylineGlowGain.y + uSkylineGlowGain.z * air) * (1.0 - lateOff * h.a);
+  // The Eiffel Tower's glow, out with its lights at midnight.
+  if (uSkylineTowerGlowScale > 0.0) c += textureSoft(uSkylineTowerGlow, uv, log2(max(foot * tpr, 1.0))).rgb * uSkylineTowerGlowScale * uSkylineTower.x;
   // The starbursts: thin spikes, read plainly (a B-spline would smear them), mip-mapped when minified.
   if (uSkylineStarGain > 0.0) {
     float tps = float(textureSize(uSkylineStar, 0).x) / uSkylineGlowRect.y;
     c += textureLod(uSkylineStar, uv, log2(max(foot * tps, 1.0))).rgb * uSkylineStarGain;
   }
   return c * uSkylineGain.x * uSkylineLit.z * exp(-uSkyHaze) * sides;
+}
+
+// The Eiffel Tower's beacon after dark: four beams from its lantern turning together, seen by the light
+// they scatter toward us out of the air. Per beam: where the view ray passes closest to it (s metres out
+// along the ray, u along the beam, `miss` apart); a beam `w` wide scatters light along every metre of it,
+// so a pixel sees its power over its width, times the path through it (1 / sin of the angle between ray
+// and beam), the air's phase function for that angle (Henyey-Greenstein, g 0.7: a beam swinging toward us
+// flares), the beam's own fading and the air between, more of it in haze and rain. A beam behind the
+// skyline (beyond 1.2 km where the skyline covers) is hidden. And the lantern flashes as a beam faces us.
+vec3 beacon(vec3 d, float foot, float cover) {
+  vec3 T = uSkyBeacon.xyz;
+  float turn = uSkyTime * 6.2831853 / uSkyBeaconLook.y;
+  float air = uSkylineGain.z + uSkyHaze;
+  float glow = 0.0;
+  float flare = 0.0;
+  vec3 toT = normalize(T);
+  for (int k = 0; k < 4; k++) {
+    float a = turn + float(k) * 1.5707963;
+    vec3 b = normalize(vec3(sin(a), 0.012, -cos(a)));
+    float bd = dot(d, b);
+    float D = max(1.0 - bd * bd, 1e-6);
+    float dw = -dot(d, T);
+    float ew = -dot(b, T);
+    float s = (bd * ew - dw) / D;
+    float u = (ew - bd * dw) / D;
+    if (u < 0.0) { u = 0.0; s = dot(d, T); }
+    if (s > 0.0) {
+      float miss = length(d * s - (T + b * u));
+      float w = uSkyBeaconLook.z + u * uSkyBeaconLook.w;
+      float we = sqrt(w * w + (s * foot) * (s * foot));
+      float cosT = -bd;
+      float hg = 0.51 / pow(1.49 - 1.4 * cosT, 1.5) / 12.566;
+      float hidden = cover * step(1200.0, s);
+      glow += hg * exp(-miss * miss / (we * we)) / (we * max(sqrt(D), 0.03)) * exp(-u / 20000.0 - s / 1000.0 * air) * (1.0 - hidden);
+    }
+    // The lantern, as this beam turns to face us: a narrow cone (about 2 degrees).
+    flare += exp(-(1.0 - dot(b, -toT)) / 0.0006);
+  }
+  float ang = length(cross(d, toT));
+  float spot = foot * 1.5 + 0.0004;
+  flare *= exp(-ang * ang / (spot * spot)) * 0.0004 / (spot * spot) * step(0.0, dot(d, toT));
+  return vec3(1.0, 0.97, 0.9) * (glow * (0.5 + 6.0 * air) + flare) * uSkyBeaconLook.x * uSkyBeacon.w * uSkylineLit.z;
 }
 
 // The sky alone along d (above the horizon): the atmosphere and the city's glow, the sun, moon and stars
@@ -646,8 +726,10 @@ vec3 water(vec3 d, float foot, vec3 fill, vec3 horizon, vec3 zenith, vec3 deck, 
     vec4 L = textureGrad(uSkylineMirrorLight, uv, gx, gy) * inside;
     vec4 N = textureGrad(uSkylineMirrorNight, uv, gx, gy) * inside;
     vec4 W = dark ? textureGrad(uSkylineMirrorWindows, uv, gx, gy) * inside : vec4(0.0);
+    vec3 S = dark ? sparkle(uSkylineMirrorSpark, uv, log2(max(length(gx * vec2(textureSize(uSkylineMirrorSpark, 0))), 1.0)), uSkylineTower.w) * inside : vec3(0.0);
+    vec3 T = dark && uSkylineTowerScale.y > 0.0 ? textureGrad(uSkylineMirrorTowerLight, uv, gx, gy).rgb * uSkylineTowerScale.y * inside : vec3(0.0);
     vec3 li;
-    vec4 m = skylineDecode(L, N, W, uSkylineMirrorScale, fill, horizon, 1.0, sin(er), li);
+    vec4 m = skylineDecode(L, N, W, S, T, uSkylineMirrorScale, fill, horizon, 1.0, sin(er), li);
     float q = 0.5 * tj;
     vec3 st = skyTap[1] + q * 0.5 * (skyTap[2] - skyTap[0]) + q * q * 0.5 * (skyTap[2] - 2.0 * skyTap[1] + skyTap[0]);
     mirrorDay += wj * F * m.rgb;
@@ -818,8 +900,10 @@ vec3 citySky(vec3 d, float foot) {
   fill = mix(fill, deck, grey);
   vec2 uv;
   float sides;
+  float cover = 0.0;
   if (uSkylineOn > 0.5 && skylineUv(d, uv, sides)) {
     vec4 s = skyline(uv, sides, foot, fill, horizon, lights);
+    cover = s.a;
     // Below the horizon, what the skyline leaves uncovered is the city's water, where it has some.
     if (uSkylineWater.x > 0.5 && d.y < 0.0 && s.a < 0.999) {
       vec3 wl;
@@ -830,6 +914,7 @@ vec3 citySky(vec3 d, float foot) {
     col = col * (1.0 - s.a) + s.rgb;
   }
   if (uSkylineOn > 0.5) lights += skylineGlow(d, foot);
+  if (uSkyBeacon.w > 0.0) lights += beacon(d, foot, cover);
   vec4 rain = cityRain(d, foot, horizon);
   col = mix(col, rain.rgb, rain.a);
   return skyTonemap(col * exposure + lights * (1.0 - rain.a));

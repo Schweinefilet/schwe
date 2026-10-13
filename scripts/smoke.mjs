@@ -61,6 +61,10 @@ async function runCase(browser, base, c) {
     await page.evaluate((t) => window.__schwe.goto(t), t)
     await sleep(wait)
   }
+  // Software rendering runs at a few frames a second, so a state the film reaches after a set time is waited
+  // for (polled, up to `ms`) rather than read once after a fixed sleep (a fixed sleep made these checks race
+  // the frame rate: they failed on slow runs of unchanged code).
+  const reach = (fn, ms) => page.waitForFunction(fn, { timeout: ms, polling: 100 }).then(() => true, () => false)
   const read = () =>
     page.evaluate(() => ({
       beat: window.__schwe.state.beat,
@@ -76,14 +80,12 @@ async function runCase(browser, base, c) {
     await goto(mid(i))
     const s = await read()
     check(s.beat === beats[i][0], `forward: expected beat ${beats[i][0]} at ${mid(i).toFixed(2)}, got ${s.beat}`)
-    if (beats[i][0] === 'align') {
-      await sleep(1200)
-      check((await read()).timeScale < 0.01, 'time did not freeze')
-    }
+    if (beats[i][0] === 'align') check(await reach(() => window.__schwe.uniforms.uTimeScale.value < 0.01, 10000), 'time did not freeze')
   }
 
   // The ending: the rain falls again, slowly (SPLASH.rainAgain eases over 3 s).
   await goto(end - 1.1, 3500)
+  await reach(() => Number(document.querySelector('.end-type').style.opacity || 0) > 0.99, 15000)
   const e = await read()
   const slow = await page.evaluate(() => window.__schwe.splash.rainAgain.timeScale)
   check(Math.abs(e.timeScale - slow) < 0.25 * slow, `rain not falling slowly at the end (time scale ${e.timeScale.toFixed(2)}, expected ${slow})`)
@@ -101,8 +103,7 @@ async function runCase(browser, base, c) {
     check(s.beat === beats[i][0], `rewind: expected beat ${beats[i][0]}, got ${s.beat}`)
     if (beats[i][0] === 'align') check(s.endOpacity === 0, 'ending text still visible after rewinding to align')
   }
-  await sleep(1800)
-  check((await read()).timeScale > 0.99, 'time did not resume after rewinding above the freeze')
+  check(await reach(() => window.__schwe.uniforms.uTimeScale.value > 0.99, 10000), 'time did not resume after rewinding above the freeze')
 
   const budget = await page.evaluate(() => window.__budget)
   check(budget.over === 0, `video decoders over budget on ${budget.over} frames`)

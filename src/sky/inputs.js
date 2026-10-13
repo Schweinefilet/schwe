@@ -46,7 +46,7 @@ export function skyInputs({ city, date, weather = null, override = {}, sky }) {
   const view = sky.facing.views?.[city.id]
   const yaw = view ? viewBearing(view) : useMoon ? moonPos.azimuth : sunPos.azimuth
   const toward = view ? 'view' : useMoon ? 'moon' : 'sun'
-  const pitch = moonTiltPitch({ night, moon: moonPos, yaw, facing: view ? { ...sky.facing, pitch: sky.facing.viewPitch ?? sky.facing.pitch } : sky.facing })
+  const pitch = moonTiltPitch({ night, moon: moonPos, yaw, facing: view ? { ...sky.facing, pitch: sky.facing.viewPitchOf?.[city.id] ?? sky.facing.viewPitch ?? sky.facing.pitch } : sky.facing })
 
   const moonRadius = Math.asin(MOON_RADIUS_KM / moonPos.distance)
   const moonColour = tint(sky.moonColour)
@@ -82,7 +82,7 @@ export function skyInputs({ city, date, weather = null, override = {}, sky }) {
     starScale: sunPos.altitude < -4 ? sky.stars.lux0 * exposure * 2 ** (sky.stars.exposureStops ?? 0) : 0,
     // The skyline's lit windows (decorative): the share of the evening's lit windows still on at this
     // local hour, and how dark it is (none by day).
-    windows: { late: lateness(localHour(date, city.tz)), dark: smoothstep(3, -6, sunPos.altitude) },
+    windows: { late: lateness(localHour(date, city.tz)), dark: smoothstep(3, -6, sunPos.altitude), hour: localHour(date, city.tz), month: localMonth(date, city.tz) },
     cityGlow: tint(glow.colour).map((c) => c * glowZenith * exposure),
     clouds: {
       cover: cloud,
@@ -143,6 +143,23 @@ export function localHour(date, tz) {
     new Intl.DateTimeFormat('en-GB', { timeZone: tz, hour: 'numeric', minute: 'numeric', hourCycle: 'h23' }).formatToParts(date).map((p) => [p.type, p.value])
   )
   return Number(parts.hour) + Number(parts.minute) / 60
+}
+
+export function localMonth(date, tz) {
+  if (!tz) return date.getUTCMonth() + 1
+  return Number(new Intl.DateTimeFormat('en-GB', { timeZone: tz, month: 'numeric' }).format(date))
+}
+
+// The Eiffel Tower by night (its owner's published hours): the golden lighting and the beacon from nightfall
+// until midnight, or 1 am in July and August, when the tower closes later; the sparkle for five minutes on
+// each hour once it is dark. `on` eases in as it gets dark (0..1); `spark` 0 or 1.
+export function eiffelLights(hour, month, dark) {
+  const end = month === 7 || month === 8 ? 1 : 0
+  const h = ((hour % 24) + 24) % 24
+  const time = h >= 12 || h < end ? 1 : 0
+  const on = time * Math.min(Math.max((dark - 0.25) / 0.25, 0), 1)
+  const spark = on >= 1 && h % 1 < 5 / 60 ? 1 : 0
+  return { on, spark }
 }
 
 const smoothstep = (a, b, x) => {

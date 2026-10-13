@@ -17,6 +17,10 @@ small set of archetypes, so the skyline is not a field of plain extruded boxes:
   loft       New York: a pre-war mid-rise (lofts, walk-ups, old offices) to 70 m, straight up under a
              heavy cornice, water tanks on the roof (roofs.py)
 
+  haussmann  Paris: the Second Empire's apartment block (and the city built to its rules since, to about
+             40 m): pale limestone, tall French windows, wrought-iron balconies along the second and fifth
+             floors, a cornice at the eaves, a steep zinc mansard with dormers, chimney stacks with many pots
+
 New York (SITE 'archetypes': 'new-york'): its own palettes (limestone, buff and red brick, brownstone,
 white terracotta; white and grey concrete, dark steel), flat roofs (no pitched slate) behind cornices, and a
 roof OSM tags flat is no reason to keep OSM's plain massing (nearly every outline here is tagged flat).
@@ -87,6 +91,21 @@ def ny():
     return G['SITE'].get('archetypes') == 'new-york' and G['UPTO'] >= 2
 
 
+def paris():
+    return G['SITE'].get('archetypes') == 'paris' and G['UPTO'] >= 2
+
+
+# Paris (linear albedo, weathered): the Lutetian limestone of its facades from cream to grey-buff, rendered
+# and painted walls, the 1900-1930 brick of the 15th and 16th, and post-war concrete and stone cladding.
+PARIS_STONE, PARIS_BUFF, PARIS_GREY, PARIS_RENDER, PARIS_BRICK = ((0.46, 0.41, 0.32), (0.4, 0.35, 0.27), (0.36, 0.34, 0.3),
+                                                                  (0.48, 0.45, 0.39), (0.24, 0.13, 0.085))
+PARIS_PALETTES = {
+    'haussmann': ((PARIS_STONE, 0.45), (PARIS_BUFF, 0.25), (PARIS_GREY, 0.15), (PARIS_RENDER, 0.1), (PARIS_BRICK, 0.05)),
+    'modern': (((0.42, 0.41, 0.38), 0.35), ((0.3, 0.3, 0.29), 0.3), ((0.36, 0.33, 0.27), 0.2), ((0.08, 0.085, 0.09), 0.15)),
+}
+ZINC = (0.15, 0.16, 0.175)  # Paris's roofs: rolled zinc, weathered blue-grey
+
+
 def srgb_to_linear(c):
     return c / 12.92 if c <= 0.04045 else ((c + 0.055) / 1.055) ** 2.4
 
@@ -136,9 +155,11 @@ def albedo(b, kind=None):
     if col in NAMED:
         return desaturate(tuple(c * 0.8 for c in NAMED[col]), 0.7)
     if b.get('material') == 'brick':
-        return pick(rng, NY_PALETTES['brick']) if ny() else rng.choice(LONDON_BRICK)
+        return PARIS_BRICK if paris() else pick(rng, NY_PALETTES['brick']) if ny() else rng.choice(LONDON_BRICK)
     if b.get('material') in MATERIAL_ALBEDO:
         return MATERIAL_ALBEDO[b['material']]
+    if paris():
+        return pick(rng, PARIS_PALETTES['haussmann' if kind in ('haussmann', 'lowrise') else 'modern'])
     if ny():
         use = b.get('kind', 'yes')
         if use in HOMES:
@@ -212,6 +233,9 @@ def facade_params(b, area):
     if grand and mat not in ('glass', 'concrete'):
         # Masonry: tall narrow windows in wide bays, high floors; gothic and classical alike at this range.
         return 2, rng.uniform(2.4, 3.4), rng.uniform(4.2, 5.4), rng.uniform(0.15, 0.21), rng.uniform(0.3, 0.36), 0.28, busy * 0.6
+    if paris() and (homes or kind == 'yes') and b['height'] <= 42 and mat not in ('glass', 'concrete', 'metal'):
+        # Paris: tall French windows (about 1.2 by 2.3 m) in 3 m bays, cream-white frames, floors 3.2 m.
+        return 1, rng.uniform(2.7, 3.3), 3.2, rng.uniform(0.19, 0.23), rng.uniform(0.34, 0.37), rng.uniform(0.55, 0.7), busy
     if homes or mat == 'brick':
         # Sash windows, white-painted frames.
         return 1, rng.uniform(2.6, 3.3), rng.uniform(2.9, 3.3), rng.uniform(0.2, 0.26), rng.uniform(0.27, 0.33), rng.uniform(0.5, 0.7), busy
@@ -240,7 +264,7 @@ def facade_runs(style):
 # ---- Archetypes ---------------------------------------------------------------------------------------
 
 BEACONS = []  # (x, y, z) of the aviation lights, built as one object by build_city
-ARCHETYPES = ('osm', 'lowrise', 'block', 'penthouse', 'setback', 'podium', 'slab', 'glass', 'wedding', 'loft')
+ARCHETYPES = ('osm', 'lowrise', 'block', 'penthouse', 'setback', 'podium', 'slab', 'glass', 'wedding', 'loft', 'haussmann')
 COUNTS = {a: 0 for a in ARCHETYPES}
 
 
@@ -265,12 +289,16 @@ def older_ny(b, style, r):
 def archetype(b, ring, style, r):
     """The building's archetype, from its OSM outline, height and kind (see the module's doc)."""
     h = b['height'] - b['min']
-    tagged = b['roof']['tagged'] and not (ny() and b['roof']['shape'] == 'flat')
+    tagged = b['roof']['tagged'] and not ((ny() or paris()) and b['roof']['shape'] == 'flat')
     single = not b.get('within') and b['min'] == 0 and not b['inner'] and not tagged
     if not single or G['UPTO'] < 2:
         return 'osm'
     area = abs(area_of(ring))
     short, long_ = oriented_size(ring)
+    if paris():
+        mat = b.get('material') or material_from_colour(b.get('colour'))
+        if 9 <= h <= 42 and style != 0 and mat not in ('glass', 'metal', 'concrete') and b.get('kind') not in GRAND + ('industrial', 'commercial', 'office', 'retail'):
+            return 'haussmann'
     if ny():
         old = older_ny(b, style, r)
         if h >= 50 and old and short >= 16:
@@ -480,10 +508,18 @@ def add_building(mb, b):
         roof['shape'] = 'mansard' if r2 < 0.3 else 'hipped'
         roof['height'] = max(2.0, min(4.5, short * 0.32))
         ztop += roof['height'] - 2.0
+    # Paris's mansards: the mapped height is the ridge's; the mansard one or two floors of it (3.5 to 6.5 m),
+    # its lower slope steep (70 degrees) and dormered, the top a shallow zinc deck.
+    if kind == 'haussmann' and roof['shape'] in ('flat', 'mansard', 'gabled', 'hipped') or (kind == 'haussmann' and not roof['tagged']):
+        short, _ = oriented_size(main)
+        roof['shape'] = 'mansard'
+        roof['height'] = max(3.5, min(6.5, short * 0.32, (b['height'] - b['min']) * 0.3))
     roof_h = roof['height'] if roof['shape'] not in ('flat',) else 0.0
     zw = max(ztop - roof_h, z0 + 0.5)
     # Flat roofs: felt, gravel and plant, grey; pitched: slate or lead, each a little its own.
     roofc = (rng.uniform(0.09, 0.17),) * 3 if roof['shape'] in ('flat', 'skillion') else jitter(rng, (0.075, 0.08, 0.09))
+    if paris() and roof['shape'] != 'flat':
+        roofc = jitter(rng, ZINC)
     rc = roof.get('colour')
     if over and 'roof' in over:
         roofc = over['roof']
@@ -519,6 +555,20 @@ def add_building(mb, b):
     trim = dict(plain, wall=tuple(min(0.6, c * 1.25 + 0.04) for c in col))
     if kind == 'lowrise' and not ny():
         band(mb, top, zw - 0.6, zw, 0.35, trim)
+    if kind == 'haussmann':
+        # The cornice at the eaves; the balconies along the second floor and the last under the cornice: a
+        # stone slab and its wrought-iron railing (dark), 0.7 m out, at the floor lines of the window grid.
+        band(mb, top, zw - 0.7, zw, 0.45, trim)
+        iron = dict(plain, wall=(0.025, 0.025, 0.027))
+        fh = attrs['floorh']
+        floors = [math.ceil((zb + 7.2) / fh) * fh]
+        if zw - zb > 16.0:
+            floors.append(math.floor((zw - 1.0) / fh) * fh - fh)
+        for zf in floors:
+            if zf + 1.2 < zw - 0.7 and zf > zb + 3.0:
+                band(mb, top, zf - 0.18, zf, 0.7, trim)
+                band(mb, top, zf + 0.85, zf + 1.0, 0.68, iron)
+                band(mb, top, zf, zf + 0.85, 0.66, dict(iron, wall=(0.04, 0.04, 0.042)))
     if kind in ('lowrise', 'loft') and ny():
         band(mb, top, zw - 1.0, zw, 0.6, trim)
     if kind == 'wedding':
@@ -573,7 +623,10 @@ def add_building(mb, b):
         # Pitched roofs (gabled, hipped, mansard, …): slopes following the outline (pitched above), with
         # chimney stacks along the ridge on older low-rise and most other pitched roofs.
         ridge, zr = pitched(mb, ring, zw, roof_h, 'mansard' if roof['shape'] in ('mansard', 'gambrel') else 'hipped', attrs)
-        if detail and (kind == 'lowrise' or r3 < 0.6):
+        if detail and kind == 'haussmann':
+            COUNTS['roof props'] = COUNTS.get('roof props', 0) + roofs.dormers(mb, ring, zw, roof_h, attrs, own)
+            COUNTS['roof props'] = COUNTS.get('roof props', 0) + roofs.party_stacks(mb, ring, zw, roof_h, attrs, own)
+        elif detail and (kind == 'lowrise' or r3 < 0.6):
             COUNTS['roof props'] = COUNTS.get('roof props', 0) + roofs.ridge_chimneys(mb, ridge, zr, attrs, own)
 
 
