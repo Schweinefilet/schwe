@@ -83,19 +83,33 @@ export default function App() {
 
   // Left and right step through the cities.
   useEffect(() => {
+    const step = (by) => select(CITIES[(CITIES.findIndex((c) => c.id === cityId) + by + CITIES.length) % CITIES.length].id)
     const onKey = (e) => {
       if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return
       if (document.querySelector('.wx-panel')) return
-      const i = CITIES.findIndex((c) => c.id === cityId)
-      const next = CITIES[(i + (e.key === 'ArrowRight' ? 1 : CITIES.length - 1)) % CITIES.length]
-      select(next.id)
+      step(e.key === 'ArrowRight' ? 1 : -1)
     }
     const onHash = () => setCityId(fromHash())
+    // A swipe across the picture does the same (not one that starts on a control or in the panel).
+    let down = null
+    const onDown = (e) => (down = e.target.closest('button, a, .wx-panel') ? null : { x: e.clientX, y: e.clientY })
+    const onUp = (e) => {
+      if (!down) return
+      const dx = e.clientX - down.x
+      const dy = e.clientY - down.y
+      down = null
+      if (Math.abs(dx) < 60 || Math.abs(dx) < Math.abs(dy) * 1.5) return
+      step(dx < 0 ? 1 : -1)
+    }
     window.addEventListener('keydown', onKey)
     window.addEventListener('hashchange', onHash)
+    window.addEventListener('pointerdown', onDown)
+    window.addEventListener('pointerup', onUp)
     return () => {
       window.removeEventListener('keydown', onKey)
       window.removeEventListener('hashchange', onHash)
+      window.removeEventListener('pointerdown', onDown)
+      window.removeEventListener('pointerup', onUp)
     }
   }, [cityId, select])
 

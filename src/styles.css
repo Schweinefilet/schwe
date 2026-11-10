@@ -49,11 +49,8 @@
   /* One type scale. Nothing on screen is set below --t-fine (13 px). */
   --t-fine: 0.8125rem; /* credits, notes */
   --t-meta: 0.875rem; /* times and weather, buttons */
-  --t-body: 1rem; /* the about text */
+  --t-body: 1rem;
   --t-name: 1.125rem; /* a city's name */
-  --t-lead: clamp(1.15rem, 0.98rem + 0.8vw, 1.55rem); /* captions, the answer */
-  --t-sub: clamp(0.95rem, 0.88rem + 0.3vw, 1.05rem); /* a caption's second line, the question */
-  --t-heading: 1.375rem; /* the sheet's sections */
   --t-title: clamp(2.4rem, 1.7rem + 2.6vw, 3.6rem); /* the name */
   /* Tracking, for the text face only (lowercase chrome reads better a little open). */
   --track-text: 0.01em;
@@ -63,21 +60,8 @@
   --dur-quick: 0.3s;
   --dur-base: 0.6s;
   --dur-slow: 1.2s;
-  --dur-slower: 1.6s;
-  --dur-enter: 1.4s; /* type settling in: the loader, the hint */
-  /* Loops: the haze drifts, the drop breathes, a drop falls down the hint's line. */
-  --loop-haze: 22s;
-  --loop-breathe: 4s;
-  --loop-fall: 2.2s;
   --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
   --ease-soft: cubic-bezier(0.45, 0, 0.55, 1);
-
-  /* The scrim: one recipe behind type that sits over the picture (labels, captions, hint, the ending,
-     the sheet's bar). Indigo falling off along a cosine, flat at both ends, so it has no edge to read
-     as a shape. Its strength is the element's opacity. */
-  --scrim: rgba(var(--ui-ink), 1) 0%, rgba(var(--ui-ink), 0.976) 10%, rgba(var(--ui-ink), 0.905) 20%, rgba(var(--ui-ink), 0.794) 30%,
-    rgba(var(--ui-ink), 0.655) 40%, rgba(var(--ui-ink), 0.5) 50%, rgba(var(--ui-ink), 0.345) 60%, rgba(var(--ui-ink), 0.206) 70%,
-    rgba(var(--ui-ink), 0.095) 80%, rgba(var(--ui-ink), 0.024) 90%, rgba(var(--ui-ink), 0) 100%;
 
   /* Focus: one soft lavender ring that follows the control's own rounding. */
   --focus-ring: 2px solid var(--ui-lavender);
@@ -93,9 +77,8 @@ body {
   color: var(--ui-white);
 }
 
-/* The page never scrolls: the film moves by stops (core/gestures.js), so presses, swipes and long
-   presses on it are the film's, not the browser's (no panning, zooming, selecting or callout). The
-   sheet and the expanded weather scroll on their own. */
+/* The page never scrolls: it is one picture. A swipe across it changes city (App.jsx), so touches are the
+   page's, not the browser's. The expanded weather scrolls on its own. */
 body {
   font-family: var(--font-text);
   -webkit-font-smoothing: antialiased;
@@ -142,40 +125,6 @@ button {
   font-variant-numeric: tabular-nums;
 }
 
-/* A quiet text button: "cities", "about", "share". Rounded like the pill, so its focus ring is too. */
-.text-link {
-  display: inline-flex;
-  align-items: center;
-  min-height: 44px;
-  padding: 0 0.8rem;
-  border: 0;
-  border-radius: 999px;
-  background: none;
-  color: var(--ui-text-2);
-  font-family: var(--font-text);
-  font-size: var(--t-meta);
-  letter-spacing: var(--track-label);
-  text-shadow: var(--ui-halo);
-  cursor: pointer;
-  transition: color var(--dur-quick) ease;
-}
-
-.text-link:hover {
-  color: var(--ui-white);
-}
-
-/* One focus ring for everything that takes the keyboard. */
-.text-link:focus-visible {
-  outline: var(--focus-ring);
-  outline-offset: 3px;
-  box-shadow: var(--focus-glow);
-}
-
-/* A text button has room inside its padding: the ring sits there, clear of its neighbours. */
-.text-link:focus-visible {
-  outline-offset: -4px;
-}
-
 :focus:not(:focus-visible) {
   outline: none;
 }
@@ -193,13 +142,11 @@ button {
   color: var(--ui-text-2);
 }
 
-/* Over the film ---------------------------------------------------------------------------------- */
+/* Over the studio --------------------------------------------------------------------------------- */
 
-/* Beat 5: inside the dive drop. The city is the picture: the weather keeps to the edges (CityType.jsx),
-   small and translucent, over a vignette that darkens only the margins so the type holds over a bright
-   sky and the middle stays untouched. "more weather" opens the expanded view (.wx-panel, WeatherPanel
-   .jsx): frosted pastel glass over the whole frame. --in (0..1) is rig.cityType, written each frame by
-   CityType.jsx; in the panel each card rises in a little after the one before (--i). */
+/* The interface's one layer (CityPanel.jsx): the name, the corner readout, the cities and "more weather"
+   laid on the picture; "more weather" opens the expanded view (.wx-panel, WeatherPanel.jsx), frosted glass
+   over the whole frame, each card rising in a little after the one before (--i). */
 .city-type {
   --in: 1;
   position: fixed;
@@ -1222,7 +1169,7 @@ button {
 
 @media (max-width: 640px) {
   .cities {
-    top: max(52px, calc(env(safe-area-inset-top) + 44px));
+    top: max(56px, calc(env(safe-area-inset-top) + 48px));
     bottom: auto;
     gap: 0;
   }
@@ -1238,9 +1185,14 @@ button {
   }
 
   .credit {
-    top: max(22px, env(safe-area-inset-top));
+    top: max(24px, env(safe-area-inset-top));
     right: max(16px, env(safe-area-inset-right));
-    max-width: 62vw;
+    max-width: 72vw;
+    white-space: nowrap;
+  }
+
+  .credit__more {
+    display: none;
   }
 
   .wordmark,

@@ -83,16 +83,17 @@ export default function CityPanel({ cityId, onSelect, weather, status }) {
         ))}
       </nav>
 
+      {/* On a phone the names alone: the line has to clear the cities under it. */}
       <p className="credit">
-        buildings ©{' '}
+        <span className="credit__more">buildings </span>©{' '}
         <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer">
           OpenStreetMap
-        </a>{' '}
-        contributors,{' '}
+        </a>
+        <span className="credit__more"> contributors</span>,{' '}
         <a href="https://overturemaps.org" target="_blank" rel="noreferrer">
           Overture Maps
         </a>{' '}
-        · weather by{' '}
+        · <span className="credit__more">weather by </span>
         <a href="https://open-meteo.com" target="_blank" rel="noreferrer">
           Open-Meteo
         </a>
