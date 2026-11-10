@@ -1,0 +1,23 @@
+{
+  "new-york": {
+    "name": "New York",
+    "center": [40.7323, -73.9935],
+    "axisBearing": 29,
+    "halfLength": 4150,
+    "halfWidth": 2100
+  },
+  "london": {
+    "name": "London",
+    "center": [51.5080, -0.1010],
+    "axisBearing": 90,
+    "halfLength": 2400,
+    "halfWidth": 1500
+  },
+  "paris": {
+    "name": "Paris",
+    "center": [48.8590, 2.3200],
+    "axisBearing": 90,
+    "halfLength": 2600,
+    "halfWidth": 2000
+  }
+}

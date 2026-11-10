@@ -33,3 +33,5 @@ data/refs/
 data/terrain/
 # The skyline bake's reflection environment (Poly Haven, CC0; skyline.py fetches it)
 data/hdri/
+# Overture Maps extracts for the city models (npm run models; scripts/models/fetch.py)
+data/models/
