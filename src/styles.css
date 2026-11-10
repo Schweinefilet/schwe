@@ -2169,3 +2169,9 @@ button {
   border: 1px solid rgba(255, 255, 255, 0.15);
   font: 11px/1.4 ui-monospace, Menlo, monospace;
 }
+
+/* The studio (city/Stage.jsx): the whole window. */
+.stage {
+  position: fixed !important;
+  inset: 0;
+}

@@ -1,7 +1,7 @@
 import { StrictMode, Suspense, lazy } from 'react'
 import { createRoot } from 'react-dom/client'
 import './styles.css'
-import App from './App.jsx'
+import App from './App.next.jsx'
 
 // Dev-only lab pages (/?lab=drop). The import sits behind the DEV flag, so builds leave them out.
 const lab = import.meta.env.DEV ? new URLSearchParams(location.search).get('lab') : null
