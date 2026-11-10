@@ -93,11 +93,15 @@ export function lookFor(city, date, wx) {
   let sky = mix3(SKY_NIGHT, mix3(SKY_DAY, SKY_GOLD, gold), day)
   // Under cloud the fill is the cloud's own grey-white and stronger: shadows lose their edge.
   sky = mix3(sky, mix3(SKY_NIGHT, [0.82, 0.84, 0.88], day), overcast * 0.7)
-  const skyLight = mix(0.75, mix(1.15, 1.8, gold), day) * (1 + 0.5 * overcast * day)
+  const skyLight = mix(0.75, mix(1.15, 1.5, gold), day) * (1 + 0.5 * overcast * day)
   // The backdrop is the floor's own colour under this light (flat, facing up), so floor and wall are one
   // sweep at any hour: the light a matte surface returns is its colour times the light on it over pi.
   const up = Math.sin(Math.max(alt, 0) * (Math.PI / 180))
-  const bg = neutral(FLOOR.map((a, i) => ((a * (sunColor[i] * sunLight * up + sky[i] * skyLight)) / Math.PI) * EXPOSURE))
+  const floor = FLOOR.map((a, i) => (a * (sunColor[i] * sunLight * up + sky[i] * skyLight)) / Math.PI)
+  // The camera's exposure: opened up when the sun is low and the floor gets little of it (a winter noon,
+  // the golden hour), the way a photographer would, but only part of the way, so low light still looks low.
+  const exposure = EXPOSURE * mix(1, Math.min(1.5, Math.max(0.85, (0.72 / Math.max(floor[1], 0.05)) ** 0.6)), day)
+  const bg = neutral(floor.map((v) => v * exposure))
 
   // The sun's direction, held just above the horizon once it has set so the shadow map never flips;
   // by then its light is zero.
@@ -112,6 +116,7 @@ export function lookFor(city, date, wx) {
     bounce: mix3(BOUNCE_NIGHT, BOUNCE_DAY, day),
     skyLight,
     bg,
+    exposure,
     night: 1 - smooth(-5, 3, alt),
     lit: occupancy(hour),
     late: lateness(hour),

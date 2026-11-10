@@ -5,7 +5,8 @@
 //   public/models/<city>.glb          every building and building part on the plinth, raised from its
 //                                     outline to its mapped height with its mapped roof shape, and the
 //                                     bridges as slabs. COLOR_0: r = ambient occlusion baked per vertex,
-//                                     g = a per-building random number (the night windows' seed).
+//                                     g = a per-building random number (the night windows' seed),
+//                                     b = what it does after dark (1 windows, 0.5 floodlit, 0 neither).
 //   public/models/<city>-ground.png   the plinth's top, one texel per two grid cells each way: r = ambient
 //                                     occlusion on the ground, g = water.
 //
@@ -239,6 +240,16 @@ function hash01(str) {
   return ((h >>> 0) % 251) / 250
 }
 
+// After dark: 1 a building with windows, 0.5 a structure that is floodlit instead (models.json `floodlit`,
+// by name: the Eiffel Tower), 0 one with neither (`unlit`, and every bridge).
+const nameById = new Map(rawBuildings.filter((b) => b.name).map((b) => [b.id, b.name]))
+const FLOODLIT = new Set(spec.floodlit ?? [])
+const UNLIT = new Set(spec.unlit ?? [])
+const litOf = (b) => {
+  const names = [b.name, nameById.get(b.building_id)]
+  return names.some((n) => FLOODLIT.has(n)) ? 0.5 : names.some((n) => UNLIT.has(n)) ? 0 : 1
+}
+
 const solids = []
 let assumed = 0
 for (const b of rawBuildings) {
@@ -264,6 +275,7 @@ for (const b of rawBuildings) {
       direction: b.roof_direction ?? null,
       orientation: b.roof_orientation ?? null,
       seed: hash01(b.building_id ?? b.id),
+      lit: litOf(b),
     })
   }
 }
@@ -311,10 +323,11 @@ const pos = []
 const col = []
 const idx = []
 let vcount = 0
+let lit = 1 // the solid being built
 function vert(u, v, h, ao, seed) {
   const [x, z] = toXZ(u, v)
   pos.push(x, h, z)
-  col.push(Math.round(Math.min(1, Math.max(0, ao)) * 255), Math.round(seed * 255), 255, 255)
+  col.push(Math.round(Math.min(1, Math.max(0, ao)) * 255), Math.round(seed * 255), Math.round(lit * 255), 255)
   return vcount++
 }
 const tri = (a, b, c) => a !== b && b !== c && a !== c && idx.push(a, b, c)
@@ -391,6 +404,7 @@ const RIDGED = new Set(['gabled', 'hipped', 'half_hipped', 'gambrel', 'saltbox',
 const POINTED = new Set(['pyramidal', 'cone', 'dome', 'onion'])
 
 function addSolid(s) {
+  lit = s.lit ?? 1
   const { rings, base, top, seed } = s
   const outer = rings[0]
   let shape = s.shape
@@ -441,7 +455,8 @@ function addSolid(s) {
       const h = Math.max(base + 0.01, eaveAt(ring[i]))
       bot.push(vert(u, v, base, skyAtWall(u, v, base + 1, nx, ny), seed))
       if (tall) mid.push(vert(u, v, base + MID, skyAtWall(u, v, base + MID, nx, ny), seed))
-      up.push(vert(u, v, h, skyAtWall(u, v, h, nx, ny), seed))
+      // Not below 0.45 at the top: a part nested inside a taller outline would otherwise bake a black roof.
+      up.push(vert(u, v, h, Math.max(0.45, skyAtWall(u, v, h, nx, ny)), seed))
     }
     for (let i = 0; i < n; i++) {
       const j = (i + 1) % n
@@ -461,7 +476,9 @@ function addSolid(s) {
   }
 
   const n = outer.length
-  const roofSky = (u, v, h) => skyOver(u, v, h + 0.5, RING8)
+  // A roof's own points look out from above whatever the height field holds there (their own building's
+  // eave included), or a dome inside its drum would bake black.
+  const roofSky = (u, v, h) => skyOver(u, v, Math.max(h, heightAt(u, v)) + 0.5, RING8)
   if (shape === 'flat' || shape === 'skillion') {
     const t = triangulate(rings)
     for (let i = 0; i < t.length; i += 3) tri(topIdx[t[i]], topIdx[t[i + 2]], topIdx[t[i + 1]])
@@ -541,7 +558,7 @@ const buildingTris = idx.length / 3
 let bridgeCount = 0
 for (const rings of bridges) {
   if (!onPlinth(centroid(rings[0]), 4) || Math.abs(signedArea(rings[0])) < 150) continue
-  addSolid({ rings, base: BRIDGE.top - BRIDGE.thick, top: BRIDGE.top, shape: 'flat', seed: 0 })
+  addSolid({ rings, base: BRIDGE.top - BRIDGE.thick, top: BRIDGE.top, shape: 'flat', seed: 0, lit: 0 })
   bridgeCount++
 }
 

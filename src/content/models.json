@@ -1,23 +1,38 @@
 {
   "new-york": {
     "name": "New York",
-    "center": [40.7323, -73.9935],
+    "center": [
+      40.7323,
+      -73.9935
+    ],
     "axisBearing": 29,
     "halfLength": 4150,
     "halfWidth": 2100
   },
   "london": {
     "name": "London",
-    "center": [51.5080, -0.1010],
+    "center": [
+      51.508,
+      -0.101
+    ],
     "axisBearing": 90,
     "halfLength": 2400,
-    "halfWidth": 1500
+    "halfWidth": 1500,
+    "unlit": [
+      "London Eye"
+    ]
   },
   "paris": {
     "name": "Paris",
-    "center": [48.8590, 2.3200],
+    "center": [
+      48.859,
+      2.32
+    ],
     "axisBearing": 90,
     "halfLength": 2600,
-    "halfWidth": 2000
+    "halfWidth": 2000,
+    "floodlit": [
+      "Tour Eiffel"
+    ]
   }
 }

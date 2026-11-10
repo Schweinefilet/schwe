@@ -13,17 +13,17 @@ const VIEWS = {
   'new-york': {
     tz: 'America/New_York',
     wide: { at: [-350, 150, -1000], bearing: 35, elevation: 10, distance: 16500, fov: 8.5 },
-    tall: { at: [-100, 150, -300], bearing: 30, elevation: 20, distance: 19000, fov: 15 },
+    tall: { at: [150, 150, -300], bearing: 30, elevation: 20, distance: 19000, fov: 15 },
   },
   london: {
     tz: 'Europe/London',
-    wide: { at: [200, 30, -100], bearing: 12, elevation: 19, distance: 9800, fov: 13 },
-    tall: { at: [300, 40, 0], bearing: 78, elevation: 24, distance: 12500, fov: 16 },
+    wide: { at: [-300, 60, -250], bearing: 68, elevation: 8.5, distance: 9300, fov: 8.5 },
+    tall: { at: [700, 60, 100], bearing: 276, elevation: 14, distance: 10500, fov: 14 },
   },
   paris: {
     tz: 'Europe/Paris',
-    wide: { at: [-500, 60, 0], bearing: 100, elevation: 15, distance: 11000, fov: 13 },
-    tall: { at: [-300, 80, 0], bearing: 96, elevation: 22, distance: 14000, fov: 16 },
+    wide: { at: [-1000, 150, -100], bearing: 78, elevation: 7.5, distance: 9000, fov: 7 },
+    tall: { at: [-1300, 150, -100], bearing: 80, elevation: 14, distance: 10500, fov: 14 },
   },
 }
 

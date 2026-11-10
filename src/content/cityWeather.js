@@ -1,12 +1,13 @@
-// Everything Open-Meteo knows about one city, for the stats inside the dive drop (ui/CityType.jsx): the
-// current reading in full, the next 24 hours, the week, the next two hours of rain and the air. Two
-// requests (forecast and air quality, both free, no key, CC BY 4.0 like content/weather.js), made only
-// for the dive city. Either can fail on its own: its part is then null, and the panel leaves it out
-// rather than inventing a reading.
+// The weather for the three cities: one Open-Meteo forecast request for all of them (free for
+// non-commercial use, no key; the data is CC BY 4.0, credited on screen). The same reading lights the
+// model (city/look.js) and fills the weather interface (ui/CityPanel.jsx, ui/WeatherPanel.jsx), so the
+// two can never disagree. A second request reads the air quality, for the panel only.
+// Either can fail on its own. A city whose forecast was not read is null: the scene then shows clear
+// skies and the interface says the weather could not be read. Nothing is ever invented.
 
 const FORECAST = 'https://api.open-meteo.com/v1/forecast'
 const AIR = 'https://air-quality-api.open-meteo.com/v1/air-quality'
-const TIMEOUT_MS = 20000
+const TIMEOUT_MS = 15000
 
 const CURRENT = [
   'temperature_2m',
@@ -49,16 +50,35 @@ const DAILY = [
   'wind_speed_10m_max',
 ]
 
+// WMO weather code → the words on screen. No code, no words.
+export function describeWeather(code) {
+  if (code == null) return null
+  if (code === 0) return 'clear'
+  if (code <= 2) return 'partly cloudy'
+  if (code === 3) return 'overcast'
+  if (code === 45 || code === 48) return 'fog'
+  if (code >= 51 && code <= 57) return 'drizzle'
+  if (code === 61 || code === 80) return 'light rain'
+  if (code === 63 || code === 81) return 'rain'
+  if (code === 65 || code === 82) return 'heavy rain'
+  if (code === 66 || code === 67) return 'freezing rain'
+  if (code >= 71 && code <= 77) return code === 77 ? 'snow grains' : 'snow'
+  if (code === 85 || code === 86) return 'snow showers'
+  if (code >= 95) return 'thunderstorm'
+  return null
+}
+
 async function getJson(url, signal) {
   const res = await fetch(url, { signal })
   if (!res.ok) throw new Error(`HTTP ${res.status}`)
   return res.json()
 }
 
-// Times come back in the city's own zone (timezone=auto) without a suffix: they are kept as local
-// wall-clock strings ("2026-10-06T14:00"), which is what the panel prints.
-export async function fetchCityDetail(city) {
-  const where = { latitude: city.lat, longitude: city.lon, timezone: 'auto' }
+// Resolves to { [cityId]: detail | null }. Times come back in each city's own zone (timezone=auto)
+// without a suffix: they are kept as local wall-clock strings ("2026-10-06T14:00"), which is what the
+// panel prints.
+export async function fetchCities(cities) {
+  const where = { latitude: cities.map((c) => c.lat).join(','), longitude: cities.map((c) => c.lon).join(','), timezone: 'auto' }
   const forecast = new URLSearchParams({
     ...where,
     current: CURRENT.join(','),
@@ -75,8 +95,18 @@ export async function fetchCityDetail(city) {
   const timer = setTimeout(() => ctrl.abort(), TIMEOUT_MS)
   try {
     const [fc, aq] = await Promise.allSettled([getJson(`${FORECAST}?${forecast}`, ctrl.signal), getJson(`${AIR}?${air}`, ctrl.signal)])
-    if (fc.status === 'rejected') console.warn('[weather] detail unavailable:', fc.reason?.message)
-    return parseDetail(fc.status === 'fulfilled' ? fc.value : null, aq.status === 'fulfilled' ? aq.value : null)
+    if (fc.status === 'rejected') console.warn('[weather] unavailable:', fc.reason?.message)
+    // One place comes back as an object, several as an array in the order asked.
+    const list = (r) => (r.status !== 'fulfilled' ? [] : Array.isArray(r.value) ? r.value : [r.value])
+    const fcs = list(fc)
+    const aqs = list(aq)
+    return Object.fromEntries(
+      cities.map((c, i) => {
+        const detail = parseDetail(fcs[i] ?? null, aqs[i] ?? null)
+        // Air quality alone is not the weather: without a current reading the city is unread.
+        return [c.id, detail?.current?.code != null ? detail : null]
+      })
+    )
   } finally {
     clearTimeout(timer)
   }

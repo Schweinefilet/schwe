@@ -1,244 +1,122 @@
-import { Suspense, lazy, useCallback, useEffect, useRef, useState } from 'react'
-import { Canvas } from '@react-three/fiber'
-import Experience from './scenes/Experience.jsx'
-import Loader from './ui/Loader.jsx'
-import CityType from './ui/CityType.jsx'
-import DropLabels from './ui/DropLabels.jsx'
-import WordSketch from './ui/WordSketch.jsx'
-import EndType from './ui/EndType.jsx'
-import BackToTop from './ui/BackToTop.jsx'
-import StillPage from './ui/StillPage.jsx'
-import MoveHint from './ui/MoveHint.jsx'
-import ProgressRail from './ui/ProgressRail.jsx'
-import Captions from './ui/Captions.jsx'
-import SoundToggle from './ui/SoundToggle.jsx'
-import { initFilm } from './core/film.js'
-import { startFocusPull } from './core/focus.js'
-import { state } from './core/state.js'
-import { unlockAudio } from './audio/audioEngine.js'
-import { detectTier, quality } from './core/quality.js'
-import { startPerfGuard } from './core/perfGuard.js'
-import { loadManifest } from './content/manifest.js'
-import { selectClips } from './content/clipSelector.js'
-import { chooseDiveCity } from './content/diveChoice.js'
-import { chooseRainCity } from './content/rainChoice.js'
-import { fetchWeather, unknownWeather } from './content/weather.js'
-import { usesFootage } from './content/contentSource.js'
-import { onSkyReady } from './sky/skyManager.js'
-import { onBackdropReady } from './content/backdrop.js'
-import { now } from './core/clock.js'
-import { CAMERA_FOV, CITIES, CONTENT, DEFAULT_DIVE_CITY, SPLASH } from './config.js'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import { CITIES, cityById } from './city/cities.js'
+import Stage from './city/Stage.jsx'
+import { fetchCities } from './content/cityWeather.js'
+import { detectQuality } from './core/quality.js'
+import CityPanel from './ui/CityPanel.jsx'
 
-const NO_CLIPS = { version: 1, clips: [] }
+const REFRESH_MS = 10 * 60 * 1000
+const STALE_MS = 40 * 60 * 1000 // a reading older than this is no longer "now": back to unread
 
-// Dynamic import behind the DEV flag, so production builds don't include the overlay.
-const DevOverlay = import.meta.env.DEV ? lazy(() => import('./dev/DevOverlay.jsx')) : null
-// ?bench (production too): scripted run that measures frame times per beat and tier on a real device.
-// Its own chunk, so normal visits never download it.
-const Bench = new URLSearchParams(location.search).has('bench') ? lazy(() => import('./bench/Bench.jsx')) : null
+// Dev: ?wx=rain|snow|fog|overcast|clear stands in for the selected city's reading, to look at each kind of
+// weather on the model. Never in a build.
+const FAKE = {
+  rain: { code: 63, cloud: 100, mmPerHour: 4, visibilityM: 7000, windKmh: 22, windFromDeg: 250, tempC: 9, feelsC: 6 },
+  snow: { code: 73, cloud: 100, mmPerHour: 0, snowCm: 0.6, visibilityM: 5000, windKmh: 10, windFromDeg: 20, tempC: -1, feelsC: -5 },
+  fog: { code: 45, cloud: 100, mmPerHour: 0, visibilityM: 400, windKmh: 3, windFromDeg: 0, tempC: 6, feelsC: 5 },
+  overcast: { code: 3, cloud: 100, mmPerHour: 0, visibilityM: 20000, windKmh: 12, windFromDeg: 200, tempC: 11, feelsC: 9 },
+  clear: { code: 0, cloud: 0, mmPerHour: 0, visibilityM: 30000, windKmh: 8, windFromDeg: 300, tempC: 14, feelsC: 13 },
+}
+const params = new URLSearchParams(location.search)
+const fake = import.meta.env.DEV ? FAKE[params.get('wx')] : null
+const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)').matches
 
-const RESELECT_MS = 10 * 60 * 1000
-// How long "enter" waits for the weather before the site opens without it (content/weather.js).
-const WEATHER_WAIT_MS = 4000
-const delay = (ms) => new Promise((resolve) => setTimeout(() => resolve(null), ms))
-// Dev: ?dive=new-york forces the dive city instead of letting the world choose.
-const FORCE_DIVE = import.meta.env.DEV ? new URLSearchParams(location.search).get('dive') : null
-// Dev: ?rain=mumbai forces the ending to that city, ?rain=london@40 to "rain reaches London in 40 min",
-// ?rain=none to the dry ending, ?rain=unknown to the ending without a weather reading.
-const FORCE_RAIN = import.meta.env.DEV ? new URLSearchParams(location.search).get('rain') : null
-// Dev: ?weather=tokyo:1:6,mumbai:0.3:0 sets cities' weather (cloud cover 0..1 : rain mm/h) as if read
-// live, for stills and previews: the sky, the type and the rain choice all see it.
-const FORCE_WEATHER = import.meta.env.DEV ? new URLSearchParams(location.search).get('weather') : null
-// Dev: ?still forces the still page.
-const FORCE_STILL = import.meta.env.DEV && new URLSearchParams(location.search).has('still')
-const REDUCED_MOTION = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+// The city in the address (#london) or the first.
+const fromHash = () => cityById(location.hash.slice(1))?.id ?? cityById(params.get('city'))?.id ?? CITIES[0].id
 
 export default function App() {
-  const [clips, setClips] = useState(null)
-  const [diveCity, setDiveCity] = useState(null)
-  const [rainCity, setRainCity] = useState(null)
-  const [device, setDevice] = useState(null) // { tier, webgl } once GPU detection finishes
-  const still = FORCE_STILL || REDUCED_MOTION || device?.webgl === false
+  const [cityId, setCityId] = useState(fromHash)
+  const [quality, setQuality] = useState(null)
+  const [ready, setReady] = useState(false)
+  const [weather, setWeather] = useState(null)
+  const [status, setStatus] = useState('reading')
+  const [veiled, setVeiled] = useState(false)
+  const readAt = useRef(0)
 
   useEffect(() => {
-    if (FORCE_STILL || REDUCED_MOTION) return
-    let stop = null
-    let cancelled = false
-    detectTier().then((d) => {
-      if (cancelled) return
-      setDevice(d)
-      if (d.webgl) stop = startPerfGuard()
-    })
-    return () => {
-      cancelled = true
-      stop?.()
-    }
+    detectQuality().then(setQuality)
   }, [])
 
-  // Clip selection runs at load and every ten minutes (bible), so light and weather stay current.
-  // With the sky as the source there are no clips: the rows carry light and weather only.
-  // At load "enter" waits at most WEATHER_WAIT_MS for the weather; without it the rows say the weather
-  // is unknown (the type shows times only), and the answer, when it comes, still reaches the labels and,
-  // while the fall is ahead, the ending.
+  // The weather, now and every ten minutes. A failed refresh keeps the last reading while it is fresh.
   useEffect(() => {
     let cancelled = false
-    const manifest = usesFootage(CONTENT.source) ? loadManifest() : Promise.resolve(NO_CLIPS)
-    const source = CONTENT.source
-    const apply = (selection) => {
-      if (cancelled) return
-      if (FORCE_WEATHER) selection = forcedWeather(FORCE_WEATHER, selection)
-      // A failed refresh keeps the weather already read rather than blanking it.
-      const read = (rows) => rows?.some((r) => r.weatherKnown !== false)
-      if (state.diveCity && !read(selection) && read(state.clips)) return
-      state.clips = selection
-      setClips(selection)
-      // Chosen once per visit: the 10-minute reselect refreshes clips but never moves the dive.
-      // The ending's rain city is chosen first so the dive can avoid it.
-      if (!state.diveCity) {
-        state.rainCity = FORCE_RAIN ? forcedRain(FORCE_RAIN, selection) : chooseRainCity(selection, { source })
-        state.diveCity = FORCE_DIVE ?? chooseDiveCity(selection, DEFAULT_DIVE_CITY, { exclude: state.rainCity.city, source })
-        setRainCity(state.rainCity)
-        setDiveCity(state.diveCity)
-      } else if (state.rainCity?.kind === 'unknown' && state.time < SPLASH.fallPinFrom) {
-        // The weather came after "enter". The fall is still ahead, so the ending can answer after all
-        // (with its city, even if that is the dive's: the truth over two different cities).
-        state.rainCity = chooseRainCity(selection, { source })
-        setRainCity(state.rainCity)
+    const load = async () => {
+      let read = null
+      try {
+        read = await fetchCities(CITIES)
+      } catch (err) {
+        console.warn('[weather] unavailable:', err.message)
       }
-      if (import.meta.env.DEV) console.table(selection.map(({ urls, ...row }) => row))
+      if (cancelled) return
+      if (read && Object.values(read).some(Boolean)) {
+        readAt.current = Date.now()
+        setWeather(read)
+        setStatus('read')
+      } else {
+        if (Date.now() - readAt.current > STALE_MS) setWeather(null)
+        setStatus('failed')
+      }
     }
-    const select = async (wait) => {
-      const m = await manifest
-      const pending = fetchWeather(CITIES)
-      const wx = wait ? await Promise.race([pending, delay(WEATHER_WAIT_MS)]) : await pending
-      apply(await selectClips(m, CITIES, now(), wx ?? unknownWeather(CITIES)))
-      if (!wx) apply(await selectClips(m, CITIES, now(), await pending))
-    }
-    select(true).catch((err) => {
-      // Never leave the loader without "enter": fall back to the default dive city, and say nothing
-      // about the weather.
-      console.warn('[clips] selection failed:', err)
-      if (cancelled || state.diveCity) return
-      state.rainCity = { kind: 'unknown' }
-      state.diveCity = DEFAULT_DIVE_CITY
-      setRainCity(state.rainCity)
-      setDiveCity(state.diveCity)
-    })
-    const timer = setInterval(() => select(false).catch((err) => console.warn('[clips] refresh failed:', err)), RESELECT_MS)
+    load()
+    const timer = setInterval(load, REFRESH_MS)
     return () => {
       cancelled = true
       clearInterval(timer)
     }
   }, [])
 
-  // prefers-reduced-motion and no-WebGL visitors get the still page: a frame of the frozen rain and
-  // the cities as they are right now. No animation.
-  if (still) return <StillPage clips={clips} rainCity={rainCity} />
-  return <Site clips={clips} device={device} diveCity={diveCity} rainCity={rainCity} />
-}
+  const select = useCallback(
+    (id) => {
+      if (id === cityId) return
+      history.replaceState(null, '', `#${id}`)
+      // Reduced motion: no swing across the studio. The picture dips out, changes, and comes back.
+      if (reducedMotion) {
+        setVeiled(true)
+        setTimeout(() => {
+          setCityId(id)
+          setTimeout(() => setVeiled(false), 120)
+        }, 320)
+      } else setCityId(id)
+    },
+    [cityId]
+  )
 
-// "enter" waits for the backdrop to be on the GPU and, with the sky as the source, for every drawn
-// city's sky to be prepared (tables, catalogue, noise, each city's texture, shaders compiled), at most
-// SKY_WAIT_MS so it never hangs; anything left after that keeps preparing one piece per frame.
-const SKY_WAIT_MS = 6000
-
-function useScenePrepared() {
-  const [prepared, setPrepared] = useState(false)
+  // Left and right step through the cities.
   useEffect(() => {
-    if (prepared) return
-    const waits = usesFootage(CONTENT.source) ? [onBackdropReady] : [onBackdropReady, onSkyReady]
-    let left = waits.length
-    const stops = waits.map((on) => on(() => --left === 0 && setPrepared(true)))
-    const cap = setTimeout(() => setPrepared(true), SKY_WAIT_MS)
-    return () => {
-      stops.forEach((stop) => stop())
-      clearTimeout(cap)
+    const onKey = (e) => {
+      if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return
+      if (document.querySelector('.wx-panel')) return
+      const i = CITIES.findIndex((c) => c.id === cityId)
+      const next = CITIES[(i + (e.key === 'ArrowRight' ? 1 : CITIES.length - 1)) % CITIES.length]
+      select(next.id)
     }
-  }, [prepared])
-  return prepared
-}
+    const onHash = () => setCityId(fromHash())
+    window.addEventListener('keydown', onKey)
+    window.addEventListener('hashchange', onHash)
+    return () => {
+      window.removeEventListener('keydown', onKey)
+      window.removeEventListener('hashchange', onHash)
+    }
+  }, [cityId, select])
 
-function Site({ clips, device, diveCity, rainCity }) {
-  const film = useRef(null)
-  const scenePrepared = useScenePrepared()
+  const onReady = useCallback(() => setReady(true), [])
+  const onTone = useCallback((tone) => (document.documentElement.dataset.tone = tone), [])
 
-  useEffect(() => {
-    film.current = initFilm({ onTop: startFocusPull })
-    return () => film.current.destroy()
-  }, [])
-
-  const handleEnter = useCallback(() => {
-    unlockAudio()
-    state.unlocked = true
-    film.current.enter()
-    startFocusPull()
-  }, [])
-
-  // Back at the top the first shot plays again (initFilm's onTop).
-  const handleTop = useCallback(() => film.current.toTop(), [])
-  // The expanded weather inside the dive drop holds the film while it is open.
-  const handleLock = useCallback((on) => film.current?.setLocked(on), [])
-
+  const shown = fake ? { ...weather, [cityId]: { current: fake, hourly: null, daily: null, nowcast: null, air: null } } : weather
+  const noModel = quality && !quality.webgl
   return (
     <>
-      {device?.webgl && (
-        <Canvas
-          frameloop="never"
-          dpr={[1, quality.dpr]}
-          gl={{ antialias: false, powerPreference: 'high-performance' }}
-          camera={{ fov: CAMERA_FOV, near: 0.02, far: 200 }}
-          style={{ position: 'fixed', inset: 0, pointerEvents: 'none' }}
-        >
-          <Experience clips={clips} diveCity={diveCity ?? DEFAULT_DIVE_CITY} rainCity={rainCity} />
-        </Canvas>
+      {quality?.webgl && (
+        <Stage cityId={cityId} weather={shown} lite={quality.lite} still={reducedMotion} className={veiled ? 'stage is-veiled' : 'stage'} onReady={onReady} onTone={onTone} />
       )}
-      <DropLabels clips={clips} />
-      <WordSketch />
-      <CityType clips={clips} cityId={diveCity ?? DEFAULT_DIVE_CITY} onLock={handleLock} />
-      {/* The answer and the final screen share one column, so the answer never overlaps the way back. */}
-      <div className="ending-ui">
-        <EndType clips={clips} rainCity={rainCity} />
-        <BackToTop onTop={handleTop} clips={clips} rainCity={rainCity} />
+      {noModel && <p className="no-model">This browser cannot draw the models (no WebGL). The weather below is live all the same.</p>}
+      {(ready || noModel) && <CityPanel cityId={cityId} onSelect={select} weather={shown} status={fake ? 'read' : status} />}
+      <div className={`loader${ready || noModel ? ' is-done' : ''}`} aria-hidden={ready || noModel}>
+        <div>
+          <div className="loader__name">schwe</div>
+          <div className="loader__note">setting up the model</div>
+        </div>
       </div>
-      <Captions />
-      <MoveHint />
-      <ProgressRail />
-      <div id="fade" />
-      <SoundToggle />
-      <Loader onEnter={handleEnter} ready={diveCity !== null && scenePrepared} />
-      {DevOverlay && (
-        <Suspense fallback={null}>
-          <DevOverlay />
-        </Suspense>
-      )}
-      {Bench && (
-        <Suspense fallback={null}>
-          <Bench film={film} />
-        </Suspense>
-      )}
     </>
   )
-}
-
-// Dev only: applies ?weather= to the selection rows. Labels follow the usual rain-rate classes
-// (light < 2.5 mm/h, moderate to 7.6, heavy above).
-function forcedWeather(param, selection) {
-  const forced = Object.fromEntries(param.split(',').map((s) => s.split(':')).map(([city, cloud, rain]) => [city, { cloud: Number(cloud), rain: Number(rain ?? 0) }]))
-  const label = ({ cloud, rain }) =>
-    rain > 0 ? (rain >= 7.6 ? 'heavy rain' : rain >= 2.5 ? 'rain' : 'light rain') : cloud >= 0.9 ? 'overcast' : cloud > 0.2 ? 'partly cloudy' : 'clear'
-  return selection.map((row) => {
-    const w = forced[row.city]
-    if (!w) return row
-    return { ...row, cloudCover: w.cloud, mmPerHour: w.rain, weather: w.rain > 0 ? 'rain' : 'clear', weatherLabel: label(w), weatherKnown: true, code: null }
-  })
-}
-
-// Dev only: builds a rain choice from ?rain=, using the selection's real data where it has it.
-function forcedRain(param, selection) {
-  if (param === 'none' || param === 'unknown') return { kind: param }
-  const [city, minutes] = param.split('@')
-  if (minutes != null) return { kind: 'soon', city, minutes: Number(minutes) }
-  const row = selection.find((r) => r.city === city)
-  const raining = row?.weather === 'rain'
-  return { kind: 'now', city, mmPerHour: raining ? row.mmPerHour : null, label: raining ? row.weatherLabel : 'rain' }
 }

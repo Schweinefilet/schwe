@@ -16,16 +16,16 @@ export const plasterUniforms = {
 
 const COMMON_VERT = /* glsl */ `
   attribute vec4 bake;
-  varying vec2 vBake;
+  varying vec3 vBake;
   varying vec3 vModel;
 `
 const BEGIN_VERT = /* glsl */ `
-  vBake = bake.rg;
+  vBake = bake.rgb;
   vModel = position;
 `
 
 const COMMON_FRAG = /* glsl */ `
-  varying vec2 vBake;
+  varying vec3 vBake;
   varying vec3 vModel;
   uniform float uNight;
   uniform float uLit;
@@ -53,7 +53,7 @@ const COMMON_FRAG = /* glsl */ `
   }
 
   vec3 windows(vec3 nWorld) {
-    if (uNight < 0.004 || abs(nWorld.y) > 0.35 || vModel.y < 1.0) return vec3(0.0);
+    if (uNight < 0.004 || vBake.z < 0.75 || abs(nWorld.y) > 0.35 || vModel.y < 1.0) return vec3(0.0);
     vec2 along = normalize(vec2(-nWorld.z, nWorld.x));
     vec2 q = vec2(dot(vModel.xz, along) / 3.3, vModel.y / 3.6);
     float seed = vBake.y;
@@ -101,7 +101,7 @@ export function buildingMaterial() {
   // The mesh is quantized: its node's matrix makes metres of it. World metres, then (each city's offset on
   // the floor only shifts the window grid).
   m.userData.beginVertex = /* glsl */ `
-    vBake = bake.rg;
+    vBake = bake.rgb;
     vModel = (modelMatrix * vec4(position, 1.0)).xyz;
   `
   return patch(m, {
@@ -109,6 +109,11 @@ export function buildingMaterial() {
     emissive: /* glsl */ `
       vec3 nWorld = normalize(cross(dFdx(vModel), dFdy(vModel)));
       totalEmissiveRadiance += windows(nWorld);
+      // A floodlit structure (the Eiffel Tower) glows gold all over instead.
+      // Lit from below and from one side, so its faces still read.
+      float flood = step(0.25, vBake.z) * step(vBake.z, 0.75);
+      float facing = 0.4 + 0.6 * abs(dot(nWorld, normalize(vec3(0.62, 0.25, 0.74))));
+      totalEmissiveRadiance += uNight * flood * vec3(1.0, 0.66, 0.28) * 0.42 * facing * mix(0.45, 1.0, vBake.x);
       // The streets' own light after dark: warm at the foot of every wall, strongest where the walls stand close.
       totalEmissiveRadiance += uNight * vec3(1.0, 0.6, 0.3) * 0.07 * exp(-max(vModel.y, 0.0) / 20.0) * (1.5 - vBake.x);
       diffuseColor.rgb *= 1.0 - 0.14 * uWet;
@@ -122,7 +127,7 @@ export function plinthMaterial(map, { halfLength, halfWidth }, depth) {
   const m = new THREE.MeshStandardMaterial({ color: PLASTER, roughness: 0.9, metalness: 0 })
   m.userData.uniforms = { uGround: { value: map }, uHalf: { value: new THREE.Vector2(halfLength, halfWidth) }, uTop: { value: depth / 2 } }
   m.userData.beginVertex = /* glsl */ `
-    vBake = vec2(1.0);
+    vBake = vec3(1.0);
     vModel = position;
   `
   return patch(m, {
@@ -138,7 +143,7 @@ export function plinthMaterial(map, { halfLength, halfWidth }, depth) {
       onTop = step(uTop - 0.5, vModel.y);
       groundMap = texture2D(uGround, clamp((vModel.xz + uHalf) / (2.0 * uHalf), 0.0, 1.0)).rg;
       float water = groundMap.g * onTop;
-      diffuseColor.rgb = mix(diffuseColor.rgb * (1.0 - 0.1 * uWet), vec3(0.7, 0.74, 0.78) * mix(1.0, 0.45, uNight), water);
+      diffuseColor.rgb = mix(diffuseColor.rgb * (1.0 - 0.1 * uWet), vec3(0.655, 0.7, 0.75) * mix(1.0, 0.45, uNight), water);
       roughnessFactor = mix(roughnessFactor, 0.32, water);
       // After dark the streets glow between the buildings (the occlusion map is where they stand close).
       totalEmissiveRadiance += uNight * vec3(1.0, 0.6, 0.3) * 0.11 * onTop * (1.0 - water) * (1.0 - groundMap.r);

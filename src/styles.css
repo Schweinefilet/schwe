@@ -1,10 +1,10 @@
-/* The UI over the night scene is white and pastel, dreamy and smooth. Two faces: Playwrite AU VIC (a
-   connected hand, never letter-spaced: tracking breaks its joins) for the name, the question, the
-   captions, the answer and the cities' names; Source Sans 3 (a quiet humanist sans, tabular figures)
-   for everything that is read rather than looked at: times and weather, buttons, the about text and the
-   credits. White type with soft glows, lavender for secondary lines, peach for the answer, indigo (never
-   neutral black) for every shadow and scrim. Text colours are solid tokens, not opacities, so contrast
-   does not depend on what is behind them. */
+/* The interface over the studio: type and a few controls laid straight on the picture, and the weather
+   in full on frosted glass (WeatherPanel.jsx). Two faces: Playwrite AU VIC (a connected hand, never
+   letter-spaced: tracking breaks its joins) for names; Source Sans 3 (a quiet humanist sans, tabular
+   figures) for everything that is read rather than looked at.
+   Two tones, set on <html data-tone> by the scene (App.jsx) from what is behind the type: over the lit
+   plaster, ink on paper; after dark, white and pastel on indigo. Every colour below is a token that the
+   tone redefines, so nothing else needs to know which it is. */
 @font-face {
   font-family: 'Playwrite AU VIC';
   src: url('./assets/playwrite-au-vic-latin.woff2') format('woff2');
@@ -23,20 +23,24 @@
 }
 
 :root {
-  --ui-white: #fff;
-  --ui-lavender: #e6e3ff;
-  --ui-peach: #ffd2bd;
-  --ui-mist: #d4e2ff;
-  --ui-night: #030307;
-  --ui-glow: rgba(230, 227, 255, 0.35);
-  /* Secondary and tertiary text: lavender mixed toward the night, ≥ 7:1 on #030307. */
+  /* After dark (the default: the page paints dark before the scene says otherwise). */
+  --ui-white: #fff; /* primary text */
+  --ui-lavender: #e6e3ff; /* lines, rings */
+  --ui-peach: #ffd2bd; /* temperature */
+  --ui-mist: #d4e2ff; /* water */
   --ui-text-2: #d4d1ee;
   --ui-text-3: #b4b1d0;
-  /* Shadows are a deep indigo, so the halo under white type feels like dusk, not a black smudge. */
+  /* As triples, for translucent strokes and fills. */
+  --ui-line: 230, 227, 255;
+  --ui-peach-rgb: 255, 210, 189;
+  --ui-mist-rgb: 212, 226, 255;
+  --ui-shine: 255, 255, 255;
+  --ui-glow: rgba(var(--ui-line), 0.35);
+  /* What sits behind type: scrims, glass, the halo under each glyph. Indigo, never neutral black. */
   --ui-ink: 8, 7, 28;
   /* Tight: a wide glyph shadow merges, over a line of type, into a dark block. The scrim does the rest. */
   --ui-halo: 0 0 2px rgba(var(--ui-ink), 0.75), 0 0 7px rgba(var(--ui-ink), 0.5), 0 0 14px rgba(var(--ui-ink), 0.2);
-  --ui-glow-white: 0 0 16px rgba(255, 255, 255, 0.2);
+  --ui-glow-white: 0 0 16px rgba(var(--ui-shine), 0.2);
 
   /* The two faces. */
   --font-script: 'Playwrite AU VIC', 'Snell Roundhand', 'Segoe Script', cursive;
@@ -77,7 +81,7 @@
 
   /* Focus: one soft lavender ring that follows the control's own rounding. */
   --focus-ring: 2px solid var(--ui-lavender);
-  --focus-glow: 0 0 0 5px rgba(230, 227, 255, 0.14), 0 0 22px rgba(230, 227, 255, 0.4);
+  --focus-glow: 0 0 0 5px rgba(var(--ui-line), 0.14), 0 0 22px rgba(var(--ui-line), 0.4);
 }
 
 html,
@@ -85,7 +89,7 @@ body {
   margin: 0;
   height: 100%;
   overflow: hidden;
-  background: #000;
+  background: #0b0d14;
   color: var(--ui-white);
 }
 
@@ -102,9 +106,7 @@ body {
   -webkit-touch-callout: none;
 }
 
-.sheet,
-.wx-panel,
-.bench-panel {
+.wx-panel {
   touch-action: pan-y;
   user-select: text;
   -webkit-user-select: text;
@@ -140,39 +142,6 @@ button {
   font-variant-numeric: tabular-nums;
 }
 
-/* The pill: "enter" and "back to top". */
-.pill {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-height: 44px;
-  /* The tracking trails the last letter; the same extra before the first keeps the word centred. */
-  padding: 0.75rem 1.9rem 0.75rem calc(1.9rem + var(--track-label));
-  border: 1px solid rgba(255, 255, 255, 0.45);
-  border-radius: 999px;
-  background: rgba(230, 227, 255, 0.06);
-  box-shadow: 0 0 18px rgba(230, 227, 255, 0.22), inset 0 0 10px rgba(230, 227, 255, 0.08);
-  color: var(--ui-white);
-  font-family: var(--font-text);
-  font-size: var(--t-meta);
-  font-weight: 400;
-  letter-spacing: var(--track-label);
-  line-height: 1;
-  text-shadow: 0 0 10px rgba(255, 255, 255, 0.35);
-  cursor: pointer;
-  transition: border-color var(--dur-quick) ease, box-shadow var(--dur-quick) ease;
-}
-
-.pill--lg {
-  padding: 0.9rem 2.4rem 0.9rem calc(2.4rem + var(--track-label));
-  font-size: 0.9375rem;
-}
-
-.pill:hover {
-  border-color: rgba(255, 255, 255, 0.85);
-  box-shadow: 0 0 24px rgba(230, 227, 255, 0.4), inset 0 0 12px rgba(230, 227, 255, 0.14);
-}
-
 /* A quiet text button: "cities", "about", "share". Rounded like the pill, so its focus ring is too. */
 .text-link {
   display: inline-flex;
@@ -196,10 +165,7 @@ button {
 }
 
 /* One focus ring for everything that takes the keyboard. */
-.pill:focus-visible,
-.text-link:focus-visible,
-.sound-toggle:focus-visible,
-.sheet__close:focus-visible {
+.text-link:focus-visible {
   outline: var(--focus-ring);
   outline-offset: 3px;
   box-shadow: var(--focus-glow);
@@ -210,224 +176,21 @@ button {
   outline-offset: -4px;
 }
 
-.sheet a:focus-visible,
-.still a:focus-visible {
-  outline: var(--focus-ring);
-  outline-offset: 3px;
-  border-radius: 4px;
-  box-shadow: var(--focus-glow);
-}
-
 :focus:not(:focus-visible) {
   outline: none;
 }
 
 /* A city's name, and the line under it (local time and weather). */
-.city-type__name,
-.drop-label__name {
+.city-type__name {
   font-family: var(--font-script);
   font-size: var(--t-name);
   font-weight: 300;
   line-height: 1.5;
 }
 
-.city-type__meta,
-.drop-label__meta,
-.end-type__meta,
-.still__meta {
+.city-type__meta {
   margin-top: 0.25em;
   color: var(--ui-text-2);
-}
-
-/* The city the answer names: peach, wherever the answer is set. */
-.answer-city {
-  color: var(--ui-peach);
-  text-shadow: var(--ui-halo), 0 0 18px rgba(255, 228, 216, 0.5);
-}
-
-/* The drop: the favicon's mark (DropMark.jsx), above the name on the loader and the still page. */
-.drop-mark {
-  display: block;
-  width: 30px;
-  height: 30px;
-  filter: drop-shadow(0 0 14px rgba(230, 227, 255, 0.3));
-}
-
-/* The screen before "enter" ---------------------------------------------------------------------- */
-
-/* The name, the question, the drop, and "enter" (or, while it loads, what is being waited for) in one
-   place. A dark night with a slowly drifting pastel haze: lavender, peach and mist. */
-.loader {
-  position: fixed;
-  inset: 0;
-  z-index: 10;
-  display: grid;
-  place-items: center;
-  align-content: center;
-  padding: 24px 16px;
-  overflow: hidden;
-  background: var(--ui-night);
-  text-align: center;
-}
-
-.loader::before {
-  content: '';
-  position: absolute;
-  inset: -12%;
-  z-index: -1;
-  background:
-    radial-gradient(48% 38% at 50% 44%, rgba(190, 178, 255, 0.22), transparent 72%),
-    radial-gradient(36% 30% at 62% 62%, rgba(255, 196, 172, 0.15), transparent 70%),
-    radial-gradient(42% 34% at 36% 34%, rgba(164, 202, 255, 0.14), transparent 70%);
-  animation: loader-haze var(--loop-haze) ease-in-out infinite alternate;
-  will-change: transform;
-}
-
-@keyframes loader-haze {
-  to {
-    transform: translate(2.5%, -2%) scale(1.07);
-  }
-}
-
-.loader .drop-mark {
-  margin-bottom: 1.6rem;
-  animation: loader-in var(--dur-enter) ease both, loader-drop var(--loop-breathe) ease-in-out var(--dur-enter) infinite;
-}
-
-/* The type settles in over the haze index.html has already painted: up a few pixels, out of a blur. */
-@keyframes loader-in {
-  from {
-    opacity: 0;
-    transform: translateY(6px);
-    filter: blur(6px);
-  }
-}
-
-@keyframes loader-drop {
-  50% {
-    opacity: 0.7;
-    transform: translateY(3px);
-  }
-}
-
-.loader__title {
-  margin: 0;
-  font-family: var(--font-script);
-  font-size: var(--t-title);
-  font-weight: 200;
-  line-height: 1.3;
-  text-shadow: 0 0 28px var(--ui-glow);
-  animation: loader-in var(--dur-enter) var(--ease-out) 0.1s both;
-}
-
-.loader__question {
-  margin: 0.6rem 0 0;
-  animation: loader-in var(--dur-enter) var(--ease-out) 0.3s both;
-  color: var(--ui-text-2);
-  font-family: var(--font-script);
-  font-size: var(--t-sub);
-  font-weight: 300;
-}
-
-.loader__action {
-  display: grid;
-  place-items: center;
-  margin-top: 2.6rem;
-  min-height: 52px;
-}
-
-.loader__action > * {
-  grid-area: 1 / 1;
-}
-
-.loader__status {
-  margin: 0;
-  pointer-events: none; /* shares its cell with "enter", and paints above it while fading */
-  color: var(--ui-text-2);
-  font-size: var(--t-meta);
-  letter-spacing: var(--track-label);
-  opacity: 0;
-  transition: opacity var(--dur-base) ease;
-}
-
-.loader__status.is-shown {
-  opacity: 1;
-  animation: loader-status var(--loop-fall) ease-in-out 0.8s infinite;
-}
-
-@keyframes loader-status {
-  50% {
-    opacity: 0.7;
-  }
-}
-
-/* "enter" arrives: it fades in, and its glow swells once as it does. */
-.loader__enter {
-  position: relative;
-  z-index: 1;
-  opacity: 0;
-  visibility: hidden;
-  transition: opacity var(--dur-base) ease, visibility 0s var(--dur-base), border-color var(--dur-quick) ease, box-shadow var(--dur-quick) ease;
-}
-
-.loader__enter.is-ready {
-  opacity: 1;
-  visibility: visible;
-  border-color: rgba(255, 255, 255, 0.6);
-  animation: loader-arrive var(--loop-fall) ease-out 0.2s 1 both;
-  transition: opacity var(--dur-base) ease, border-color var(--dur-quick) ease, box-shadow var(--dur-quick) ease;
-}
-
-@keyframes loader-arrive {
-  40% {
-    box-shadow: 0 0 36px rgba(230, 227, 255, 0.5), inset 0 0 14px rgba(230, 227, 255, 0.18);
-  }
-}
-
-.loader__enter.is-ready:hover {
-  border-color: rgba(255, 255, 255, 0.9);
-}
-
-/* Two phrases, each kept whole: on a phone they stack, with no dot between and no word left alone. */
-.loader__note {
-  position: absolute;
-  left: 16px;
-  right: 16px;
-  bottom: max(28px, calc(env(safe-area-inset-bottom) + 16px));
-  margin: 0;
-  color: var(--ui-text-3);
-  font-size: var(--t-meta);
-  letter-spacing: var(--track-text);
-  line-height: 1.6;
-  animation: loader-in var(--dur-enter) ease 0.7s both;
-}
-
-.loader__note > span {
-  white-space: nowrap;
-}
-
-@media (max-width: 520px) {
-  .loader__note > span {
-    display: block;
-  }
-
-  .loader__note-sep {
-    display: none !important;
-  }
-}
-
-.dev-overlay {
-  position: fixed;
-  top: 8px;
-  left: 8px;
-  z-index: 100;
-  margin: 0;
-  padding: 6px 8px;
-  background: rgba(0, 0, 0, 0.6);
-  color: #9f9;
-  font: 11px/1.4 ui-monospace, Menlo, monospace;
-  white-space: pre;
-  pointer-events: none;
 }
 
 /* Over the film ---------------------------------------------------------------------------------- */
@@ -438,13 +201,13 @@ button {
    .jsx): frosted pastel glass over the whole frame. --in (0..1) is rig.cityType, written each frame by
    CityType.jsx; in the panel each card rises in a little after the one before (--i). */
 .city-type {
-  --in: 0;
+  --in: 1;
   position: fixed;
   inset: 0;
   z-index: 1;
-  opacity: var(--in);
-  visibility: hidden;
   pointer-events: none;
+  color: var(--ui-white);
+  transition: color var(--dur-slow) var(--ease-soft);
   text-shadow: var(--ui-halo), var(--ui-glow-white);
 }
 
@@ -454,26 +217,7 @@ button {
   inset: 0;
   z-index: -1;
   opacity: 0;
-  background:
-    linear-gradient(to bottom, rgba(var(--ui-ink), 0.5), rgba(var(--ui-ink), 0) 19%),
-    linear-gradient(to top, rgba(var(--ui-ink), 0.55), rgba(var(--ui-ink), 0) 23%),
-    linear-gradient(to right, rgba(var(--ui-ink), 0.42), rgba(var(--ui-ink), 0) 17%),
-    linear-gradient(to left, rgba(var(--ui-ink), 0.42), rgba(var(--ui-ink), 0) 19%);
   transition: opacity var(--dur-base) var(--ease-soft);
-}
-
-.city-type.has-detail::before {
-  opacity: 1;
-}
-
-/* Before the full weather is read, only the corner shows, on a drop label's scrim. */
-.city-type:not(.has-detail) .wx-corner::before {
-  content: '';
-  position: absolute;
-  inset: -2.4em -3.2em;
-  z-index: -1;
-  background: radial-gradient(closest-side, var(--scrim));
-  opacity: 0.55;
 }
 
 /* The expanded view dims the whole frame instead: one soft pool of dusk behind the glass. */
@@ -506,54 +250,16 @@ button {
   line-height: 0.9;
   letter-spacing: -0.03em;
   font-variant-numeric: tabular-nums;
-  background: linear-gradient(170deg, #fff 30%, var(--ui-peach) 75%, var(--ui-lavender));
+  background: linear-gradient(170deg, var(--ui-white) 30%, var(--ui-peach) 75%, var(--ui-lavender));
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
   text-shadow: none;
-  filter: drop-shadow(0 0 2px rgba(var(--ui-ink), 0.7)) drop-shadow(0 0 14px rgba(255, 210, 189, 0.25));
+  filter: drop-shadow(0 0 2px rgba(var(--ui-ink), 0.7)) drop-shadow(0 0 14px rgba(var(--ui-peach-rgb), 0.25));
 }
 
 .wx-corner__deg {
   font-size: 2.6rem;
-}
-
-.wx-edge {
-  position: absolute;
-  opacity: 0.92;
-}
-
-.wx-edge__label {
-  font-size: var(--t-fine);
-  letter-spacing: var(--track-label);
-  color: var(--ui-text-3);
-}
-
-.wx-edge--top,
-.wx-edge--bottom {
-  left: 50%;
-  width: min(48vw, 760px);
-  transform: translateX(-50%);
-  text-align: center;
-}
-
-.wx-edge--top {
-  top: max(20px, env(safe-area-inset-top));
-}
-
-.wx-edge--bottom {
-  bottom: max(20px, env(safe-area-inset-bottom));
-}
-
-.wx-ribbon__plot {
-  height: 52px;
-  margin: 1.4rem 0 0.2rem;
-}
-
-.wx-ribbon__bars {
-  height: 30px;
-  margin: 0.45rem 0 0;
-  border-bottom: 1px solid rgba(230, 227, 255, 0.18);
 }
 
 .wx-line--soft {
@@ -574,61 +280,6 @@ button {
   opacity: 0.6;
 }
 
-.wx-edge--left {
-  left: max(24px, env(safe-area-inset-left));
-  top: 50%;
-  display: flex;
-  flex-direction: column;
-  gap: 0.85rem;
-  margin: 0;
-  transform: translateY(-50%);
-}
-
-.wx-reading {
-  display: grid;
-  grid-template-columns: 28px auto;
-  grid-template-rows: auto auto;
-  column-gap: 0.6rem;
-  align-items: center;
-}
-
-.wx-reading__glyph {
-  grid-row: span 2;
-  width: 28px;
-  height: 28px;
-}
-
-.wx-reading__glyph .wx-ring,
-.wx-reading__glyph .wx-compass {
-  width: 28px;
-  height: 28px;
-}
-
-.wx-reading__glyph .wx-ring__value {
-  display: none;
-}
-
-.wx-reading dt {
-  grid-column: 2;
-  font-size: var(--t-fine);
-  line-height: 1.2;
-  color: var(--ui-text-3);
-}
-
-.wx-reading dd {
-  grid-column: 2;
-  margin: 0;
-  font-size: 0.9375rem;
-  line-height: 1.3;
-  font-variant-numeric: tabular-nums;
-}
-
-.wx-reading small,
-.wx-reading dd small {
-  font-size: var(--t-fine);
-  color: var(--ui-text-2);
-}
-
 .wx-compass--bare .wx-ring__track {
   stroke-width: 6;
 }
@@ -646,60 +297,6 @@ button {
   display: none;
 }
 
-.wx-edge--right {
-  right: max(72px, env(safe-area-inset-right));
-  top: 50%;
-  width: 190px;
-  transform: translateY(-50%);
-}
-
-.wx-miniweek {
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-  margin: 0.6rem 0 0;
-  padding: 0;
-  list-style: none;
-}
-
-.wx-miniweek li {
-  display: grid;
-  grid-template-columns: 3em 2em 1fr 2em;
-  align-items: center;
-  gap: 0.4rem;
-  color: var(--ui-text-2);
-}
-
-.wx-miniweek__day {
-  color: var(--ui-white);
-}
-
-.wx-miniweek__t {
-  text-align: right;
-}
-
-.wx-miniweek__track {
-  position: relative;
-  height: 4px;
-  border-radius: 2px;
-  background: rgba(230, 227, 255, 0.12);
-}
-
-.wx-miniweek__track span {
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  min-width: 4px;
-  border-radius: 2px;
-  background: linear-gradient(90deg, var(--ui-mist), var(--ui-lavender), var(--ui-peach));
-  opacity: 0.85;
-}
-
-.wx-edge__sun {
-  margin-top: 0.8rem;
-  color: var(--ui-text-2);
-}
-
 /* The two controls: "more weather" at the edges, "close" in the expanded view. */
 .wx-more,
 .wx-close {
@@ -708,7 +305,7 @@ button {
   gap: 0.5rem;
   min-height: 44px;
   padding: 0 1.1rem;
-  border: 1px solid rgba(230, 227, 255, 0.32);
+  border: 1px solid rgba(var(--ui-line), 0.32);
   border-radius: 999px;
   background: rgba(var(--ui-ink), 0.35);
   color: var(--ui-white);
@@ -722,9 +319,9 @@ button {
 
 .wx-more:hover,
 .wx-close:hover {
-  background: rgba(230, 227, 255, 0.14);
-  border-color: rgba(230, 227, 255, 0.6);
-  box-shadow: 0 0 22px rgba(230, 227, 255, 0.25);
+  background: rgba(var(--ui-line), 0.14);
+  border-color: rgba(var(--ui-line), 0.6);
+  box-shadow: 0 0 22px rgba(var(--ui-line), 0.25);
 }
 
 .wx-more:focus-visible,
@@ -745,7 +342,7 @@ button {
 .wx-panel {
   --gap: clamp(10px, 1.1vw, 16px);
   --glass: rgba(var(--ui-ink), 0.38);
-  --edge: rgba(230, 227, 255, 0.2);
+  --edge: rgba(var(--ui-line), 0.2);
   position: absolute;
   top: max(clamp(20px, 4vh, 44px), env(safe-area-inset-top));
   right: max(72px, env(safe-area-inset-right));
@@ -784,11 +381,11 @@ button {
   padding: clamp(12px, 1.3vw, 20px);
   border-radius: 22px;
   background:
-    radial-gradient(120% 80% at 0% 0%, rgba(230, 227, 255, 0.13), rgba(230, 227, 255, 0) 60%),
-    radial-gradient(90% 70% at 100% 100%, rgba(255, 210, 189, 0.08), rgba(255, 210, 189, 0) 60%),
+    radial-gradient(120% 80% at 0% 0%, rgba(var(--ui-line), 0.13), rgba(var(--ui-line), 0) 60%),
+    radial-gradient(90% 70% at 100% 100%, rgba(var(--ui-peach-rgb), 0.08), rgba(var(--ui-peach-rgb), 0) 60%),
     var(--glass);
   border: 1px solid var(--edge);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12), 0 18px 50px -20px rgba(var(--ui-ink), 0.7);
+  box-shadow: inset 0 1px 0 rgba(var(--ui-shine), 0.12), 0 18px 50px -20px rgba(var(--ui-ink), 0.7);
   -webkit-backdrop-filter: blur(18px) saturate(1.15);
   backdrop-filter: blur(18px) saturate(1.15);
   transform: translateY(var(--rise));
@@ -869,7 +466,7 @@ button {
 
 /* Charts. Grid lines and axes stay recessive; the data wears the pastels. */
 .wx-grid {
-  stroke: rgba(230, 227, 255, 0.12);
+  stroke: rgba(var(--ui-line), 0.12);
   stroke-width: 1;
 }
 
@@ -882,11 +479,11 @@ button {
 
 .wx-line--temp {
   stroke: var(--ui-peach);
-  filter: drop-shadow(0 0 6px rgba(255, 210, 189, 0.55));
+  filter: drop-shadow(0 0 6px rgba(var(--ui-peach-rgb), 0.55));
 }
 
 .wx-cross {
-  stroke: rgba(255, 255, 255, 0.55);
+  stroke: rgba(var(--ui-shine), 0.55);
   stroke-width: 1;
   stroke-dasharray: 2 3;
 }
@@ -928,7 +525,7 @@ button {
   height: 22%;
   min-height: 26px;
   margin: 0 0.4rem;
-  border-bottom: 1px solid rgba(230, 227, 255, 0.16);
+  border-bottom: 1px solid rgba(var(--ui-line), 0.16);
 }
 
 .wx-dot {
@@ -938,18 +535,18 @@ button {
   margin: -4px 0 0 -4px;
   border-radius: 50%;
   background: var(--ui-peach);
-  box-shadow: 0 0 0 2px rgba(var(--ui-ink), 0.55), 0 0 12px rgba(255, 210, 189, 0.7);
+  box-shadow: 0 0 0 2px rgba(var(--ui-ink), 0.55), 0 0 12px rgba(var(--ui-peach-rgb), 0.7);
 }
 
 .wx-dot--now {
-  background: #fff;
+  background: var(--ui-white);
 }
 
 .wx-dot--hover {
   width: 10px;
   height: 10px;
   margin: -5px 0 0 -5px;
-  background: #fff;
+  background: var(--ui-white);
 }
 
 .wx-dot__label {
@@ -986,13 +583,13 @@ button {
   max-width: 10px;
   transform: translateX(-50%);
   border-radius: 4px 4px 1px 1px;
-  background: linear-gradient(to top, rgba(212, 226, 255, 0.45), var(--ui-mist));
+  background: linear-gradient(to top, rgba(var(--ui-mist-rgb), 0.45), var(--ui-mist));
   opacity: 0.8;
 }
 
 .wx-bar.is-on {
   opacity: 1;
-  box-shadow: 0 0 10px rgba(212, 226, 255, 0.7);
+  box-shadow: 0 0 10px rgba(var(--ui-mist-rgb), 0.7);
 }
 
 .wx-axis {
@@ -1063,14 +660,14 @@ button {
   display: flex;
   align-items: flex-end;
   gap: 4px;
-  border-bottom: 1px solid rgba(230, 227, 255, 0.16);
+  border-bottom: 1px solid rgba(var(--ui-line), 0.16);
 }
 
 .wx-col {
   flex: 1;
   border-radius: 4px 4px 1px 1px;
-  background: linear-gradient(to top, rgba(212, 226, 255, 0.35), var(--ui-mist));
-  box-shadow: 0 0 10px rgba(212, 226, 255, 0.25);
+  background: linear-gradient(to top, rgba(var(--ui-mist-rgb), 0.35), var(--ui-mist));
+  box-shadow: 0 0 10px rgba(var(--ui-mist-rgb), 0.25);
 }
 
 .wx-plot__note {
@@ -1117,7 +714,7 @@ button {
   position: relative;
   height: 6px;
   border-radius: 3px;
-  background: rgba(230, 227, 255, 0.1);
+  background: rgba(var(--ui-line), 0.1);
 }
 
 .wx-week__range {
@@ -1127,7 +724,7 @@ button {
   min-width: 6px;
   border-radius: 3px;
   background: linear-gradient(90deg, var(--ui-mist), var(--ui-lavender), var(--ui-peach));
-  box-shadow: 0 0 10px rgba(230, 227, 255, 0.35);
+  box-shadow: 0 0 10px rgba(var(--ui-line), 0.35);
 }
 
 .wx-week__now {
@@ -1137,8 +734,8 @@ button {
   height: 10px;
   margin: -5px 0 0 -5px;
   border-radius: 50%;
-  background: #fff;
-  box-shadow: 0 0 0 2px rgba(var(--ui-ink), 0.6), 0 0 10px #fff;
+  background: var(--ui-white);
+  box-shadow: 0 0 0 2px rgba(var(--ui-ink), 0.6), 0 0 10px var(--ui-white);
 }
 
 .wx-wind {
@@ -1163,7 +760,7 @@ button {
 }
 
 .wx-tick {
-  stroke: rgba(230, 227, 255, 0.35);
+  stroke: rgba(var(--ui-line), 0.35);
   stroke-width: 1;
 }
 
@@ -1174,8 +771,8 @@ button {
 }
 
 .wx-compass__head {
-  fill: #fff;
-  filter: drop-shadow(0 0 4px rgba(230, 227, 255, 0.9));
+  fill: var(--ui-white);
+  filter: drop-shadow(0 0 4px rgba(var(--ui-line), 0.9));
 }
 
 .wx-compass__tail {
@@ -1216,7 +813,7 @@ button {
 
 .wx-ring__track {
   fill: none;
-  stroke: rgba(230, 227, 255, 0.14);
+  stroke: rgba(var(--ui-line), 0.14);
   stroke-width: 4;
 }
 
@@ -1225,7 +822,7 @@ button {
   stroke: var(--ui-lavender);
   stroke-width: 4;
   stroke-linecap: round;
-  filter: drop-shadow(0 0 4px rgba(230, 227, 255, 0.7));
+  filter: drop-shadow(0 0 4px rgba(var(--ui-line), 0.7));
 }
 
 .wx-sun {
@@ -1237,7 +834,7 @@ button {
 
 .wx-sun__path {
   fill: none;
-  stroke: rgba(230, 227, 255, 0.25);
+  stroke: rgba(var(--ui-line), 0.25);
   stroke-width: 1.5;
   stroke-dasharray: 3 5;
 }
@@ -1337,41 +934,6 @@ button {
       linear-gradient(to top, rgba(var(--ui-ink), 0.6), rgba(var(--ui-ink), 0) 34%);
   }
 
-  /* Clear of the progress rail on the right. */
-  .wx-edge--top,
-  .wx-edge--bottom {
-    left: max(16px, env(safe-area-inset-left));
-    right: max(52px, env(safe-area-inset-right));
-    width: auto;
-    transform: none;
-  }
-
-  .wx-edge--top {
-    top: max(76px, env(safe-area-inset-top));
-  }
-
-  .wx-edge--bottom {
-    bottom: calc(max(20px, env(safe-area-inset-bottom)) + 128px);
-  }
-
-  .wx-ribbon__plot {
-    height: 44px;
-  }
-
-  .wx-edge--left {
-    top: max(190px, env(safe-area-inset-top));
-    left: max(16px, env(safe-area-inset-left));
-    right: max(52px, env(safe-area-inset-right));
-    flex-direction: row;
-    justify-content: space-between;
-    transform: none;
-  }
-
-  .wx-reading:nth-child(n + 4),
-  .wx-edge--right {
-    display: none;
-  }
-
   .wx-more,
   .wx-close {
     right: max(16px, env(safe-area-inset-right));
@@ -1440,738 +1002,264 @@ button {
   }
 }
 
-/* City drop labels. Placed beside each drop from the render loop (DropLabelAnchors.jsx), which sets
-   transform, opacity and alignment. The scrim behind is wide and falls off with no edge, so over the
-   square's brightest lamps the type holds and the dark never reads as a box. */
-.drop-label {
-  position: fixed;
-  left: 0;
-  top: 0;
-  z-index: 1;
-  opacity: 0;
-  visibility: hidden;
-  pointer-events: none;
-  white-space: nowrap;
-  color: var(--ui-white);
-  text-shadow: var(--ui-halo);
-  will-change: transform, opacity;
+/* By day: ink on paper. The glass turns to frosted white, the pastels to their deeper selves. ------- */
+
+:root[data-tone='day'] {
+  --ui-white: #1d1e26;
+  --ui-lavender: #5e5f8f;
+  --ui-peach: #b9603a;
+  --ui-mist: #3f6fb0;
+  --ui-text-2: #474958;
+  --ui-text-3: #666878;
+  --ui-line: 52, 54, 84;
+  --ui-peach-rgb: 185, 96, 58;
+  --ui-mist-rgb: 63, 111, 176;
+  --ui-shine: 255, 255, 255;
+  --ui-ink: 250, 249, 246;
+  --ui-halo: 0 0 2px rgba(var(--ui-ink), 0.9), 0 0 8px rgba(var(--ui-ink), 0.7);
+  --ui-glow-white: 0 0 0 transparent;
+  --focus-ring: 2px solid #5e5f8f;
+  --focus-glow: 0 0 0 5px rgba(94, 95, 143, 0.16);
 }
 
-.drop-label::before {
-  content: '';
-  position: absolute;
-  inset: -3em -3.8em;
-  z-index: -1;
-  background: radial-gradient(closest-side, var(--scrim));
-  opacity: 0.78;
+:root[data-tone='day'] .wx-panel {
+  --glass: rgba(var(--ui-ink), 0.66);
+  --edge: rgba(var(--ui-line), 0.14);
 }
 
-.drop-label__meta {
-  color: var(--ui-lavender);
-  text-shadow: 0 0 3px rgba(var(--ui-ink), 0.95), var(--ui-halo);
+:root[data-tone='day'] .wx-card {
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.7), 0 18px 50px -24px rgba(40, 42, 70, 0.35);
 }
 
-/* The word's pencil sketch: a canvas the size of the word's area, moved and drawn from the render loop
-   (AlignmentWord.jsx). White pencil lines with a soft pastel halo. */
-.word-sketch {
-  position: fixed;
-  left: 0;
-  top: 0;
-  z-index: 1;
-  visibility: hidden;
-  pointer-events: none;
+:root[data-tone='day'] .city-type.is-open::before {
+  background: rgba(var(--ui-ink), 0.55);
 }
 
-.word-sketch--glow {
-  filter: drop-shadow(0 0 4px rgba(230, 227, 255, 0.55));
-}
+/* The studio (city/Stage.jsx): the whole window. ---------------------------------------------------- */
 
-/* The ending: a title card over whatever frame the rain makes. A scrim rises from the bottom as the
-   answer comes in (EndType.jsx) and stays under the final screen. */
-.ending-scrim {
-  position: fixed;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  height: min(78vh, 46rem);
-  z-index: -1; /* behind the answer and the final screen, in .ending-ui's stacking context */
-  opacity: 0;
-  pointer-events: none;
-  background: radial-gradient(85% 100% at 50% 100%, var(--scrim));
-}
-
-/* Beat 7 and the final screen in one column at the bottom: the answer (EndType.jsx), which comes in as
-   the rings spread and stays, above the way back and the links (BackToTop.jsx), which come once the
-   picture holds. The final screen's space is kept from the start, so the answer never moves. Under
-   #fade, so "back to top" takes it all into the black. */
-.ending-ui {
-  position: fixed;
-  left: 0;
-  right: 0;
-  bottom: max(4vh, calc(env(safe-area-inset-bottom) + 12px));
-  z-index: 1;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: clamp(1.1rem, 3vh, 2rem);
-  padding: 0 16px;
-  pointer-events: none;
-}
-
-.end-type {
-  max-width: 36rem;
-  opacity: 0;
-  visibility: hidden;
-  text-align: center;
-  text-shadow: var(--ui-halo), 0 0 18px rgba(255, 255, 255, 0.22);
-}
-
-.end-type__headline {
-  font-family: var(--font-script);
-  font-size: var(--t-lead);
-  font-weight: 300;
-  line-height: 1.55;
-  text-wrap: balance;
-}
-
-.end-type__meta {
-  margin-top: 0.6rem;
-  line-height: 1.6;
-}
-
-.final-screen {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 0.5rem;
-  width: 100%;
-  opacity: 0;
-  visibility: hidden;
-  pointer-events: auto;
-  transition: opacity var(--dur-base) ease, visibility 0s var(--dur-base);
-}
-
-.final-screen.is-shown {
-  opacity: 1;
-  visibility: visible;
-  transition: opacity var(--dur-slow) ease 0.3s;
-}
-
-.final-screen__links {
-  display: flex;
-  align-items: center;
-  gap: 0.1rem;
-  color: var(--ui-text-3);
-  text-shadow: var(--ui-halo);
-}
-
-/* "share" turns peach for a moment when the link has been copied. */
-.final-screen__share.is-copied {
-  color: var(--ui-peach);
-  text-shadow: var(--ui-halo), 0 0 14px rgba(255, 210, 189, 0.5);
-}
-
-/* The captions where no city is in view (Captions.jsx), set like the answer. */
-.caption {
-  position: fixed;
-  left: 16px;
-  right: 16px;
-  bottom: max(15vh, calc(env(safe-area-inset-bottom) + 72px));
-  z-index: 1;
-  max-width: 34rem;
-  margin: 0 auto;
-  opacity: 0;
-  visibility: hidden;
-  pointer-events: none;
-  text-align: center;
-  text-shadow: var(--ui-halo), 0 0 18px rgba(255, 255, 255, 0.2);
-}
-
-.caption::before {
-  content: '';
-  position: absolute;
-  inset: -3em -4em;
-  z-index: -1;
-  background: radial-gradient(closest-side, var(--scrim));
-  opacity: 0.5;
-}
-
-.caption__headline {
-  margin: 0;
-  font-family: var(--font-script);
-  font-size: var(--t-lead);
-  font-weight: 300;
-  line-height: 1.55;
-  text-wrap: balance;
-}
-
-.caption__sub {
-  margin: 0.5rem 0 0;
-  color: var(--ui-text-2);
-  font-family: var(--font-script);
-  font-size: var(--t-sub);
-  font-weight: 300;
-  line-height: 1.6;
-  text-wrap: balance;
-}
-
-/* After "enter", until the first move, on the word, and as a reminder (MoveHint.jsx): a drop falling
-   down a thin line, and the words. */
-.move-hint {
-  position: fixed;
-  left: 50%;
-  bottom: max(5vh, calc(env(safe-area-inset-bottom) + 18px));
-  z-index: 1;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 0.8rem;
-  transform: translate(-50%, 6px);
-  opacity: 0;
-  pointer-events: none;
-  transition: opacity var(--dur-base) ease, transform var(--dur-base) ease;
-}
-
-.move-hint::before {
-  content: '';
-  position: absolute;
-  inset: -2em -3.4em;
-  z-index: -1;
-  background: radial-gradient(closest-side, var(--scrim));
-  opacity: 0.5;
-}
-
-.move-hint.is-shown {
-  opacity: 1;
-  transform: translate(-50%, 0);
-  transition: opacity var(--dur-enter) ease, transform var(--dur-enter) var(--ease-out);
-}
-
-.move-hint__line {
-  position: relative;
-  width: 1px;
-  height: 48px;
-  overflow: hidden;
-  background: linear-gradient(rgba(230, 227, 255, 0), rgba(230, 227, 255, 0.45));
-}
-
-.move-hint__drop {
-  position: absolute;
-  left: -2px;
-  top: -6px;
-  width: 5px;
-  height: 5px;
-  border-radius: 50%;
-  background: #fff;
-  box-shadow: 0 0 8px rgba(230, 227, 255, 0.9);
-  animation: move-hint-drop var(--loop-fall) cubic-bezier(0.5, 0, 0.75, 0) infinite;
-}
-
-@keyframes move-hint-drop {
-  to {
-    transform: translateY(58px);
-  }
-}
-
-.move-hint__label {
-  padding-left: var(--track-label); /* the tracking trails the last letter: keep the word centred */
-  color: var(--ui-lavender);
-  font-size: var(--t-meta);
-  letter-spacing: var(--track-label);
-  text-shadow: var(--ui-halo), 0 0 14px rgba(230, 227, 255, 0.45);
-  white-space: nowrap;
-}
-
-/* Resting on the word: the drop falls a little faster, like a nudge. */
-.move-hint.is-on .move-hint__drop {
-  animation-duration: var(--dur-slower);
-}
-
-/* The way through, on the right edge under the sound switch: a line that fills as the page is scrolled,
-   a drop at its head, and a soft tick at each part of the film (the cities, the dive, the word), which
-   brightens once passed. Full as the answer comes in, and gone with it. On an indigo halo, so it holds
-   over bright frames. */
-.progress-rail {
-  position: fixed;
-  top: 24vh;
-  bottom: 24vh;
-  right: calc(max(14px, env(safe-area-inset-right)) + 22px);
-  z-index: 1;
-  width: 1px;
-  transform: translateX(50%);
-  background: linear-gradient(rgba(230, 227, 255, 0), rgba(230, 227, 255, 0.32) 10%, rgba(230, 227, 255, 0.32) 90%, rgba(230, 227, 255, 0));
-  box-shadow: 0 0 0 1px rgba(var(--ui-ink), 0.35), 0 0 8px rgba(var(--ui-ink), 0.6);
-  opacity: 0;
-  pointer-events: none;
-  transition: opacity var(--dur-base) ease;
-}
-
-.progress-rail.is-shown {
-  opacity: 1;
-  transition: opacity var(--dur-slower) ease 0.8s;
-}
-
-.progress-rail__fill {
-  position: absolute;
-  left: 0;
-  top: 0;
-  width: 1px;
-  height: 0;
-  background: linear-gradient(rgba(230, 227, 255, 0), rgba(230, 227, 255, 0.85));
-}
-
-.progress-rail__tick {
-  position: absolute;
-  left: -3px;
-  width: 7px;
-  height: 1px;
-  margin-top: -0.5px;
-  background: rgba(230, 227, 255, 0.45);
-  box-shadow: 0 0 3px rgba(var(--ui-ink), 0.9);
-  transition: background-color var(--dur-base) ease, box-shadow var(--dur-base) ease;
-}
-
-.progress-rail__tick.is-passed {
-  background: var(--ui-lavender);
-  box-shadow: 0 0 3px rgba(var(--ui-ink), 0.9), 0 0 6px rgba(230, 227, 255, 0.7);
-}
-
-.progress-rail__drop {
-  position: absolute;
-  left: -2.5px;
-  top: 0;
-  width: 6px;
-  height: 6px;
-  margin-top: -3px;
-  border-radius: 50%;
-  background: #fff;
-  box-shadow: 0 0 8px rgba(230, 227, 255, 0.9), 0 0 2px rgba(var(--ui-ink), 0.8);
-}
-
-/* Sound on and off, top right, from "enter" on. A faint ring so it reads as a button on any frame. */
-.sound-toggle {
-  position: fixed;
-  top: max(14px, env(safe-area-inset-top));
-  right: max(14px, env(safe-area-inset-right));
-  z-index: 4;
-  display: grid;
-  place-items: center;
-  width: 44px;
-  height: 44px;
-  padding: 0;
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  border-radius: 50%;
-  background: rgba(var(--ui-ink), 0.28);
-  color: var(--ui-white);
-  cursor: pointer;
-  opacity: 0;
-  visibility: hidden;
-  filter: drop-shadow(0 0 6px rgba(230, 227, 255, 0.5)) drop-shadow(0 0 2px rgba(var(--ui-ink), 0.6));
-  transition: opacity var(--dur-base) ease, border-color var(--dur-quick) ease, visibility 0s var(--dur-base);
-}
-
-.sound-toggle.is-shown {
-  opacity: 0.85;
-  visibility: visible;
-  transition: opacity var(--dur-slow) ease var(--dur-base), border-color var(--dur-quick) ease;
-}
-
-.sound-toggle.is-shown:hover,
-.sound-toggle.is-shown:focus-visible {
-  border-color: rgba(255, 255, 255, 0.5);
-  opacity: 1;
-  transition: opacity var(--dur-quick) ease, border-color var(--dur-quick) ease;
-}
-
-/* The sheet ------------------------------------------------------------------------------------- */
-
-/* The answer again, the cities, what this is, and the credits, over the last frame (CitySheet.jsx).
-   Indigo night with the pastel haze; its own scroll area (the film leaves input in it alone). */
-.sheet {
-  position: fixed;
+.stage {
+  position: fixed !important;
   inset: 0;
-  z-index: 5;
-  overflow-y: auto;
-  overscroll-behavior: contain;
-  padding: 0 20px max(56px, env(safe-area-inset-bottom));
-  background:
-    radial-gradient(60% 40% at 50% 20%, rgba(230, 227, 255, 0.12), transparent 72%),
-    radial-gradient(46% 34% at 66% 70%, rgba(255, 220, 204, 0.07), transparent 70%),
-    rgb(var(--ui-ink)); /* opaque: the answer and the links under it must not show through */
-  color: var(--ui-white);
-  scroll-padding-top: 84px; /* a section opened from a link clears the close button */
-  animation: sheet-in var(--dur-base) ease both;
+  transition: opacity var(--dur-base) var(--ease-soft);
 }
 
-.sheet:focus {
-  outline: none;
+.stage.is-veiled {
+  opacity: 0;
 }
 
-@keyframes sheet-in {
-  from {
-    opacity: 0;
-  }
-}
-
-.sheet__body {
-  width: min(36rem, 100%);
-  margin: 0 auto;
-}
-
-/* "close", on a bar that stays at the top as the sheet scrolls; the night fades in under it, so the
-   list never runs beneath the button. */
-.sheet__bar {
-  position: sticky;
-  top: 0;
-  z-index: 1;
-  display: flex;
-  justify-content: flex-end;
-  margin: 0 -20px;
-  padding: max(12px, env(safe-area-inset-top)) max(12px, env(safe-area-inset-right)) 28px;
-  background: linear-gradient(to bottom, rgb(var(--ui-ink)) 55%, rgba(var(--ui-ink), 0));
-  pointer-events: none;
-}
-
-.sheet__close {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.45rem;
-  min-height: 44px;
-  padding: 0 1rem 0 0.8rem;
-  border: 1px solid rgba(255, 255, 255, 0.22);
-  border-radius: 999px;
-  background: rgba(230, 227, 255, 0.05);
-  color: var(--ui-text-2);
-  font-family: var(--font-text);
-  font-size: var(--t-meta);
-  letter-spacing: var(--track-label);
-  pointer-events: auto;
-  cursor: pointer;
-  transition: color var(--dur-quick) ease, border-color var(--dur-quick) ease;
-}
-
-.sheet__close:hover {
-  color: var(--ui-white);
-  border-color: rgba(255, 255, 255, 0.5);
-}
-
-.sheet__close svg {
-  flex: none;
-}
-
-/* The answer, at the top, as the film left it. */
-.sheet__recap {
-  margin: 0.5rem 0 0;
-  padding-bottom: 2.4rem;
-  border-bottom: 1px solid rgba(230, 227, 255, 0.12);
-  text-align: center;
-}
-
-.sheet__recap-headline {
-  margin: 0;
-  font-family: var(--font-script);
-  font-size: var(--t-lead);
-  font-weight: 300;
-  line-height: 1.55;
-  text-wrap: balance;
-}
-
-.sheet__recap .meta {
-  margin: 0.6rem 0 0;
-  color: var(--ui-text-2);
-}
-
-.sheet__title {
-  margin: 2.8rem 0 1.1rem;
-  font-family: var(--font-script);
-  font-size: var(--t-heading);
-  font-weight: 200;
-  line-height: 1.5;
-  text-align: center;
-  text-shadow: 0 0 28px var(--ui-glow);
-}
-
-/* What this is: the text face at reading size, in a comfortable measure. */
-.sheet__about {
-  max-width: 34rem;
-  margin: 0 auto;
-  color: var(--ui-text-2);
-  font-size: var(--t-body);
-  font-weight: 400;
-  line-height: 1.7;
-  letter-spacing: var(--track-text);
-  text-wrap: pretty;
-}
-
-.sheet__about p {
-  margin: 0 0 1em;
-}
-
-/* The credits: a quiet list, each line what it is (lowercase, like the meta lines), then its source with
-   the source's own capitals, as a city keeps its name. */
-.credits {
-  display: grid;
-  gap: 1.1rem;
-  margin: 0;
-  color: var(--ui-text-3);
-  font-size: var(--t-fine);
-  line-height: 1.65;
-  letter-spacing: var(--track-text);
-}
-
-.credits dt {
-  color: var(--ui-text-2);
-  letter-spacing: var(--track-label);
-}
-
-.credits dd {
-  margin: 0.1rem 0 0;
-}
-
-.credits a {
-  color: var(--ui-text-2);
-  text-decoration-color: rgba(212, 209, 238, 0.45);
-  text-underline-offset: 3px;
-  transition: color var(--dur-quick) ease;
-}
-
-.credits a:hover {
-  color: var(--ui-white);
-}
-
-/* The ten cities, as they are right now: the sheet's list and the still page's. */
-.city-list {
-  display: grid;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.city-list li {
-  display: grid;
-  grid-template-columns: 1fr auto;
-  align-items: baseline;
-  gap: 0.2rem 1.2rem;
-  padding: 0.55rem 0;
-  border-bottom: 1px solid rgba(230, 227, 255, 0.07);
-}
-
-.city-list li:last-child {
-  border-bottom: 0;
-}
-
-.city-list__name {
+/* The name, top left. */
+.wordmark {
+  position: absolute;
+  top: max(20px, env(safe-area-inset-top));
+  left: max(24px, env(safe-area-inset-left));
   font-family: var(--font-script);
   font-size: var(--t-name);
   font-weight: 300;
-  line-height: 1.5;
-}
-
-.city-list__meta {
-  color: var(--ui-text-2);
-  text-align: right;
-}
-
-.city-list li.is-answer .city-list__name {
-  color: var(--ui-peach);
-  text-shadow: 0 0 14px rgba(255, 228, 216, 0.45);
-}
-
-/* The still page (prefers-reduced-motion, no WebGL) ---------------------------------------------- */
-
-/* Laid out like an editorial page: the frame full width, fading into the night it came from; the name
-   and the question over that fade; the answer; then the cities and the credits, side by side when
-   there is room. */
-.still {
-  min-height: 100vh;
-  padding-bottom: 12vh;
-  background: radial-gradient(70% 40% at 50% 70vh, rgba(230, 227, 255, 0.08), transparent 70%), var(--ui-night);
-}
-
-.still__frame {
-  position: relative;
-  margin: 0;
-}
-
-.still__frame img {
-  display: block;
-  width: 100%;
-  height: min(78vh, 56vw + 20rem);
-  object-fit: cover;
-  object-position: 50% 30%; /* the drop sits in the upper third: keep it clear of the top edge */
-  -webkit-mask-image: linear-gradient(to bottom, #000 0%, #000 45%, rgba(0, 0, 0, 0.75) 65%, rgba(0, 0, 0, 0.32) 82%, rgba(0, 0, 0, 0.08) 93%, transparent 100%);
-  mask-image: linear-gradient(to bottom, #000 0%, #000 45%, rgba(0, 0, 0, 0.75) 65%, rgba(0, 0, 0, 0.32) 82%, rgba(0, 0, 0, 0.08) 93%, transparent 100%);
-}
-
-.still__head {
-  position: relative;
-  margin: -9rem 16px 0;
-  text-align: center;
-}
-
-.still__word {
-  margin: 0;
-  font-family: var(--font-script);
-  font-size: var(--t-title);
-  font-weight: 200;
-  line-height: 1.3;
-  text-shadow: 0 0 28px var(--ui-glow), var(--ui-halo);
-}
-
-.still__question {
-  margin: 0.5rem 0 0;
-  color: var(--ui-text-2);
-  font-family: var(--font-script);
-  font-size: var(--t-sub);
-  font-weight: 300;
   text-shadow: var(--ui-halo);
 }
 
-.still__answer {
-  width: min(36rem, calc(100% - 32px));
-  margin: 3.2rem auto 0;
-  padding: 2.2rem 0;
-  border-top: 1px solid rgba(230, 227, 255, 0.12);
-  border-bottom: 1px solid rgba(230, 227, 255, 0.12);
+/* The three cities: the one control that moves the camera. Bottom centre; on a phone, top centre. */
+.cities {
+  position: absolute;
+  left: 50%;
+  bottom: max(18px, env(safe-area-inset-bottom));
+  transform: translateX(-50%);
+  display: flex;
+  gap: clamp(0.2rem, 1.4vw, 1.2rem);
+  pointer-events: auto;
+  transition: opacity var(--dur-quick) ease;
+}
+
+.city-type.is-open .cities,
+.city-type.is-open .wordmark,
+.city-type.is-open .credit {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.cities__item {
+  position: relative;
+  min-height: 44px;
+  padding: 0 0.9rem;
+  border: 0;
+  border-radius: 999px;
+  background: none;
+  color: var(--ui-text-3);
+  font-family: var(--font-script);
+  font-size: var(--t-name);
+  font-weight: 300;
+  white-space: nowrap;
+  text-shadow: var(--ui-halo);
+  cursor: pointer;
+  transition: color var(--dur-quick) ease;
+}
+
+.cities__item:hover {
+  color: var(--ui-white);
+}
+
+.cities__item[aria-current='true'] {
+  color: var(--ui-white);
+  cursor: default;
+}
+
+/* A hairline under the city in view. */
+.cities__item::after {
+  content: '';
+  position: absolute;
+  left: 0.9rem;
+  right: 0.9rem;
+  bottom: 6px;
+  height: 1px;
+  background: currentColor;
+  transform: scaleX(0);
+  transition: transform var(--dur-base) var(--ease-out);
+}
+
+.cities__item[aria-current='true']::after {
+  transform: scaleX(1);
+}
+
+.cities__item:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: -4px;
+  box-shadow: var(--focus-glow);
+}
+
+/* Under the time: the weather could not be read, or is being read. */
+.wx-note {
+  margin-top: 0.3em;
+  color: var(--ui-text-3);
+  font-size: var(--t-fine);
+}
+
+/* Whose data this is. Top right, small. */
+.credit {
+  position: absolute;
+  top: max(22px, env(safe-area-inset-top));
+  right: max(24px, env(safe-area-inset-right));
+  max-width: min(46vw, 30rem);
+  color: var(--ui-text-3);
+  font-size: var(--t-fine);
+  line-height: 1.4;
+  text-align: right;
+  text-shadow: var(--ui-halo);
+  pointer-events: auto;
+}
+
+.credit a {
+  color: inherit;
+  text-underline-offset: 2px;
+}
+
+.credit a:hover {
+  color: var(--ui-white);
+}
+
+.wx-more,
+.wx-close {
+  right: max(24px, env(safe-area-inset-right));
+  color: var(--ui-white);
+}
+
+.wx-panel {
+  right: max(clamp(20px, 3vw, 44px), env(safe-area-inset-right));
+}
+
+/* Before the first model is up: the name on the backdrop, breathing. */
+.loader {
+  position: fixed;
+  inset: 0;
+  z-index: 3;
+  display: grid;
+  place-items: center;
+  background: #0b0d14;
+  color: #fff;
+  transition: opacity var(--dur-slow) var(--ease-soft), visibility 0s linear var(--dur-slow);
+}
+
+.loader.is-done {
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+}
+
+.loader__name {
+  font-family: var(--font-script);
+  font-size: var(--t-title);
+  font-weight: 300;
+  animation: loader-breathe 2.4s var(--ease-soft) infinite alternate;
+}
+
+.loader__note {
+  margin-top: 1rem;
+  color: #b4b1d0;
+  font-size: var(--t-meta);
+  letter-spacing: var(--track-label);
   text-align: center;
 }
 
-.still__headline {
-  margin: 0;
-  font-family: var(--font-script);
-  font-size: var(--t-lead);
-  font-weight: 300;
-  line-height: 1.55;
-  text-wrap: balance;
+@keyframes loader-breathe {
+  from {
+    opacity: 0.55;
+  }
+  to {
+    opacity: 1;
+  }
 }
 
-.still__meta {
-  margin: 0.6rem 0 0;
-}
-
-.still__columns {
+/* No WebGL: the weather still reads, on the plain backdrop. */
+.no-model {
+  position: fixed;
+  inset: 0;
   display: grid;
-  gap: 3rem;
-  width: min(36rem, calc(100% - 40px));
-  margin: 3rem auto 0;
+  place-items: center;
+  padding: 2rem;
+  color: var(--ui-text-2);
+  font-size: var(--t-body);
+  text-align: center;
 }
 
-.still__heading {
-  margin: 0 0 0.8rem;
-  font-family: var(--font-script);
-  font-size: var(--t-heading);
-  font-weight: 200;
-  line-height: 1.5;
-  text-shadow: 0 0 28px var(--ui-glow);
-}
+@media (max-width: 640px) {
+  .cities {
+    top: max(52px, calc(env(safe-area-inset-top) + 44px));
+    bottom: auto;
+    gap: 0;
+  }
 
-@media (min-width: 960px) {
-  .still__columns {
-    grid-template-columns: 1.15fr 1fr;
-    gap: 5rem;
-    width: min(64rem, calc(100% - 96px));
+  .cities__item {
+    padding: 0 0.7rem;
+    font-size: 1rem;
+  }
+
+  .cities__item::after {
+    left: 0.7rem;
+    right: 0.7rem;
+  }
+
+  .credit {
+    top: max(22px, env(safe-area-inset-top));
+    right: max(16px, env(safe-area-inset-right));
+    max-width: 62vw;
+  }
+
+  .wordmark,
+  .wx-corner {
+    left: max(16px, env(safe-area-inset-left));
+  }
+
+  .wx-more,
+  .wx-close {
+    right: max(16px, env(safe-area-inset-right));
+  }
+
+  .wx-panel {
+    right: max(14px, env(safe-area-inset-right));
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .loader::before,
-  .loader .drop-mark,
-  .loader__status.is-shown,
-  .loader__enter.is-ready,
-  .move-hint__drop,
-  .sheet {
+  .loader__name {
     animation: none;
   }
-}
-
-/* ?bench only. */
-.bench-status {
-  position: fixed;
-  top: 8px;
-  right: 8px;
-  z-index: 100;
-  font: 11px/1.4 ui-monospace, Menlo, monospace;
-  color: #9f9;
-  pointer-events: none;
-}
-
-.bench-panel {
-  position: fixed;
-  inset: max(16px, env(safe-area-inset-top)) 16px max(16px, env(safe-area-inset-bottom));
-  z-index: 200;
-  overflow: auto;
-  overscroll-behavior: contain;
-  padding: 16px;
-  background: rgba(0, 0, 0, 0.88);
-  border: 1px solid rgba(255, 255, 255, 0.15);
-  font: 12px/1.5 ui-monospace, Menlo, monospace;
-}
-
-.bench-panel h2 {
-  margin: 0 0 8px;
-  font-size: 13px;
-  font-weight: 600;
-}
-
-.bench-panel p {
-  margin: 0 0 12px;
-  opacity: 0.8;
-}
-
-.bench-panel table {
-  border-collapse: collapse;
-  white-space: nowrap;
-}
-
-.bench-panel th,
-.bench-panel td {
-  padding: 2px 10px 2px 0;
-  text-align: right;
-}
-
-.bench-panel th:first-child,
-.bench-panel td:first-child,
-.bench-panel th:nth-child(2),
-.bench-panel td:nth-child(2) {
-  text-align: left;
-}
-
-.bench-panel tr.is-bad td {
-  color: #f99;
-}
-
-.bench-panel tbody tr:last-child td {
-  border-top: 1px solid rgba(255, 255, 255, 0.2);
-  font-weight: 600;
-}
-
-.bench-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin: 14px 0 10px;
-}
-
-.bench-actions button {
-  min-height: 44px;
-  padding: 0 14px;
-  border: 1px solid rgba(255, 255, 255, 0.3);
-  background: none;
-  color: #fff;
-  font: inherit;
-}
-
-.bench-panel textarea {
-  width: 100%;
-  box-sizing: border-box;
-  background: #000;
-  color: #ccc;
-  border: 1px solid rgba(255, 255, 255, 0.15);
-  font: 11px/1.4 ui-monospace, Menlo, monospace;
-}
-
-/* The studio (city/Stage.jsx): the whole window. */
-.stage {
-  position: fixed !important;
-  inset: 0;
 }

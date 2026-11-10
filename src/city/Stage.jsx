@@ -1,5 +1,6 @@
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Canvas, useFrame, useThree } from '@react-three/fiber'
+import { PerformanceMonitor } from '@react-three/drei'
 import * as THREE from 'three'
 import { now } from '../core/clock.js'
 import { CITIES, cityById } from './cities.js'
@@ -51,7 +52,7 @@ function blendView(out, a, b, t) {
   return out
 }
 
-function Rig({ cityId, weather, shadowSize }) {
+function Rig({ cityId, weather, shadowSize, still, onTone }) {
   const { camera, gl, scene, size } = useThree()
   const sun = useRef()
   const fill = useRef()
@@ -82,7 +83,7 @@ function Rig({ cityId, weather, shadowSize }) {
       st.fromView = { ...st.view }
       st.fromLook = copyLook(look.current)
       st.to = city
-      st.p = 0
+      st.p = still ? 1 : 0 // reduced motion: no swing (App.jsx dips the picture out round the change)
       st.at = 0
     }
     // The destination's look: the sun moves a quarter of a degree a minute, so once a second is plenty.
@@ -98,13 +99,14 @@ function Rig({ cityId, weather, shadowSize }) {
       blendLook(look.current, st.fromLook, st.target, smooth(0.15, 0.85, st.p))
     } else {
       Object.assign(st.view, home)
-      blendLook(look.current, look.current, st.target, 1 - Math.exp(-dt * 1.6))
+      blendLook(look.current, look.current, st.target, still && st.at === 1 && st.fromView ? 1 : 1 - Math.exp(-dt * 1.6))
+      if (still) st.fromView = null
     }
     const l = look.current
 
     // Camera: on a sphere round the point it looks at, drifting slowly.
     const v = st.view
-    const t = STILL ? 0 : state.clock.elapsedTime
+    const t = STILL || still ? 0 : state.clock.elapsedTime
     const bearing = (v.bearing + DRIFT.bearing * Math.sin((t * 2 * Math.PI) / DRIFT.bearingS)) * RAD
     const elevation = (v.elevation + DRIFT.elevation * Math.sin((t * 2 * Math.PI) / DRIFT.elevationS)) * RAD
     const flat = v.distance * Math.cos(elevation)
@@ -122,6 +124,7 @@ function Rig({ cityId, weather, shadowSize }) {
     fill.current.groundColor.setRGB(...l.bounce)
     fill.current.intensity = l.skyLight
     bg.setRGB(...l.bg)
+    gl.toneMappingExposure = l.exposure
     fog.color.copy(bg)
     fog.density = l.fog * 0.00012
     plasterUniforms.uBg.value.copy(bg)
@@ -129,6 +132,10 @@ function Rig({ cityId, weather, shadowSize }) {
     plasterUniforms.uLit.value = l.lit
     plasterUniforms.uLate.value = l.late
     plasterUniforms.uWet.value = l.wet
+    // The interface's tone follows what is behind it: ink over a light backdrop, white over a dark one.
+    const lum = 0.2126 * l.bg[0] + 0.7152 * l.bg[1] + 0.0722 * l.bg[2]
+    const tone = st.tone === 'day' ? (lum < 0.13 ? 'night' : 'day') : lum > 0.19 ? 'day' : 'night'
+    if (tone !== st.tone) onTone?.((st.tone = tone))
 
     // The shadow map follows the city in view: it changes hands half way through a move, over bare floor,
     // and is redrawn only when the sun has moved.
@@ -206,7 +213,9 @@ function fitShadow(light, city, dir) {
   cam.updateProjectionMatrix()
 }
 
-export default function Stage({ cityId, weather, lite = false, onReady }) {
+export default function Stage({ cityId, weather, lite = false, still = false, className = 'stage', onReady, onTone }) {
+  // Pixels per pixel: the device's, capped; halved toward 1 if the frame rate will not hold.
+  const [dpr, setDpr] = useState(() => Math.min(window.devicePixelRatio || 1, lite ? 1.5 : 2))
   // The selected city first; the other two once it is up, so the first picture is not kept waiting.
   const [mounted, setMounted] = useState([cityId])
   const ready = useCallback(
@@ -221,13 +230,14 @@ export default function Stage({ cityId, weather, lite = false, onReady }) {
 
   return (
     <Canvas
-      className="stage"
+      className={className}
       shadows={{ type: THREE.PCFShadowMap }}
-      dpr={lite ? [1, 1.5] : [1, 2]}
+      dpr={dpr}
       gl={{ antialias: true, toneMapping: THREE.NeutralToneMapping, toneMappingExposure: EXPOSURE, powerPreference: 'high-performance' }}
       camera={{ fov: 13, near: 400, far: 160000 }}
     >
-      <Rig cityId={cityId} weather={weather} shadowSize={lite ? 2048 : 4096} />
+      <PerformanceMonitor onDecline={() => setDpr((d) => Math.max(1, d * 0.75))} />
+      <Rig cityId={cityId} weather={weather} shadowSize={lite ? 2048 : 4096} still={still} onTone={onTone} />
       {CITIES.filter((c) => mounted.includes(c.id)).map((c) => (
         <Suspense key={c.id} fallback={null}>
           <Maquette city={c} onReady={ready} />
