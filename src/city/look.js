@@ -1,9 +1,16 @@
 import { getPosition } from 'suncalc'
-import { dirFromAltAz } from '../sky/astro.js'
 
 // How the studio is lit for one city at one moment: every number the scene needs, as plain values, so two
 // looks can be blended (a move between cities) and the scene can ease toward one (time passing, weather
 // arriving). Colours are linear RGB triples.
+
+// The model's frame: x east, y up, z south. A direction at altitude `alt` and azimuth `az` (degrees, from
+// north through east, as SunCalc 2 reports them).
+export function dirFromAltAz(altDeg, azDeg) {
+  const alt = altDeg * (Math.PI / 180)
+  const az = azDeg * (Math.PI / 180)
+  return [Math.cos(alt) * Math.sin(az), Math.sin(alt), -Math.cos(alt) * Math.cos(az)]
+}
 
 const clamp01 = (v) => Math.min(1, Math.max(0, v))
 const smooth = (a, b, v) => {

@@ -1,29 +1,13 @@
 /assets/*
   Cache-Control: public, max-age=31536000, immutable
 
-/clips/manifest.json
-  Cache-Control: no-cache
-
-# Splash VAT and GPU benchmark data: large, rarely changed, but not content-hashed.
-/splash/*
-  Cache-Control: public, max-age=86400
-
-# City skylines (public/skyline/: meta and image sets, several MB each): changes only if re-rendered.
-/skyline/*
+# City models (a few MB each) and GPU benchmark data: rarely changed, but not content-hashed.
+/models/*
   Cache-Control: public, max-age=86400
 
 /benchmarks/*
   Cache-Control: public, max-age=604800
 
-# Star catalogue for the city skies (14 KB, preloaded by index.html): changes only if rebuilt.
-/sky/*
-  Cache-Control: public, max-age=604800
-
-# Backdrop photograph (≈400 KB, preloaded by index.html): changes only if rebuilt.
-/backdrop/*
-  Cache-Control: public, max-age=604800
-
-# The web manifest and its icons: rebuilt with `npm run brand`.
 /site.webmanifest
   Content-Type: application/manifest+json
   Cache-Control: public, max-age=86400

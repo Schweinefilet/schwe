@@ -1,6 +1,6 @@
 import { useId, useState } from 'react'
 
-// The charts inside the dive drop (CityType.jsx). Hand-drawn SVG, one series each, so no legends: the
+// The weather panel's charts (WeatherPanel.jsx). Hand-drawn SVG, one series each, so no legends: the
 // card's title names what is drawn. Lines and areas sit in a stretched viewBox (strokes keep their width
 // with non-scaling-stroke); type and dots are HTML placed in percentages, so nothing distorts.
 // Colours are the UI's pastels: peach for temperature, mist for water, lavender for everything else.
@@ -241,81 +241,5 @@ export function SunArc({ rise, set, nowMin }) {
       {up && <circle cx={sx} cy={sy} r="14" fill={`url(#${id}g)`} />}
       {up && <circle cx={sx} cy={sy} r="4.5" fill="#fff8f2" />}
     </svg>
-  )
-}
-
-// The edges' versions (CityType.jsx): thin, translucent, no axes but a few hours, no hover. They sit
-// over the city itself, so they say little and let it show through.
-
-// The next 24 hours' temperature as one soft line along the top of the screen.
-export function TempRibbon({ hourly }) {
-  const id = useId()
-  const temps = hourly.tempC
-  const n = temps.length
-  const [lo, hi] = extent(temps, 0.12)
-  const x = (i) => (i / (n - 1)) * 100
-  const y = (v) => 100 - ((v - lo) / (hi - lo)) * 100
-  const pts = temps.map((v, i) => (v == null ? null : [x(i), y(v)])).filter(Boolean)
-  const line = smoothPath(pts)
-  const finite = temps.filter((v) => v != null)
-  const iMax = temps.indexOf(Math.max(...finite))
-  const iMin = temps.indexOf(Math.min(...finite))
-  const marks = []
-  for (const i of [0, iMax, iMin]) if (i >= 0 && temps[i] != null && marks.every((j) => Math.abs(i - j) > 2)) marks.push(i)
-  return (
-    <div className="wx-ribbon">
-      <div className="wx-plot wx-ribbon__plot">
-        <svg viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
-          <defs>
-            <linearGradient id={`${id}f`} x1="0" y1="0" x2="1" y2="0">
-              <stop offset="0" stopColor="#fff" stopOpacity="0" />
-              <stop offset="0.08" stopColor="#fff" stopOpacity="1" />
-              <stop offset="0.92" stopColor="#fff" stopOpacity="1" />
-              <stop offset="1" stopColor="#fff" stopOpacity="0" />
-            </linearGradient>
-            <mask id={`${id}m`}>
-              <rect x="-5" y="-50" width="110" height="200" fill={`url(#${id}f)`} />
-            </mask>
-          </defs>
-          <path d={line} className="wx-line wx-line--temp wx-line--soft" vectorEffect="non-scaling-stroke" mask={`url(#${id}m)`} />
-        </svg>
-        {marks.map((i) => (
-          <span
-            key={i}
-            className={`wx-dot wx-dot--small${i === 0 ? ' wx-dot--now' : ''}`}
-            style={{ left: pct(x(i)), top: pct(y(temps[i])) }}
-          >
-            <span className={`wx-dot__label${y(temps[i]) > 55 ? ' is-below' : ''}${x(i) < 8 ? ' is-start' : x(i) > 92 ? ' is-end' : ''}`}>
-              {i === 0 ? 'now ' : ''}
-              {round(temps[i])}°{i > 0 ? ` · ${hourOf(hourly.time[i])}:00` : ''}
-            </span>
-          </span>
-        ))}
-      </div>
-    </div>
-  )
-}
-
-// The next 24 hours' chance of rain as hairline bars along the bottom of the screen.
-export function RainRibbon({ hourly }) {
-  const n = hourly.time.length
-  const x = (i) => (i / (n - 1)) * 100
-  return (
-    <div className="wx-ribbon wx-ribbon--rain">
-      <div className="wx-plot wx-ribbon__bars">
-        {hourly.precipProb.map((p, i) => (
-          <span key={i} className="wx-bar wx-bar--thin" style={{ left: pct(x(i)), height: pct(Math.max(4, p ?? 0)) }} />
-        ))}
-      </div>
-      <div className="wx-axis meta">
-        {hourly.time.map((t, i) =>
-          i % 6 === 0 ? (
-            <span key={t} style={{ left: pct(x(i)) }}>
-              {i === 0 ? 'now' : `${hourOf(t)}:00`}
-            </span>
-          ) : null,
-        )}
-      </div>
-    </div>
   )
 }

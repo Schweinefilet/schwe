@@ -1,14 +1,27 @@
 {
-  "name": "schwe: where is it raining now?",
+  "name": "schwe: three cities, right now",
   "short_name": "schwe",
-  "description": "Rain stops mid-air. Ten of the drops each hold a city as it is right now, and one of them falls.",
+  "description": "New York, London and Paris as white architectural models, lit by their real sun and under their real weather.",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#030307",
-  "theme_color": "#030307",
+  "background_color": "#0b0d14",
+  "theme_color": "#0b0d14",
   "icons": [
-    { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png" },
-    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png" },
-    { "src": "/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+    {
+      "src": "/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    },
+    {
+      "src": "/icon-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
   ]
 }

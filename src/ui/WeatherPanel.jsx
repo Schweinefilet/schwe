@@ -14,9 +14,9 @@ import {
   visibility,
 } from './weatherWords.js'
 
-// The expanded view inside the dive drop, opened from the edges' "more weather" (CityType.jsx): every
-// reading Open-Meteo has for the city, on frosted pastel glass over its sky. The film is held while
-// it is open (CityType); focus moves into it and back to the opener, Escape closes, Tab stays inside.
+// The expanded view, opened from "more weather" (CityPanel.jsx): every reading Open-Meteo has for the
+// city, on frosted glass over its model. Focus moves into it and back to the opener, Escape closes, Tab
+// stays inside.
 export default function WeatherPanel({ city, time, label, tempC, detail, onClose }) {
   const closeRef = useRef()
   const cur = detail.current

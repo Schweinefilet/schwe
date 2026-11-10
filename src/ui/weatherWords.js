@@ -1,4 +1,4 @@
-// Words and small conversions for the weather inside the dive drop (CityType.jsx, WeatherPanel.jsx).
+// Words and small conversions for the weather panel (WeatherPanel.jsx).
 import { round } from './weatherCharts.jsx'
 
 // One or two plain sentences about the next 24 hours, read off the hourly forecast.
