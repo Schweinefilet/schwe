@@ -57,11 +57,19 @@ export default function App() {
         setStatus('failed')
       }
     }
-    load()
-    const timer = setInterval(load, REFRESH_MS)
+    // A failed read is tried again after 20 s, then 60 s, before waiting for the next refresh.
+    let retry = null
+    const run = async (tries = 0) => {
+      await load()
+      if (cancelled || readAt.current > Date.now() - 5000 || tries >= 2) return
+      retry = setTimeout(() => run(tries + 1), tries ? 60000 : 20000)
+    }
+    run()
+    const timer = setInterval(run, REFRESH_MS)
     return () => {
       cancelled = true
       clearInterval(timer)
+      clearTimeout(retry)
     }
   }, [])
 

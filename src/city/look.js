@@ -80,7 +80,7 @@ export function weatherOf(wx) {
     rain: rainy ? clamp01(0.25 + Math.sqrt(rate / 8) * 0.75) : 0,
     snow: snowy ? clamp01(0.35 + (cur?.snowCm ?? 0) * 0.5) : 0,
     // From the visibility reading when there is one (10 km and more: none), else from the fog codes.
-    fog: Math.max(foggy ? 0.75 : 0, cur?.visibilityM != null ? 1 - smooth(600, 9000, cur.visibilityM) : 0),
+    fog: Math.max(foggy ? 0.75 : 0, cur?.visibilityM != null ? 1 - smooth(400, 7000, cur.visibilityM) : 0),
     windKmh: cur?.windKmh ?? 0,
     windFromDeg: cur?.windFromDeg ?? 0,
   }
