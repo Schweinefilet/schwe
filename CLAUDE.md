@@ -40,6 +40,7 @@ Dev-only query parameters (none work in a build):
     src/city/Stage.jsx       canvas, camera rig, light, shadow map, the move between cities
     src/city/Maquette.jsx    one city: GLB, plinth with the ground map, its patch of floor
     src/city/plaster.js      the plaster material: baked occlusion, night windows, street glow
+    src/city/newYork.js      New York's own night: lamp colours, Times Square, crowns, red roof lights
     src/city/Precip.jsx      rain and snow over a plinth
     src/content/cityWeather.js   one Open-Meteo request for all cities; parsing
     src/content/models.json  each model's centre, plinth and night flags (shared with the build scripts)

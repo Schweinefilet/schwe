@@ -12,8 +12,9 @@ export const SPACING = 40000
 const VIEWS = {
   'new-york': {
     tz: 'America/New_York',
-    wide: { at: [-350, 150, -1000], bearing: 35, elevation: 10, distance: 16500, fov: 8.5 },
-    tall: { at: [150, 150, -300], bearing: 30, elevation: 20, distance: 19000, fov: 15 },
+    // Raised from 10 and 20 degrees so Times Square's screens show between the towers south of it.
+    wide: { at: [-200, 150, -450], bearing: 35, elevation: 14, distance: 17000, fov: 8.5 },
+    tall: { at: [150, 150, 0], bearing: 30, elevation: 24, distance: 19000, fov: 15 },
   },
   london: {
     tz: 'Europe/London',

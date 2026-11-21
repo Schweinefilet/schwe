@@ -4,9 +4,10 @@ import { PerformanceMonitor } from '@react-three/drei'
 import * as THREE from 'three'
 import { now } from '../core/clock.js'
 import { CITIES, cityById } from './cities.js'
-import { EXPOSURE, blendLook, copyLook, lookFor } from './look.js'
+import { EXPOSURE, blendLook, copyLook, localHour, lookFor } from './look.js'
 import Maquette, { PLINTH_DEPTH } from './Maquette.jsx'
 import { plasterUniforms } from './plaster.js'
+import { signSpill } from './newYork.js'
 import Precip from './Precip.jsx'
 
 // The studio: three plaster cities on a floor, one sun, one long lens. The lens rests on the selected
@@ -18,6 +19,10 @@ const DRIFT = { bearing: 4.5, bearingS: 96, elevation: 0.5, elevationS: 61 }
 const LIGHT_DISTANCE = 30000
 const TALLEST = 620 // above every roof on the three models
 const RAD = Math.PI / 180
+const NEW_YORK = cityById('new-york')
+// Which night it is in a city: its local date twelve hours ago, as a day number (so one night is one number).
+const DAY = new Intl.DateTimeFormat('en-CA', { timeZone: NEW_YORK.tz, year: 'numeric', month: '2-digit', day: '2-digit' })
+const nightNumber = (city, date) => Math.round(Date.parse(DAY.format(new Date(date.getTime() - 12 * 3600e3))) / 86400e3) % 10000
 
 const ease = (t) => (t < 0.5 ? 4 * t * t * t : 1 - (-2 * t + 2) ** 3 / 2)
 const smooth = (a, b, v) => {
@@ -90,6 +95,8 @@ function Rig({ cityId, weather, shadowSize, still, onTone }) {
     st.at -= dt
     if (st.at <= 0) {
       st.target = lookFor(city, date, weather?.[city.id])
+      plasterUniforms.uHour.value = localHour(NEW_YORK, date)
+      plasterUniforms.uDay.value = nightNumber(NEW_YORK, date)
       st.at = 1
     }
     const home = viewOf(city, aspect)
@@ -132,6 +139,8 @@ function Rig({ cityId, weather, shadowSize, still, onTone }) {
     plasterUniforms.uLit.value = l.lit
     plasterUniforms.uLate.value = l.late
     plasterUniforms.uWet.value = l.wet
+    plasterUniforms.uTime.value = state.clock.elapsedTime
+    signSpill(plasterUniforms.uSpill.value, state.clock.elapsedTime)
     // The interface's tone follows what is behind it: ink over a light backdrop, white over a dark one.
     const lum = 0.2126 * l.bg[0] + 0.7152 * l.bg[1] + 0.0722 * l.bg[2]
     const tone = st.tone === 'day' ? (lum < 0.13 ? 'night' : 'day') : lum > 0.19 ? 'day' : 'night'

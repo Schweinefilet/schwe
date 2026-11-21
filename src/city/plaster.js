@@ -1,4 +1,5 @@
 import * as THREE from 'three'
+import { NY_BUILDING_FRAG, NY_BUILDING_VERT, NY_PLINTH_FRAG } from './newYork.js'
 
 // The model's one material: matte off-white plaster. On top of three's standard shading it reads the
 // occlusion baked into the mesh (scripts/models/build.mjs) and, after dark, lights windows on the walls.
@@ -12,6 +13,10 @@ export const plasterUniforms = {
   uLate: { value: 0 }, // 0 early evening, 1 deep night: office floors go dark
   uWet: { value: 0 }, // rain on the plaster: a little darker
   uBg: { value: new THREE.Color() },
+  uTime: { value: 0 }, // seconds: New York's screens and sparkle
+  uHour: { value: 20 }, // New York's local hour (its Empire State goes dark at 2 am)
+  uSpill: { value: [0, 1, 2, 3].map(() => new THREE.Vector3()) }, // New York's sign light (newYork.js)
+  uDay: { value: 0 }, // New York's night, as a day number that turns at noon (its LED crowns' colours)
 }
 
 const COMMON_VERT = /* glsl */ `
@@ -95,27 +100,42 @@ function patch(material, { ao, emissive = '', header = '', vertex = '' }) {
   return material
 }
 
-// The buildings.
-export function buildingMaterial() {
+// The buildings. New York's night is its own (newYork.js): `origin` is where its model stands on the floor.
+// `plain`: New York without its rarer lights (crowns, signs, names on roofs), for the solids that have none.
+export function buildingMaterial(cityId, origin = [0, 0, 0], { plain = false } = {}) {
+  const ny = cityId === 'new-york'
   const m = new THREE.MeshStandardMaterial({ color: PLASTER, roughness: 0.88, metalness: 0, flatShading: true })
+  if (ny) {
+    m.defines = plain ? { NEW_YORK: '', NY_PLAIN: '' } : { NEW_YORK: '' }
+    m.userData.uniforms = { uOrigin: { value: new THREE.Vector3(...origin) } }
+  }
   // The mesh is quantized: its node's matrix makes metres of it. World metres, then (each city's offset on
   // the floor only shifts the window grid).
   m.userData.beginVertex = /* glsl */ `
     vBake = bake.rgb;
     vModel = (modelMatrix * vec4(position, 1.0)).xyz;
+    ${ny ? 'vTop = top.x; vLandmark = int(top.y + 0.5) & 15; vFlags = int(top.y + 0.5) >> 4; vKind = kind;' : ''}
   `
+  // (New York's varies by district; above 90 m its glow is gone, so it is not worked out there.)
+  const street = ny ? '(vModel.y < 90.0 ? nyStreet(vModel.xz - uOrigin.xz) : vec3(0.0))' : 'vec3(1.0, 0.6, 0.3)'
   return patch(m, {
     ao: 'mix(0.3, 1.0, vBake.x)',
+    vertex: ny ? NY_BUILDING_VERT : '',
+    header: ny ? NY_BUILDING_FRAG : '',
     emissive: /* glsl */ `
       vec3 nWorld = normalize(cross(dFdx(vModel), dFdy(vModel)));
+      #ifdef NEW_YORK
+      totalEmissiveRadiance += nyNight(nWorld);
+      #else
       totalEmissiveRadiance += windows(nWorld);
+      #endif
       // A floodlit structure (the Eiffel Tower) glows gold all over instead.
       // Lit from below and from one side, so its faces still read.
       float flood = step(0.25, vBake.z) * step(vBake.z, 0.75);
       float facing = 0.4 + 0.6 * abs(dot(nWorld, normalize(vec3(0.62, 0.25, 0.74))));
       totalEmissiveRadiance += uNight * flood * vec3(1.0, 0.66, 0.28) * 0.42 * facing * mix(0.45, 1.0, vBake.x);
-      // The streets' own light after dark: warm at the foot of every wall, strongest where the walls stand close.
-      totalEmissiveRadiance += uNight * vec3(1.0, 0.6, 0.3) * 0.07 * exp(-max(vModel.y, 0.0) / 20.0) * (1.5 - vBake.x);
+      // The streets' own light after dark: at the foot of every wall, strongest where the walls stand close.
+      totalEmissiveRadiance += uNight * ${street} * 0.07 * exp(-max(vModel.y, 0.0) / 20.0) * (1.5 - vBake.x);
       diffuseColor.rgb *= 1.0 - 0.14 * uWet;
     `,
   })
@@ -123,15 +143,23 @@ export function buildingMaterial() {
 
 // The plinth: a slab whose top carries the ground map (r: occlusion, g: water). Water is a cooler, darker,
 // smoother inlay, like tinted resin set into the plaster. `frame` maps a model position to the map.
-export function plinthMaterial(map, { halfLength, halfWidth }, depth) {
+export function plinthMaterial(map, { id, halfLength, halfWidth, offset = [0, 0, 0] }, depth) {
+  const ny = id === 'new-york'
   const m = new THREE.MeshStandardMaterial({ color: PLASTER, roughness: 0.9, metalness: 0 })
   m.userData.uniforms = { uGround: { value: map }, uHalf: { value: new THREE.Vector2(halfLength, halfWidth) }, uTop: { value: depth / 2 } }
+  if (ny) {
+    m.defines = { NEW_YORK: '' }
+    m.userData.uniforms.uOrigin = { value: new THREE.Vector3(...offset) }
+  }
   m.userData.beginVertex = /* glsl */ `
     vBake = vec3(1.0);
     vModel = position;
+    ${ny ? 'vWorld = (modelMatrix * vec4(position, 1.0)).xyz;' : ''}
   `
   return patch(m, {
+    vertex: ny ? 'varying vec3 vWorld;' : '',
     header: /* glsl */ `
+      ${ny ? NY_PLINTH_FRAG : ''}
       uniform sampler2D uGround;
       uniform vec2 uHalf;
       uniform float uTop;
@@ -146,7 +174,17 @@ export function plinthMaterial(map, { halfLength, halfWidth }, depth) {
       diffuseColor.rgb = mix(diffuseColor.rgb * (1.0 - 0.1 * uWet), vec3(0.655, 0.7, 0.75) * mix(1.0, 0.45, uNight), water);
       roughnessFactor = mix(roughnessFactor, 0.32, water);
       // After dark the streets glow between the buildings (the occlusion map is where they stand close).
+      #ifdef NEW_YORK
+      // New York's streets, signs and traffic, worked out only on dry ground on top (not the water, which is
+      // much of the picture).
+      if (uNight > 0.004 && onTop * (1.0 - water) > 0.01) {
+        // Brighter than the other cities' streets: from above, New York's street grid is one of its lights.
+        totalEmissiveRadiance += uNight * onTop * (1.0 - water) * (nyStreet(vWorld.xz - uOrigin.xz) * 0.17 * (1.0 - groundMap.r) + nyGround() + nyTraffic(vModel.xz));
+      }
+      if (uNight > 0.004 && onTop > 0.5) totalEmissiveRadiance += uNight * nyPools(vModel.xz);
+      #else
       totalEmissiveRadiance += uNight * vec3(1.0, 0.6, 0.3) * 0.11 * onTop * (1.0 - water) * (1.0 - groundMap.r);
+      #endif
     `,
     ao: 'mix(1.0, mix(0.34, 1.0, groundMap.r), onTop)',
   })
