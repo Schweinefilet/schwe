@@ -6,7 +6,7 @@ import { now } from '../core/clock.js'
 import { CITIES, cityById } from './cities.js'
 import { EXPOSURE, blendLook, copyLook, localHour, lookFor } from './look.js'
 import Maquette, { PLINTH_DEPTH } from './Maquette.jsx'
-import { plasterUniforms } from './plaster.js'
+import { cityClock, plasterUniforms } from './plaster.js'
 import { signSpill } from './newYork.js'
 import Precip from './Precip.jsx'
 
@@ -19,10 +19,11 @@ const DRIFT = { bearing: 4.5, bearingS: 96, elevation: 0.5, elevationS: 61 }
 const LIGHT_DISTANCE = 30000
 const TALLEST = 620 // above every roof on the three models
 const RAD = Math.PI / 180
-const NEW_YORK = cityById('new-york')
 // Which night it is in a city: its local date twelve hours ago, as a day number (so one night is one number).
-const DAY = new Intl.DateTimeFormat('en-CA', { timeZone: NEW_YORK.tz, year: 'numeric', month: '2-digit', day: '2-digit' })
-const nightNumber = (city, date) => Math.round(Date.parse(DAY.format(new Date(date.getTime() - 12 * 3600e3))) / 86400e3) % 10000
+const DAY = Object.fromEntries(CITIES.map((c) => [c.id, new Intl.DateTimeFormat('en-CA', { timeZone: c.tz, year: 'numeric', month: '2-digit', day: '2-digit' })]))
+const nightNumber = (city, date) => Math.round(Date.parse(DAY[city.id].format(new Date(date.getTime() - 12 * 3600e3))) / 86400e3) % 10000
+// The city's month on its own clock (1..12): the night it belongs to, as above.
+const nightMonth = (city, date) => Number(DAY[city.id].format(new Date(date.getTime() - 12 * 3600e3)).slice(5, 7))
 
 const ease = (t) => (t < 0.5 ? 4 * t * t * t : 1 - (-2 * t + 2) ** 3 / 2)
 const smooth = (a, b, v) => {
@@ -31,7 +32,8 @@ const smooth = (a, b, v) => {
 }
 const mix = (a, b, t) => a + (b - a) * t
 
-// Dev: ?cam=bearing,elevation,distance,fov[,east,up,north] replaces the selected city's view, for choosing one.
+// Dev: ?cam=bearing,elevation,distance,fov[,east,up,north[,near]] replaces the selected city's view, for
+// choosing one (near: the camera's near plane, for a view from inside the model).
 const CAM = import.meta.env.DEV ? new URLSearchParams(location.search).get('cam')?.split(',').map(Number) : null
 // Dev: ?still stops the drift, so two screenshots of one view match.
 const STILL = import.meta.env.DEV && new URLSearchParams(location.search).has('still')
@@ -95,8 +97,11 @@ function Rig({ cityId, weather, shadowSize, still, onTone }) {
     st.at -= dt
     if (st.at <= 0) {
       st.target = lookFor(city, date, weather?.[city.id])
-      plasterUniforms.uHour.value = localHour(NEW_YORK, date)
-      plasterUniforms.uDay.value = nightNumber(NEW_YORK, date)
+      for (const c of CITIES) {
+        cityClock[c.id].uHour.value = localHour(c, date)
+        cityClock[c.id].uDay.value = nightNumber(c, date)
+        cityClock[c.id].uMonth.value = nightMonth(c, date)
+      }
       st.at = 1
     }
     const home = viewOf(city, aspect)
@@ -119,8 +124,9 @@ function Rig({ cityId, weather, shadowSize, still, onTone }) {
     const flat = v.distance * Math.cos(elevation)
     camera.position.set(v.x - Math.sin(bearing) * flat, v.y + v.distance * Math.sin(elevation), v.z + Math.cos(bearing) * flat)
     camera.lookAt(v.x, v.y, v.z)
-    if (camera.fov !== v.fov) {
+    if (camera.fov !== v.fov || (CAM?.[7] && camera.near !== CAM[7])) {
       camera.fov = v.fov
+      if (CAM?.[7]) camera.near = CAM[7]
       camera.updateProjectionMatrix()
     }
 

@@ -27,7 +27,7 @@ Dev-only query parameters (none work in a build):
 
     ?at=2026-11-10T17:00Z   pretend it is that moment
     ?wx=rain|snow|fog|overcast|clear   stand in for the selected city's weather
-    ?cam=bearing,elevation,distance,fov[,east,up,north]   try a view
+    ?cam=bearing,elevation,distance,fov[,east,up,north[,near]]   try a view
     ?still                  stop the camera's drift
 
 `?lite` and `?lite=0` force the phone or desktop version anywhere. `#london` selects a city.
@@ -41,6 +41,10 @@ Dev-only query parameters (none work in a build):
     src/city/Maquette.jsx    one city: GLB, plinth with the ground map, its patch of floor
     src/city/plaster.js      the plaster material: baked occlusion, night windows, street glow
     src/city/newYork.js      New York's own night: lamp colours, Times Square, crowns, red roof lights
+    src/city/london.js       London's night: lamps, landmarks, the Eye, bridges, the Embankments
+    src/city/paris.js        Paris's night: lamps, the Eiffel Tower's schedule, monuments, the Champs-Élysées
+    src/city/nightKit.js     what London's and Paris's nights share: windows, floodlights, street lamps, traffic
+    src/city/solids.js       per-building facts worked out at load, the draw split, red obstruction lights
     src/city/Precip.jsx      rain and snow over a plinth
     src/content/cityWeather.js   one Open-Meteo request for all cities; parsing
     src/content/models.json  each model's centre, plinth and night flags (shared with the build scripts)

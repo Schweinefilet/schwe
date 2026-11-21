@@ -1,4 +1,4 @@
-import * as THREE from 'three'
+import { buildingTops as solidTops } from './solids.js'
 
 // New York after dark. The other cities' windows are one warm colour; New York's are not, because the real
 // one is not. Calibrated against photographs of Manhattan at night (DECISIONS.md, 2026-11-20): homes burn
@@ -72,163 +72,37 @@ function officeZone(x, z) {
   return Math.max(midtown, smooth(-500, -1000, z) * 0.45, smooth(1500, 2100, z))
 }
 
-// The shader needs each building's height. The model carries none, but each solid (a building or one of
-// its parts) is one connected piece of the index buffer, so its top is the highest vertex reachable
-// through its triangles. Each solid also learns here which landmark it belongs to (1 + its index in
-// LANDMARKS, by where its top stands; 0 for none), so the shader looks it up instead of testing all twelve.
-// And what kind of building it is, decided once here rather than in every pixel: an office or homes
-// (more often an office in the office districts and the taller it is), the office's lamp or whether the
-// homes are all-LED, how many of its windows tend to be lit, how bright it is.
-// Returns the attribute values (top, landmark; and the kind, four bytes) and the tall tops, for the
-// obstruction lights.
-export function buildingTops(geometry, matrix) {
-  const pos = geometry.getAttribute('position')
-  const index = geometry.index.array
-  const n = pos.count
-  const e = matrix.elements
-  const parent = new Int32Array(n)
-  for (let i = 0; i < n; i++) parent[i] = i
-  const find = (a) => {
-    while (parent[a] !== a) a = parent[a] = parent[parent[a]]
-    return a
-  }
-  for (let i = 0; i < index.length; i += 3) {
-    const a = find(index[i])
-    const b = find(index[i + 1])
-    if (a !== b) parent[a] = b
-    const c = find(index[i + 2])
-    const d = find(index[i + 1])
-    if (c !== d) parent[c] = d
-  }
-  const y = new Float32Array(n)
-  const top = new Float32Array(n).fill(-Infinity)
-  for (let i = 0; i < n; i++) {
-    y[i] = pos.getY(i) * e[5] + e[13]
-    const r = find(i)
-    if (y[i] > top[r]) top[r] = y[i]
-  }
-  const tops = new Float32Array(n * 2)
-  // The middle of each solid's highest vertices: where its obstruction light goes, and which landmark
-  // (if any) it is part of.
-  const peaks = new Map()
-  for (let i = 0; i < n; i++) {
-    const r = find(i)
-    if (y[i] < top[r] - 0.5) continue
-    let p = peaks.get(r)
-    if (!p) peaks.set(r, (p = { x: 0, z: 0, k: 0, y: top[r] }))
-    p.x += pos.getX(i) * e[0] + e[12]
-    p.z += pos.getZ(i) * e[10] + e[14]
-    p.k++
-  }
-  const bake = geometry.getAttribute('bake')
-  const landmark = new Map()
-  const kind = new Map()
-  for (const [r, p] of peaks) {
-    const x = p.x / p.k
-    const z = p.z / p.k
-    const i = LANDMARKS.findIndex((l) => Math.hypot(x - l[1], z - l[2]) < l[3] && p.y > l[4] - 6)
-    const seed = Math.round(bake.getY(r) * 255)
-    // Which of the rarer lights this solid can show at all, so every other pixel skips them: 1 a washed
-    // crown (about a third of the towers over 160 m), 2 a lit name on the roof (Midtown, more often near
-    // Times Square), 4 within reach of the signs' light (its middle within the signs' box, plus a margin).
-    const crown = p.y >= 160 && rand(seed, 6) < 0.3
-    const near = toSign(SIGN_LIST[0], x, z)
-    const roofSign = p.y >= 45 && p.y <= 260 && z < -1300 && rand(seed, 7) < smooth(-1300, -1800, z) * (0.05 + 0.25 * (1 - smooth(120, 800, near)))
-    // (A solid's middle is up to about 60 m from its walls.)
-    const signs = SIGN_LIST.some((g) => toSign(g, x, z) < g[4] * 3 + 60)
-    landmark.set(r, (i >= 0 ? i + 1 : 0) + 16 * ((crown ? 1 : 0) + (roofSign ? 2 : 0) + (signs ? 4 : 0)))
-    const pOffice = Math.min(0.95, Math.max(0.02, mix(0.15, 0.72, officeZone(x, z)) + 0.3 * smooth(60, 200, p.y) - 0.2 * (1 - smooth(20, 35, p.y))))
-    const office = rand(seed, 1) < pOffice
-    // Lamps: mostly 3000 to 4000 K, some clear white LED, a few behind green or blue glass. The Financial
-    // District and the very tall new towers run whiter (eight recent night photographs from Brooklyn and
-    // 70 Pine Street: Lower Manhattan reads white and gold, almost never blue).
-    const b = rand(seed, 2)
-    const cooler = Math.max(smooth(1500, 2100, z), smooth(230, 320, p.y))
-    const edges = [mix(0.3, 0.15, cooler), mix(0.58, 0.35, cooler), mix(0.82, 0.6, cooler), mix(0.87, 0.65, cooler), mix(0.885, 0.67, cooler)]
-    const lamp = [0, 1, 2, 3, 4].find((k) => b < edges[k]) ?? 5
-    const cool = rand(seed, 3) < 0.05
-    kind.set(r, [office ? 255 : 0, office ? lamp * 51 : cool ? 255 : 0, Math.round(rand(seed, 4) * 255), Math.round(rand(seed, 5) * 255)])
-  }
-  const kinds = new Uint8Array(n * 4)
-  for (let i = 0; i < n; i++) {
-    const r = find(i)
-    tops[i * 2] = top[r]
-    tops[i * 2 + 1] = landmark.get(r) ?? 0
-    kinds.set(kind.get(r), i * 4)
-  }
-  // One light per roof: a tower's parts often share an outline's corner, so the nearby lower peaks go.
-  const list = [...peaks.values()].filter((p) => p.y >= 180).map((p) => ({ x: p.x / p.k, y: p.y, z: p.z / p.k })).sort((a, b) => b.y - a.y)
-  const kept = []
-  for (const p of list) if (!kept.some((q) => Math.hypot(q.x - p.x, q.z - p.z) < 30)) kept.push(p)
-  return { tops, kinds, peaks: kept }
+// What each solid is (solids.js does the finding): which landmark it belongs to (1 + its index in
+// LANDMARKS, by where its top stands; 0 for none), so the shader looks it up instead of testing all twelve;
+// which of the rarer lights it can show; and what kind of building it is, decided once here rather than in
+// every pixel: an office or homes (more often an office in the office districts and the taller it is), the
+// office's lamp or whether the homes are all-LED, how many of its windows tend to be lit, how bright it is.
+function classify({ x, z, y, seed }) {
+  const i = LANDMARKS.findIndex((l) => Math.hypot(x - l[1], z - l[2]) < l[3] && y > l[4] - 6)
+  // Which of the rarer lights this solid can show at all, so every other pixel skips them: 1 a washed
+  // crown (about a third of the towers over 160 m), 2 a lit name on the roof (Midtown, more often near
+  // Times Square), 4 within reach of the signs' light (its middle within the signs' box, plus a margin).
+  const crown = y >= 160 && rand(seed, 6) < 0.3
+  const near = toSign(SIGN_LIST[0], x, z)
+  const roofSign = y >= 45 && y <= 260 && z < -1300 && rand(seed, 7) < smooth(-1300, -1800, z) * (0.05 + 0.25 * (1 - smooth(120, 800, near)))
+  // (A solid's middle is up to about 60 m from its walls.)
+  const signs = SIGN_LIST.some((g) => toSign(g, x, z) < g[4] * 3 + 60)
+  const flags = (i >= 0 ? i + 1 : 0) + 16 * ((crown ? 1 : 0) + (roofSign ? 2 : 0) + (signs ? 4 : 0))
+  const pOffice = Math.min(0.95, Math.max(0.02, mix(0.15, 0.72, officeZone(x, z)) + 0.3 * smooth(60, 200, y) - 0.2 * (1 - smooth(20, 35, y))))
+  const office = rand(seed, 1) < pOffice
+  // Lamps: mostly 3000 to 4000 K, some clear white LED, a few behind green or blue glass. The Financial
+  // District and the very tall new towers run whiter (eight recent night photographs from Brooklyn and
+  // 70 Pine Street: Lower Manhattan reads white and gold, almost never blue).
+  const b = rand(seed, 2)
+  const cooler = Math.max(smooth(1500, 2100, z), smooth(230, 320, y))
+  const edges = [mix(0.3, 0.15, cooler), mix(0.58, 0.35, cooler), mix(0.82, 0.6, cooler), mix(0.87, 0.65, cooler), mix(0.885, 0.67, cooler)]
+  const lamp = [0, 1, 2, 3, 4].find((k) => b < edges[k]) ?? 5
+  const cool = rand(seed, 3) < 0.05
+  return { flags, kind: [office ? 255 : 0, office ? lamp * 51 : cool ? 255 : 0, Math.round(rand(seed, 4) * 255), Math.round(rand(seed, 5) * 255)] }
 }
 
-// Orders the index buffer so the solids that can show the rarer lights (a landmark, a washed crown, a lit
-// name, the signs' light: any flag set in buildingTops) come last, as a second group; the mesh draws the
-// first group with the plain material and the second with the full one. Same vertices, one more draw.
-export function splitByFlags(geometry) {
-  const index = geometry.index.array
-  const top = geometry.getAttribute('top').array
-  const plain = []
-  const full = []
-  for (let i = 0; i < index.length; i += 3) (top[index[i] * 2 + 1] > 0.5 ? full : plain).push(index[i], index[i + 1], index[i + 2])
-  index.set(plain, 0)
-  index.set(full, plain.length)
-  geometry.index.needsUpdate = true
-  geometry.clearGroups()
-  geometry.addGroup(0, plain.length, 0)
-  geometry.addGroup(plain.length, full.length, 1)
-  return { plain: plain.length / 3, full: full.length / 3 }
-}
-
-// Red obstruction lights on the tall roofs (above 180 m): some steady, some flashing 30 times a minute.
-export function obstructionLights(peaks, uniforms) {
-  const g = new THREE.BufferGeometry()
-  const p = new Float32Array(peaks.length * 3)
-  const phase = new Float32Array(peaks.length)
-  peaks.forEach((q, i) => {
-    p.set([q.x, q.y + 4, q.z], i * 3)
-    // A deterministic hash of the position: the same roofs flash every visit.
-    phase[i] = Math.abs(Math.sin(q.x * 12.9898 + q.z * 78.233) * 43758.5453) % 1
-  })
-  g.setAttribute('position', new THREE.BufferAttribute(p, 3))
-  g.setAttribute('phase', new THREE.BufferAttribute(phase, 1))
-  const m = new THREE.ShaderMaterial({
-    // uScale: pixels per metre at a metre's distance (Maquette.jsx sets it each frame); uPx: the device's pixel.
-    uniforms: { uNight: uniforms.uNight, uTime: uniforms.uTime, uScale: { value: 1000 }, uPx: { value: 1 } },
-    vertexShader: /* glsl */ `
-      attribute float phase;
-      uniform float uNight;
-      uniform float uTime;
-      uniform float uScale;
-      uniform float uPx;
-      varying float vOn;
-      void main() {
-        vec4 mv = modelViewMatrix * vec4(position, 1.0);
-        gl_Position = projectionMatrix * mv;
-        // A lamp's glare about 10 m across on the model, never under a pixel or over two and a half.
-        gl_PointSize = clamp(10.0 * uScale / -mv.z, 1.0 * uPx, 2.5 * uPx);
-        float flashing = step(0.55, phase);
-        vOn = uNight * mix(0.6, step(fract(uTime * 0.5 + phase * 7.0), 0.3), flashing);
-      }
-    `,
-    fragmentShader: /* glsl */ `
-      varying float vOn;
-      void main() {
-        float r = length(gl_PointCoord - 0.5);
-        float a = smoothstep(0.5, 0.05, r);
-        gl_FragColor = vec4(vec3(1.0, 0.1, 0.06) * 2.2 * a * vOn, 1.0);
-      }
-    `,
-    transparent: true,
-    depthWrite: false,
-    blending: THREE.AdditiveBlending,
-  })
-  const points = new THREE.Points(g, m)
-  points.frustumCulled = false
-  points.renderOrder = 2
-  return points
-}
+// The attribute values (top, flags; kind) and the roofs over 180 m, for the red obstruction lights.
+export const buildingTops = (geometry, matrix) => solidTops(geometry, matrix, classify, { lightsAbove: 180 })
 
 // The colour the signs throw on what is round them: white and violet-magenta (photographs from the Empire
 // State Building show the towers round Times Square bathed in it), drifting toward blue and red. The same

@@ -3,12 +3,18 @@ import { useFrame, useLoader } from '@react-three/fiber'
 import { useGLTF } from '@react-three/drei'
 import * as THREE from 'three'
 import { buildingMaterial, floorMaterial, plasterUniforms, plinthMaterial } from './plaster.js'
-import { buildingTops, obstructionLights, splitByFlags } from './newYork.js'
+import { buildingTops as newYorkTops } from './newYork.js'
+import { londonTops } from './london.js'
+import { parisTops } from './paris.js'
+import { obstructionLights, splitByFlags } from './solids.js'
 
 // One city: its buildings (public/models/<city>.glb), the plinth they stand on with water inlaid, and the
 // patch of studio floor under it.
 
 export const PLINTH_DEPTH = 130 // the slab's thickness in the model's metres: about 3 cm at 1:5000
+
+// What each city's night needs to know about its buildings (solids.js), worked out once at load.
+const TOPS = { 'new-york': newYorkTops, london: londonTops, paris: parisTops }
 
 export default function Maquette({ city, onReady }) {
   const { scene } = useGLTF(city.glb, false, true)
@@ -29,20 +35,19 @@ export default function Maquette({ city, onReady }) {
         g.setAttribute('bake', g.getAttribute('color'))
         g.deleteAttribute('color')
       }
-      // New York's night needs each building's height (newYork.js), and its tall roofs carry lights.
-      if (city.id === 'new-york') {
-        if (!g.userData.peaks) {
-          o.updateWorldMatrix(true, false)
-          const { tops, kinds, peaks } = buildingTops(g, o.matrixWorld)
-          g.setAttribute('top', new THREE.BufferAttribute(tops, 2))
-          g.setAttribute('kind', new THREE.BufferAttribute(kinds, 4, true))
-          g.userData.peaks = peaks
-          splitByFlags(g)
-        }
-        lights = obstructionLights(g.userData.peaks, plasterUniforms)
+      // Each building's height, kind and landmark (the city's night needs them), and the tall roofs, which
+      // carry red lights.
+      if (!g.userData.peaks) {
+        o.updateWorldMatrix(true, false)
+        const { tops, kinds, peaks } = TOPS[city.id](g, o.matrixWorld)
+        g.setAttribute('top', new THREE.BufferAttribute(tops, 2))
+        g.setAttribute('kind', new THREE.BufferAttribute(kinds, 4, true))
+        g.userData.peaks = peaks
+        splitByFlags(g)
       }
-      // New York's mesh is two groups (splitByFlags): the plain city, then the solids with the rarer lights.
-      o.material = city.id === 'new-york' ? [buildingMaterial(city.id, city.offset, { plain: true }), buildings] : buildings
+      lights = obstructionLights(g.userData.peaks, plasterUniforms)
+      // The mesh is two groups (splitByFlags): the plain city, then the solids with the rarer lights.
+      o.material = [buildingMaterial(city.id, city.offset, { plain: true }), buildings]
       o.castShadow = o.receiveShadow = true
       o.frustumCulled = false
       mesh.current = o
