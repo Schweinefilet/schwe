@@ -471,4 +471,132 @@ The benchmark prints the renderer it ran on and should be run on real hardware.
 
 ## Results
 
-(Filled in as each technique lands; see the table below.)
+Built in the order above and checked after each step: the production build (exit 0), the console (no
+errors at any stage), the benchmark (scripts/bench.mjs, headed Chrome under Xvfb, 1920 x 1080), and the four
+screenshots (scripts/shots.mjs) beside the matching photographs (docs/reference.md). scripts/stages.mjs
+replays the build-up from the final build, one technique at a time, with the techniques not yet reached
+turned off through `?fx=`: its screenshots are in docs/shots/stages/<n>-<name>/ and its timings in
+docs/shots/stages/bench.json. The final set is docs/shots/{noon,golden,night,rain}.png.
+
+The timings are llvmpipe's (Mesa's CPU rasterizer; see the limitation above). They are a frame's work with
+the GPU forced to finish, the median over 20 s. They rank costs; they are not frame rates. A software
+rasterizer pays far more for texture reads than a GPU does, so full-resolution passes with many reads
+(TAA, the shafts, the relief-mapped surroundings) are overstated relative to shading.
+
+### What each step changed, and what still looked fake after it
+
+0. The studio's plaster New York (`?real=0`), for reference: 532 ms at noon, 698 at night.
+1. HDR, metering, a filmic curve (AgX during the stages, ACES in the end: below). The frame moves into a
+   half-float target, which drops the canvas's 4x multisampling
+   (the plaster pays for it). On its own this step looks worse than the studio: no sky, so no fill light
+   and black shadows. Fake: everything.
+2. Sky, aerial perspective, image-based light. The biggest single change: the air. At the site's true
+   17 km a median day (28 km visibility) veils the city nearly to grey and the rain reading hides it, so the
+   aerial perspective counts the air over the last quarter of each ray (about 4 km, the photographers'
+   distance; Unreal exposes the same control). A first version lit the haze under a 5%-covered sky with the
+   full cloud deck's light and washed the city out; the deck's light now scales with the cover. Fake: plaster
+   buildings, a flat grey city.
+3. PBR facades, roofs, ground, glass and water, and the surroundings. Brick, brownstone, limestone and
+   glass by building; tar, gravel and coated roofs; parks from the land cover; Cox-Munk water. The
+   surroundings (New Jersey, Brooklyn, Queens, upper Manhattan, from Overture) replace an ocean that ended at
+   the plinth's edge; their towers are boxes, their low-rise a relief-mapped height field (flat roofs on the
+   ground read as a car park: from 14 degrees up the walls dominate). Fake: white roof coatings in rows of
+   specks under an overexposed frame (fixed by reflected metering and a darker palette), facades as flat
+   colour with no cornices or setbacks below what OSM maps.
+4. Screen-space reflections, on the water and wet ground only. By day the water reflects mostly sky
+   (at 76 degrees from the normal, wind-roughened); the waterfront's reflections show at night, faintly.
+   Fake: night water stays black where the photographs show long streaks of light.
+5. TAA. Resolves the window grids and roof clutter below a pixel. A first version left white specks: its
+   Catmull-Rom history read overshot past the clip box in the tone-mapped blend space, whose inverse then
+   exploded. The box is now clamped to the neighbourhood's own range.
+6. Bloom. Visible only at night, round Times Square and the brightest crowns. Fake: lights are glow, not
+   points with a halo, at this distance.
+7. Wetness. Only in rain; darker, glossier roofs and streets, ponding on flat roofs. At 17 km a wet city
+   mostly reads as darker.
+8. Light shafts. Building shadows in the air: shadowed streets at noon lose part of their veil (1.8% RMSE
+   against step 7). Ran at night for nothing at first; now only with a sun up, in 8 steps.
+9. Clouds. The rain and overcast deck; cloud shadows in partly cloudy weather (the four fixtures are clear
+   or overcast, so they show the deck only). Skipped under 12% cover, where the shadows were not worth the
+   noise in every pixel.
+10. Grade. Contrast 1.14 and saturation 1.12 in linear light before the tone curve, set against the
+    photographs.
+11. GTAO (trial, `?fx=+gtao`). A first run measured nothing: a `+` in a query string arrives as a space,
+    so the trial never switched on (the parser now takes either). Switched on, it changes the noon frame by
+    1.8% RMSE: darker seams between buildings and a little more definition. But a forward renderer has no
+    separate ambient buffer, so a post-pass AO multiplies the whole pixel and darkens sunlit walls as well;
+    it double-counts the baked sky visibility; and it costs +65 / +28 ms (8% / 3%). Rejected; the version
+    worth trying multiplies only the indirect light, which needs that light in a buffer of its own.
+
+AgX against ACES. The stages were built with AgX. Side by side with the photographs (docs/shots/*-agx.jpg
+against docs/shots/*.png), AgX's low contrast and desaturated highlights flatten the noon frame and the
+harbour's blue, where the photographs are contrasty and saturated; at night it lifts the windows toward
+white where the photographs are amber. ACES (Narkowicz's fit, three's `ACESFilmicToneMapping`) matches
+them better in all four conditions, so the final build uses ACES (`?tm=agx` to compare). Rain and fog are
+metered darker (a grey day printed grey) after the same comparison.
+
+The night after the stages. The studio's night was calibrated on the hues of the lit pixels (DECISIONS.md
+2026-11-20); beside the aerial photographs (07 to 09) the whole city glowed where they show a dark city of
+point lights whose brightest structure is the street grid. The photoreal path draws the windows at 0.45 of
+the studio's strength and the street light at twice. docs/shots/stages/ shows the night before this; the
+final set after.
+
+## Remaining gaps against the reference photographs
+
+Noon (01, 02, 03). The photographs' facades have depth: cornices, setbacks, window reveals, rooftop water
+tanks and bulkheads; the model's are flat colour on OSM's massing. Glass towers in the photographs reflect
+their neighbours and the sky in patches; here every curtain wall reflects one sky. Street trees, cars and
+boats are absent. The water in 01 and 02 is a saturated deep blue with wakes; here a hazier blue-grey.
+Golden hour (04, 05, 06). The haze turns pink where the photographs keep it gold-grey; low-sun glints off
+glass toward the camera are missing (the sun is behind the lens in this view, so they would be rare).
+Night (07, 08, 09). Water is black where the photographs carry long reflections of the waterfront; the
+boroughs' lights are a glow rather than points; the 2010 photograph's sodium orange is gone from today's
+LED streets, which the night follows (DECISIONS.md 2026-11-20). Rain (10, 11, 12). No rain shafts: the
+photographs' showers are columns of streaked grey under the cloud; here the rain is a uniform veil.
+
+## What to try next
+
+1. Measure on real hardware (scripts/bench.mjs prints the renderer). If the full stack misses 30 fps on a
+   mid-range laptop: the shafts and the context's relief at half resolution with a depth-aware upsample,
+   then a lower internal resolution under TAA (Unreal's TSR does the same).
+2. Cloud shadows from a small texture redrawn when the clouds move, instead of noise in every pixel
+   (Microsoft Flight Simulator's and RDR2's cloud shadow maps).
+3. Rain shafts: density columns in the aerial-perspective volume under rain cells (Bauer 2019).
+4. Real facade materials and colours where OSM maps them (Overture's `facade_material`, `roof_color`), and
+   street trees from OSM's trees, before procedural guesses.
+5. Planar or stochastic SSR with more rays on the water at night, so the waterfront's light streaks.
+6. The context's low-rise near the plinth as real extrusions (a level of detail), relief mapping only
+   beyond.
+
+## Table: what shipped, its cost, what still looks fake, what to try next
+
+Frame cost: the median frame time on llvmpipe at 1920 x 1080, noon / night, and what the step added to the
+one before (negative: within noise or cheaper). The studio's plaster New York: 532 / 698 ms. The full stack
+(step 10): 838 / 828 ms, 1.57 / 1.19 times the plaster's. The final build (ACES, the re-balanced night),
+benchmarked on its own: 838.5 / 803.7 ms, median over 24 / 25 frames, no console errors
+(docs/shots/bench-final.json). Runs of the same build differ by up to about 6%, so steps under 50 ms are
+within noise. These are not frame rates: llvmpipe draws this scene at 1.2 fps, and the plaster studio at
+1.9. The 30 fps target is untested (see the limitation above).
+
+| Technique (rank) | Outcome | Frame cost, noon / night ms (added) | Still looks fake | Try next |
+| --- | --- | --- | --- | --- |
+| HDR target, metering, filmic tone curve (1) | Shipped: ACES (AgX compared and dropped) | 530 / 565 (-3 / -134: the studio's 4x MSAA gone) | Daylight metered 60% from the frame; rain still a little bright. | Eye adaptation over time if the weather changes fast. |
+| Sky and atmosphere, Hillaire LUTs (2) | Shipped | 602 / 652 (+72 / +87), with aerial perspective and IBL | Pink haze at golden hour; one aerosol type for every weather. | Aerosol type from the reading (humidity, PM2.5 from the air-quality request the panel already makes). |
+| Aerial perspective (3) | Shipped | in the row above | Scaled to a 4 km camera (a choice, stated); uniform veil, no layering of smog. | A second, shallower smog layer on hazy days. |
+| Image-based light from the sky (4) | Shipped | in row 2 (2 to 5 ms once a minute on a GPU, not per frame) | Every glass tower reflects the same sky, not its neighbours. | Local reflection probes for the tallest towers. |
+| PBR facades, roofs, ground, parks (5) | Shipped | 603 / 647 (+1 / -4), with glass, water and the surroundings | Flat facades without cornices or setbacks; no rooftop tanks; no street trees. | OSM facade materials and colours where mapped; trees from OSM. |
+| Glass and night windows (6) | Shipped | in row 5 | Curtain walls too uniform. | Per-panel tint variation, warped-pane reflections. |
+| Interior mapping (6) | Rejected | none | A window is under a pixel at 17 km: no parallax to show. | Only if a closer view is added. |
+| Water, Cox-Munk waves (7) | Shipped | in row 5 | No wakes or boats; hazier than the photographs' blue. | Ferry and boat wakes along real routes. |
+| Screen-space reflections (8) | Shipped | 628 / 687 (+25 / +40) | Night water black where the photographs streak. | More rays on water at night; planar reflection. |
+| TAA (9) | Shipped | 731 / 735 (+103 / +48) | None visible in stills; slight softening. | A sharpening pass; an internal resolution below native. |
+| SMAA (9) | Rejected | none | TAA resolves edges and sub-pixel crawl on every tier; SMAA would add three passes for edges alone. | - |
+| Bloom (10) | Shipped | 718 / 757 (-12 / +22) | Lights glow rather than read as points. | A dimmer, wider tail; lens flare off. |
+| Wet surfaces and puddles (11) | Shipped | 710 / 762 (-9 / +4) | At this distance mostly reads as darker. | Reflections of the lit city in wet streets at night. |
+| Volumetric light shafts (12) | Shipped | 851 / 801 (+142 / +39) | Subtle with the sun behind the lens. | Half resolution. |
+| Clouds and their shadows (13) | Shipped | 896 / 847 (+45 / +47) | No rain shafts; clouds never seen directly. | Cloud shadow texture; rain shafts in the air. |
+| Ray-marched volumetric clouds (13) | Rejected | none | The horizon is never in frame. | - |
+| Colour grading (14) | Shipped | 838 / 828 (-58 / -19) | One grade for all weathers. | A grade per condition, set against the photographs. |
+| GTAO (15) | Rejected | 903 / 857 (+65 / +28) on trial | 1.8% RMSE change, but it darkens direct sunlight and double-counts the baked occlusion. | AO on the indirect light only. |
+| Cascaded, contact and soft shadows (16) | Rejected | none | One fitted 4096 map is about a texel a pixel already; the sun's penumbra is a pixel. | Only for a closer view. |
+| Global illumination (17) | Approximated | none | No bounce between buildings. | A screen-space indirect diffuse pass. |
+| The surroundings (not in the list; from MSFS's approach) | Shipped | in row 5 | Relief-mapped low-rise looks soft near the plinth. | Real extrusions near the plinth. |

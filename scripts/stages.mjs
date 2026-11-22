@@ -6,7 +6,7 @@
 //   npm run build && npx vite preview --port 4173 &
 //   node scripts/stages.mjs --url http://localhost:4173/ [--only 3,4] [--headed]
 //
-// Writes docs/shots/stages/<n>-<name>/{noon,golden,night,rain}.png and docs/shots/stages/bench.json.
+// Writes docs/shots/stages/<n>-<name>/{noon,golden,night,rain}.jpg and docs/shots/stages/bench.json.
 
 import { execFileSync } from 'node:child_process'
 import fs from 'node:fs'
@@ -46,7 +46,7 @@ for (const [name, adds] of STAGES) {
   const dir = path.join(OUT, name)
   fs.mkdirSync(dir, { recursive: true })
   console.log(`== ${name} ${query}`)
-  execFileSync('node', ['scripts/shots.mjs', '--url', URL_, '--out', dir, '--settle', arg('settle', '20000'), ...(query ? ['--query', query] : [])], { stdio: 'inherit' })
+  execFileSync('node', ['scripts/shots.mjs', '--jpeg', '--url', URL_, '--out', dir, '--settle', arg('settle', '20000'), ...(query ? ['--query', query] : [])], { stdio: 'inherit' })
   const bench = {}
   for (const shot of ['noon', 'night']) {
     const out = execFileSync('xvfb-run', ['-a', '-s', '-screen 0 1920x1080x24', 'node', 'scripts/bench.mjs', '--url', URL_, '--shot', shot, '--seconds', arg('seconds', '20'), ...(query ? ['--query', query] : [])], { encoding: 'utf8' })

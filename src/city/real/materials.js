@@ -11,8 +11,10 @@ import { CLOUDS_GLSL } from './clouds.js'
 // 2014, the albedo chart): brick 0.2 to 0.35, limestone 0.4 to 0.55, asphalt 0.05 to 0.12, tar roofs
 // 0.07, cool-roof coating 0.5 to 0.6.
 //
-// New York's night (newYork.js) is the plaster's, unchanged, scaled by uNightGain for this pipeline's
-// exposure.
+// New York's night (newYork.js) is the plaster's, re-balanced for a photograph from the air: the studio
+// calibrated the hues of the lit pixels (DECISIONS.md 2026-11-20), but the aerial photographs (docs/
+// reference.md, 07 to 09) show a dark city of point lights whose brightest structure is the street grid.
+// Windows here are WINDOW_GAIN of the studio's, the streets STREET_GAIN.
 
 export const realUniforms = {
   uSunDirW: { value: new THREE.Vector3(0, 1, 0) },
@@ -22,6 +24,8 @@ export const realUniforms = {
   uCloudOpacity: { value: 0.9 },
   uWetness: { value: 0 },
   uNightGain: { value: 1 },
+  uWindowGain: { value: 0.45 },
+  uStreetGain: { value: 2.0 },
   uWind: { value: new THREE.Vector2(1, 0) }, // where it blows to, unit
   uWindSpeed: { value: 4 }, // m/s at 10 m
   tBuild: { value: null }, // the buildings' radiance (rgb) and view depth in metres (a)
@@ -39,6 +43,8 @@ const REAL_COMMON = /* glsl */ `
   uniform float uCloudOpacity;
   uniform float uWetness;
   uniform float uNightGain;
+  uniform float uWindowGain;
+  uniform float uStreetGain;
   ${CLOUDS_GLSL}
 
   // The fraction of the sun the cloud layer lets through at world point p.
@@ -179,9 +185,9 @@ const FACADE_APPLY = /* glsl */ `
   diffuseColor.rgb = fm.albedo;
   roughnessFactor = fm.rough;
   metalnessFactor = fm.metal;
-  totalEmissiveRadiance += ${NIGHTS['new-york'].night} * uNightGain;
+  totalEmissiveRadiance += ${NIGHTS['new-york'].night} * uNightGain * uWindowGain;
   // The streets' own light after dark, at the foot of every wall.
-  totalEmissiveRadiance += uNight * uNightGain * ${NIGHTS['new-york'].street} * 0.07 * exp(-max(vModel.y, 0.0) / 20.0) * (1.5 - vBake.x);
+  totalEmissiveRadiance += uNight * uNightGain * uStreetGain * ${NIGHTS['new-york'].street} * 0.07 * exp(-max(vModel.y, 0.0) / 20.0) * (1.5 - vBake.x);
 `
 
 // After the lights: the cloud layer's shadow on the sun, and the sky's reflection occluded where the
@@ -471,11 +477,11 @@ const GROUND_APPLY = /* glsl */ `
     float pane = pulse(wq.x + 0.25, fq.x, 0.5) * pulse(wq.y - 0.3, fq.y, 0.6);
     vec3 win = mix(vec3(1.0, 0.62, 0.2), vec3(1.0, 0.85, 0.6), hash21(floor(wq) + 3.0)) * on * pane;
     win = mix(win, vec3(1.0, 0.7, 0.35) * uLit * 0.5 * 0.15, smoothstep(0.4, 1.0, max(fq.x, fq.y)));
-    totalEmissiveRadiance += uNight * uNightGain * (lamp * streets + win * ctxWall * 0.9);
+    totalEmissiveRadiance += uNight * uNightGain * (lamp * streets * uStreetGain + win * ctxWall * 0.9 * uWindowGain);
   }
   // After dark: the streets, the signs' light, the traffic and the memorial pools (newYork.js).
   float onTopSave = onTop;
-  ${NIGHTS['new-york'].ground.replace(/totalEmissiveRadiance \+=/g, 'totalEmissiveRadiance += uNightGain *')}
+  ${NIGHTS['new-york'].ground.replace(/totalEmissiveRadiance \+=/g, 'totalEmissiveRadiance += uNightGain * uStreetGain *')}
   onTop = onTopSave;
 `
 

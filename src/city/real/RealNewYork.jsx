@@ -5,7 +5,7 @@ import * as THREE from 'three'
 import { now } from '../../core/clock.js'
 import { blendLook, localHour } from '../look.js'
 import { prepareModel } from '../Maquette.jsx'
-import { cityClock, plasterUniforms } from '../plaster.js'
+import { buildingMaterial, cityClock, plasterUniforms } from '../plaster.js'
 import { signSpill } from '../newYork.js'
 import { obstructionLights } from '../solids.js'
 import Precip from '../Precip.jsx'
@@ -24,12 +24,17 @@ import { Pipeline } from './pipeline.js'
 // ?fx=-taa,-ssr (or any of the names in FX) turns techniques off, to compare.
 
 const params = new URLSearchParams(location.search)
-const off = new Set((params.get('fx') ?? '').split(',').filter((f) => f.startsWith('-')).map((f) => f.slice(1)))
+// (A '+' in a query string arrives as a space: either spelling turns a trial on.)
+const fxList = (params.get('fx') ?? '').split(',').map((f) => f.trim())
+const off = new Set(fxList.filter((f) => f.startsWith('-')).map((f) => f.slice(1)))
 export const FX = Object.fromEntries(['aerial', 'ibl', 'pbr', 'ssr', 'taa', 'bloom', 'clouds', 'wet', 'grade', 'shafts'].map((k) => [k, !off.has(k)]))
 // On trial, off unless asked for (?fx=+gtao).
-FX.gtao = (params.get('fx') ?? '').split(',').includes('+gtao')
-// The tone curve: AgX, or ACES (Narkowicz's fit, three's ACESFilmicToneMapping) with ?tm=aces to compare.
-const TONE = params.get('tm') === 'aces' ? THREE.ACESFilmicToneMapping : THREE.AgXToneMapping
+FX.gtao = fxList.some((f) => f.replace(/^\+/, '') === 'gtao')
+// The tone curve: ACES (three's ACESFilmicToneMapping, Narkowicz's fit of the ACES output transform), or
+// AgX with ?tm=agx to compare. Against the reference photographs ACES carries their contrast and the
+// harbour's saturated blue by day and their amber at night, where AgX flattens both
+// (docs/rendering-research.md, docs/shots/*-agx.jpg).
+const TONE = params.get('tm') === 'agx' ? THREE.AgXToneMapping : THREE.ACESFilmicToneMapping
 
 // New York is the first city: fetch what this needs as soon as the module loads.
 for (const id of ['new-york']) {
@@ -51,7 +56,8 @@ export default function RealNewYork({ city, weather, lite = false, still = false
   const { buildings, lights, ground, towers } = useMemo(() => {
     const o = prepareModel(gltf, city)
     o.updateWorldMatrix(true, false)
-    const mats = FX.pbr ? [realBuildingMaterial(city.offset, { plain: true }), realBuildingMaterial(city.offset)] : o.material
+    // Without the PBR materials (?fx=-pbr, to compare): the studio's plaster.
+    const mats = FX.pbr ? [realBuildingMaterial(city.offset, { plain: true }), realBuildingMaterial(city.offset)] : [buildingMaterial(city.id, city.offset, { plain: true }), buildingMaterial(city.id, city.offset)]
     const buildings = new THREE.Mesh(o.geometry, mats)
     buildings.matrixAutoUpdate = false
     buildings.matrix.copy(o.matrixWorld)
@@ -73,7 +79,7 @@ export default function RealNewYork({ city, weather, lite = false, still = false
     ground.position.set(...city.offset)
     ground.receiveShadow = true
     ground.frustumCulled = false
-    const towers = new THREE.Mesh(towerGeometry(towersBin), FX.pbr ? realBuildingMaterial(city.offset, { plain: true }) : new THREE.MeshStandardMaterial())
+    const towers = new THREE.Mesh(towerGeometry(towersBin), FX.pbr ? realBuildingMaterial(city.offset, { plain: true }) : buildingMaterial(city.id, city.offset, { plain: true }))
     towers.castShadow = towers.receiveShadow = true
     towers.frustumCulled = false
     return { buildings, lights, ground, towers }
@@ -200,7 +206,9 @@ export default function RealNewYork({ city, weather, lite = false, still = false
     signSpill(plasterUniforms.uSpill.value, state.clock.elapsedTime)
     const ru = realUniforms
     ru.uSunDirW.value.fromArray(l.sunDir)
-    ru.uCloudTh.value = FX.clouds ? l.cloudTh : 2
+    // A sky under an eighth covered casts too little shadow to be worth the noise in every pixel; the
+    // reflections still show its clouds (the sky cube keeps them).
+    ru.uCloudTh.value = FX.clouds && l.cover >= 0.12 ? l.cloudTh : 2
     ru.uCloudH.value = l.cloudH
     ru.uCloudShift.value.fromArray(l.cloudShift)
     ru.uCloudOpacity.value = l.cloudOpacity
@@ -219,7 +227,8 @@ export default function RealNewYork({ city, weather, lite = false, still = false
       // By day a camera meters the frame itself (half its exposure here); after dark the incident reading
       // and its ceiling decide, so the night is not lifted to grey.
       meter: 0.6 * (1 - l.night),
-      key: 0.2,
+      // A grey day is printed grey, not lifted to a bright one: rain and fog metered darker.
+      key: 0.2 * (1 - 0.35 * Math.max(l.rain, l.fog, l.snow * 0.5)),
       exposureMax: NIGHT_EXPOSURE,
       // The grade: a print's contrast and colour, as the reference photographs have (docs/reference.md).
       balance: [1, 1, 1],
@@ -231,7 +240,8 @@ export default function RealNewYork({ city, weather, lite = false, still = false
       sunDir: l.sunTrue,
       aerial: FX.aerial,
       sky: atmosphere.skyCube.texture,
-      shafts: FX.shafts,
+      // Only with a sun to cast them.
+      shafts: FX.shafts && l.sunLight[1] * l.sunThrough > 1,
       shadow: sl.shadow.map ? { map: sl.shadow.map.depthTexture, matrix: sl.shadow.matrix } : null,
       sunL: l.sunLight.map((e) => e * l.sunThrough),
       sunDirW: l.sunDir,

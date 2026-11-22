@@ -1,0 +1,398 @@
+{
+ "0-plaster": {
+  "query": "real=0",
+  "noon": {
+   "url": "http://localhost:4173/?real=0&lite=0#new-york",
+   "renderer": "ANGLE (Mesa, llvmpipe (LLVM 20.1.2 256 bits), OpenGL 4.5)",
+   "software": true,
+   "canvas": [
+    1920,
+    1080
+   ],
+   "frames": 37,
+   "medianMs": 532.5,
+   "p90Ms": 596.1,
+   "medianFps": 1.9,
+   "intervalMedianMs": 533.3,
+   "consoleErrors": []
+  },
+  "night": {
+   "url": "http://localhost:4173/?real=0&lite=0#new-york",
+   "renderer": "ANGLE (Mesa, llvmpipe (LLVM 20.1.2 256 bits), OpenGL 4.5)",
+   "software": true,
+   "canvas": [
+    1920,
+    1080
+   ],
+   "frames": 29,
+   "medianMs": 698.5,
+   "p90Ms": 751.4,
+   "medianFps": 1.4,
+   "intervalMedianMs": 701.7,
+   "consoleErrors": []
+  }
+ },
+ "1-hdr-agx": {
+  "query": "fx=-aerial,-ibl,-pbr,-ssr,-taa,-bloom,-wet,-shafts,-clouds,-grade",
+  "noon": {
+   "url": "http://localhost:4173/?fx=-aerial%2C-ibl%2C-pbr%2C-ssr%2C-taa%2C-bloom%2C-wet%2C-shafts%2C-clouds%2C-grade&lite=0#new-york",
+   "renderer": "ANGLE (Mesa, llvmpipe (LLVM 20.1.2 256 bits), OpenGL 4.5)",
+   "software": true,
+   "canvas": [
+    1920,
+    1080
+   ],
+   "frames": 38,
+   "medianMs": 529.9,
+   "p90Ms": 564,
+   "medianFps": 1.9,
+   "intervalMedianMs": 534.4,
+   "consoleErrors": []
+  },
+  "night": {
+   "url": "http://localhost:4173/?fx=-aerial%2C-ibl%2C-pbr%2C-ssr%2C-taa%2C-bloom%2C-wet%2C-shafts%2C-clouds%2C-grade&lite=0#new-york",
+   "renderer": "ANGLE (Mesa, llvmpipe (LLVM 20.1.2 256 bits), OpenGL 4.5)",
+   "software": true,
+   "canvas": [
+    1920,
+    1080
+   ],
+   "frames": 36,
+   "medianMs": 564.7,
+   "p90Ms": 609.1,
+   "medianFps": 1.8,
+   "intervalMedianMs": 570,
+   "consoleErrors": []
+  }
+ },
+ "2-sky-air-ibl": {
+  "query": "fx=-pbr,-ssr,-taa,-bloom,-wet,-shafts,-clouds,-grade",
+  "noon": {
+   "url": "http://localhost:4173/?fx=-pbr%2C-ssr%2C-taa%2C-bloom%2C-wet%2C-shafts%2C-clouds%2C-grade&lite=0#new-york",
+   "renderer": "ANGLE (Mesa, llvmpipe (LLVM 20.1.2 256 bits), OpenGL 4.5)",
+   "software": true,
+   "canvas": [
+    1920,
+    1080
+   ],
+   "frames": 33,
+   "medianMs": 602.2,
+   "p90Ms": 663,
+   "medianFps": 1.7,
+   "intervalMedianMs": 608.1,
+   "consoleErrors": []
+  },
+  "night": {
+   "url": "http://localhost:4173/?fx=-pbr%2C-ssr%2C-taa%2C-bloom%2C-wet%2C-shafts%2C-clouds%2C-grade&lite=0#new-york",
+   "renderer": "ANGLE (Mesa, llvmpipe (LLVM 20.1.2 256 bits), OpenGL 4.5)",
+   "software": true,
+   "canvas": [
+    1920,
+    1080
+   ],
+   "frames": 31,
+   "medianMs": 651.5,
+   "p90Ms": 689.9,
+   "medianFps": 1.5,
+   "intervalMedianMs": 663.9,
+   "consoleErrors": []
+  }
+ },
+ "3-pbr-glass-water": {
+  "query": "fx=-ssr,-taa,-bloom,-wet,-shafts,-clouds,-grade",
+  "noon": {
+   "url": "http://localhost:4173/?fx=-ssr%2C-taa%2C-bloom%2C-wet%2C-shafts%2C-clouds%2C-grade&lite=0#new-york",
+   "renderer": "ANGLE (Mesa, llvmpipe (LLVM 20.1.2 256 bits), OpenGL 4.5)",
+   "software": true,
+   "canvas": [
+    1920,
+    1080
+   ],
+   "frames": 33,
+   "medianMs": 603.1,
+   "p90Ms": 640.7,
+   "medianFps": 1.7,
+   "intervalMedianMs": 600.9,
+   "consoleErrors": []
+  },
+  "night": {
+   "url": "http://localhost:4173/?fx=-ssr%2C-taa%2C-bloom%2C-wet%2C-shafts%2C-clouds%2C-grade&lite=0#new-york",
+   "renderer": "ANGLE (Mesa, llvmpipe (LLVM 20.1.2 256 bits), OpenGL 4.5)",
+   "software": true,
+   "canvas": [
+    1920,
+    1080
+   ],
+   "frames": 31,
+   "medianMs": 647.1,
+   "p90Ms": 679.9,
+   "medianFps": 1.5,
+   "intervalMedianMs": 649.2,
+   "consoleErrors": []
+  }
+ },
+ "4-ssr": {
+  "query": "fx=-taa,-bloom,-wet,-shafts,-clouds,-grade",
+  "noon": {
+   "url": "http://localhost:4173/?fx=-taa%2C-bloom%2C-wet%2C-shafts%2C-clouds%2C-grade&lite=0#new-york",
+   "renderer": "ANGLE (Mesa, llvmpipe (LLVM 20.1.2 256 bits), OpenGL 4.5)",
+   "software": true,
+   "canvas": [
+    1920,
+    1080
+   ],
+   "frames": 32,
+   "medianMs": 627.8,
+   "p90Ms": 660.4,
+   "medianFps": 1.6,
+   "intervalMedianMs": 629.4,
+   "consoleErrors": []
+  },
+  "night": {
+   "url": "http://localhost:4173/?fx=-taa%2C-bloom%2C-wet%2C-shafts%2C-clouds%2C-grade&lite=0#new-york",
+   "renderer": "ANGLE (Mesa, llvmpipe (LLVM 20.1.2 256 bits), OpenGL 4.5)",
+   "software": true,
+   "canvas": [
+    1920,
+    1080
+   ],
+   "frames": 29,
+   "medianMs": 687,
+   "p90Ms": 771.7,
+   "medianFps": 1.5,
+   "intervalMedianMs": 690.6,
+   "consoleErrors": []
+  }
+ },
+ "5-taa": {
+  "query": "fx=-bloom,-wet,-shafts,-clouds,-grade",
+  "noon": {
+   "url": "http://localhost:4173/?fx=-bloom%2C-wet%2C-shafts%2C-clouds%2C-grade&lite=0#new-york",
+   "renderer": "ANGLE (Mesa, llvmpipe (LLVM 20.1.2 256 bits), OpenGL 4.5)",
+   "software": true,
+   "canvas": [
+    1920,
+    1080
+   ],
+   "frames": 28,
+   "medianMs": 730.6,
+   "p90Ms": 783.4,
+   "medianFps": 1.4,
+   "intervalMedianMs": 731.6,
+   "consoleErrors": []
+  },
+  "night": {
+   "url": "http://localhost:4173/?fx=-bloom%2C-wet%2C-shafts%2C-clouds%2C-grade&lite=0#new-york",
+   "renderer": "ANGLE (Mesa, llvmpipe (LLVM 20.1.2 256 bits), OpenGL 4.5)",
+   "software": true,
+   "canvas": [
+    1920,
+    1080
+   ],
+   "frames": 27,
+   "medianMs": 734.9,
+   "p90Ms": 767,
+   "medianFps": 1.4,
+   "intervalMedianMs": 741.2,
+   "consoleErrors": []
+  }
+ },
+ "6-bloom": {
+  "query": "fx=-wet,-shafts,-clouds,-grade",
+  "noon": {
+   "url": "http://localhost:4173/?fx=-wet%2C-shafts%2C-clouds%2C-grade&lite=0#new-york",
+   "renderer": "ANGLE (Mesa, llvmpipe (LLVM 20.1.2 256 bits), OpenGL 4.5)",
+   "software": true,
+   "canvas": [
+    1920,
+    1080
+   ],
+   "frames": 28,
+   "medianMs": 718.2,
+   "p90Ms": 766.4,
+   "medianFps": 1.4,
+   "intervalMedianMs": 717.2,
+   "consoleErrors": []
+  },
+  "night": {
+   "url": "http://localhost:4173/?fx=-wet%2C-shafts%2C-clouds%2C-grade&lite=0#new-york",
+   "renderer": "ANGLE (Mesa, llvmpipe (LLVM 20.1.2 256 bits), OpenGL 4.5)",
+   "software": true,
+   "canvas": [
+    1920,
+    1080
+   ],
+   "frames": 27,
+   "medianMs": 757.3,
+   "p90Ms": 803.4,
+   "medianFps": 1.3,
+   "intervalMedianMs": 760.3,
+   "consoleErrors": []
+  }
+ },
+ "7-wet": {
+  "query": "fx=-shafts,-clouds,-grade",
+  "noon": {
+   "url": "http://localhost:4173/?fx=-shafts%2C-clouds%2C-grade&lite=0#new-york",
+   "renderer": "ANGLE (Mesa, llvmpipe (LLVM 20.1.2 256 bits), OpenGL 4.5)",
+   "software": true,
+   "canvas": [
+    1920,
+    1080
+   ],
+   "frames": 29,
+   "medianMs": 709.6,
+   "p90Ms": 744.1,
+   "medianFps": 1.4,
+   "intervalMedianMs": 708.7,
+   "consoleErrors": []
+  },
+  "night": {
+   "url": "http://localhost:4173/?fx=-shafts%2C-clouds%2C-grade&lite=0#new-york",
+   "renderer": "ANGLE (Mesa, llvmpipe (LLVM 20.1.2 256 bits), OpenGL 4.5)",
+   "software": true,
+   "canvas": [
+    1920,
+    1080
+   ],
+   "frames": 27,
+   "medianMs": 761.6,
+   "p90Ms": 788.9,
+   "medianFps": 1.3,
+   "intervalMedianMs": 760.2,
+   "consoleErrors": []
+  }
+ },
+ "8-shafts": {
+  "query": "fx=-clouds,-grade",
+  "noon": {
+   "url": "http://localhost:4173/?fx=-clouds%2C-grade&lite=0#new-york",
+   "renderer": "ANGLE (Mesa, llvmpipe (LLVM 20.1.2 256 bits), OpenGL 4.5)",
+   "software": true,
+   "canvas": [
+    1920,
+    1080
+   ],
+   "frames": 24,
+   "medianMs": 851.2,
+   "p90Ms": 928.7,
+   "medianFps": 1.2,
+   "intervalMedianMs": 854.4,
+   "consoleErrors": []
+  },
+  "night": {
+   "url": "http://localhost:4173/?fx=-clouds%2C-grade&lite=0#new-york",
+   "renderer": "ANGLE (Mesa, llvmpipe (LLVM 20.1.2 256 bits), OpenGL 4.5)",
+   "software": true,
+   "canvas": [
+    1920,
+    1080
+   ],
+   "frames": 25,
+   "medianMs": 800.8,
+   "p90Ms": 888.4,
+   "medianFps": 1.2,
+   "intervalMedianMs": 803.4,
+   "consoleErrors": []
+  }
+ },
+ "9-clouds": {
+  "query": "fx=-grade",
+  "noon": {
+   "url": "http://localhost:4173/?fx=-grade&lite=0#new-york",
+   "renderer": "ANGLE (Mesa, llvmpipe (LLVM 20.1.2 256 bits), OpenGL 4.5)",
+   "software": true,
+   "canvas": [
+    1920,
+    1080
+   ],
+   "frames": 23,
+   "medianMs": 896,
+   "p90Ms": 964.4,
+   "medianFps": 1.1,
+   "intervalMedianMs": 889.5,
+   "consoleErrors": []
+  },
+  "night": {
+   "url": "http://localhost:4173/?fx=-grade&lite=0#new-york",
+   "renderer": "ANGLE (Mesa, llvmpipe (LLVM 20.1.2 256 bits), OpenGL 4.5)",
+   "software": true,
+   "canvas": [
+    1920,
+    1080
+   ],
+   "frames": 24,
+   "medianMs": 847.4,
+   "p90Ms": 901.9,
+   "medianFps": 1.2,
+   "intervalMedianMs": 859.1,
+   "consoleErrors": []
+  }
+ },
+ "10-grade": {
+  "query": "",
+  "noon": {
+   "url": "http://localhost:4173/?lite=0#new-york",
+   "renderer": "ANGLE (Mesa, llvmpipe (LLVM 20.1.2 256 bits), OpenGL 4.5)",
+   "software": true,
+   "canvas": [
+    1920,
+    1080
+   ],
+   "frames": 24,
+   "medianMs": 837.8,
+   "p90Ms": 894.2,
+   "medianFps": 1.2,
+   "intervalMedianMs": 839.3,
+   "consoleErrors": []
+  },
+  "night": {
+   "url": "http://localhost:4173/?lite=0#new-york",
+   "renderer": "ANGLE (Mesa, llvmpipe (LLVM 20.1.2 256 bits), OpenGL 4.5)",
+   "software": true,
+   "canvas": [
+    1920,
+    1080
+   ],
+   "frames": 25,
+   "medianMs": 828.2,
+   "p90Ms": 893.4,
+   "medianFps": 1.2,
+   "intervalMedianMs": 835.3,
+   "consoleErrors": []
+  }
+ },
+ "11-gtao-trial": {
+  "query": "fx=+gtao",
+  "noon": {
+   "url": "http://localhost:4173/?fx=+gtao&lite=0#new-york",
+   "renderer": "ANGLE (Mesa, llvmpipe (LLVM 20.1.2 256 bits), OpenGL 4.5)",
+   "software": true,
+   "canvas": [
+    1920,
+    1080
+   ],
+   "frames": 23,
+   "medianMs": 902.6,
+   "p90Ms": 961.7,
+   "medianFps": 1.1,
+   "intervalMedianMs": 908.9,
+   "consoleErrors": []
+  },
+  "night": {
+   "url": "http://localhost:4173/?fx=+gtao&lite=0#new-york",
+   "renderer": "ANGLE (Mesa, llvmpipe (LLVM 20.1.2 256 bits), OpenGL 4.5)",
+   "software": true,
+   "canvas": [
+    1920,
+    1080
+   ],
+   "frames": 24,
+   "medianMs": 856.7,
+   "p90Ms": 929.5,
+   "medianFps": 1.2,
+   "intervalMedianMs": 854.1,
+   "consoleErrors": []
+  }
+ }
+}

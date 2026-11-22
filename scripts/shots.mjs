@@ -5,7 +5,7 @@
 // with a fixture, so nothing dev-only is needed. Reduced motion stops the camera's drift, so runs match.
 //
 //   node scripts/shots.mjs [--url http://localhost:4173/] [--out docs/shots] [--tag final] [--size 1920x1080]
-//        [--only noon,night] [--query fx=-taa] [--settle 20000] [--headed]
+//        [--only noon,night] [--query fx=-taa] [--settle 20000] [--headed] [--jpeg]
 //
 // Runs in headless Chromium by default; --headed uses a window (under xvfb-run on a machine without a
 // display). The image is what matters here, not the frame rate (scripts/bench.mjs measures that).
@@ -27,6 +27,7 @@ const TAG = arg('tag', '')
 const [W, H] = arg('size', '1920x1080').split('x').map(Number)
 const ONLY = arg('only', '')
 const HEADED = process.argv.includes('--headed')
+const JPEG = process.argv.includes('--jpeg') // smaller files for the many stage shots
 const EXTRA = arg('query', '')
 
 // The four sets. New York's clocks are on EST (UTC-5) in late November; sunset on 22 November is 16:31,
@@ -104,8 +105,8 @@ async function main() {
     await page.waitForSelector('.loader.is-done', { timeout: 180000 })
     // Let the look settle (weather eases in) and the shadow map draw.
     await page.waitForTimeout(Number(arg('settle', 9000)))
-    const file = path.join(OUT, `${shot.name}${TAG ? `-${TAG}` : ''}.png`)
-    await page.screenshot({ path: file })
+    const file = path.join(OUT, `${shot.name}${TAG ? `-${TAG}` : ''}.${JPEG ? 'jpg' : 'png'}`)
+    await page.screenshot(JPEG ? { path: file, type: 'jpeg', quality: 88 } : { path: file })
     console.log(file, errors.length ? `console errors: ${errors.join(' | ')}` : 'no console errors')
     await ctx.close()
   }
