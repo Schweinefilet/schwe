@@ -39,7 +39,7 @@ export const SHOTS = [
 // Open-Meteo's `current` block for each kind of weather (the fields cityWeather.js reads).
 const CURRENT = {
   clear: { weather_code: 0, cloud_cover: 5, rain: 0, showers: 0, snowfall: 0, visibility: 30000, wind_speed_10m: 9, wind_direction_10m: 300, temperature_2m: 9, apparent_temperature: 7, relative_humidity_2m: 52, dew_point_2m: 0, precipitation: 0, pressure_msl: 1021, wind_gusts_10m: 18, uv_index: 2, is_day: 1 },
-  rain: { weather_code: 63, cloud_cover: 100, rain: 1.1, showers: 0, snowfall: 0, visibility: 6000, wind_speed_10m: 22, wind_direction_10m: 70, temperature_2m: 8, apparent_temperature: 4, relative_humidity_2m: 94, dew_point_2m: 7, precipitation: 1.1, pressure_msl: 1004, wind_gusts_10m: 40, uv_index: 0, is_day: 1 },
+  rain: { weather_code: 63, cloud_cover: 100, rain: 1.1, showers: 0, snowfall: 0, visibility: 12000, wind_speed_10m: 22, wind_direction_10m: 70, temperature_2m: 8, apparent_temperature: 4, relative_humidity_2m: 94, dew_point_2m: 7, precipitation: 1.1, pressure_msl: 1004, wind_gusts_10m: 40, uv_index: 0, is_day: 1 },
 }
 
 function forecast(at, wx) {

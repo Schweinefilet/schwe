@@ -20,6 +20,9 @@ const FAKE = {
 const params = new URLSearchParams(location.search)
 const fake = import.meta.env.DEV ? FAKE[params.get('wx')] : null
 const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)').matches
+// New York is drawn as a photograph (src/city/real/); ?real=0 keeps it a plaster model in the studio.
+const REAL = params.get('real') !== '0'
+const isReal = (id) => REAL && id === 'new-york'
 
 // The city in the address (#london) or the first.
 const fromHash = () => cityById(location.hash.slice(1))?.id ?? cityById(params.get('city'))?.id ?? CITIES[0].id
@@ -77,8 +80,9 @@ export default function App() {
     (id) => {
       if (id === cityId) return
       history.replaceState(null, '', `#${id}`)
-      // Reduced motion: no swing across the studio. The picture dips out, changes, and comes back.
-      if (reducedMotion) {
+      // Reduced motion: no swing across the studio. The picture dips out, changes, and comes back. So does
+      // a change between the photoreal New York and the studio, which share no floor to swing across.
+      if (reducedMotion || isReal(id) !== isReal(cityId)) {
         setVeiled(true)
         setTimeout(() => {
           setCityId(id)
@@ -129,7 +133,7 @@ export default function App() {
   return (
     <>
       {quality?.webgl && (
-        <Stage cityId={cityId} weather={shown} lite={quality.lite} still={reducedMotion} className={veiled ? 'stage is-veiled' : 'stage'} onReady={onReady} onTone={onTone} />
+        <Stage cityId={cityId} real={isReal(cityId)} weather={shown} lite={quality.lite} still={reducedMotion} className={veiled ? 'stage is-veiled' : 'stage'} onReady={onReady} onTone={onTone} />
       )}
       {noModel && <p className="no-model">This browser cannot draw the models (no WebGL). The weather below is live all the same.</p>}
       {(ready || noModel) && <CityPanel cityId={cityId} onSelect={select} weather={shown} status={fake ? 'read' : status} />}
