@@ -292,6 +292,9 @@ const SKY_FRAG = /* glsl */ `
   uniform float uCloudTh; // cloudThreshold(cover), clouds.js
   uniform float uCloudH;
   uniform vec2 uCloudShift;
+  // Under a full deck, the CIE standard overcast sky's gradient (L = Lz (1 + 2 sin theta) / 3, theta above
+  // the horizon; CIE, "CIE Standard Overcast Sky and Clear Sky"), at the same irradiance as an even deck.
+  uniform float uCie;
   varying vec3 vDir;
   CLOUDS_GLSL
   void main() {
@@ -313,7 +316,7 @@ const SKY_FRAG = /* glsl */ `
       float a = cloudCover(at, uCloudTh) * smoothstep(0.0, 0.12, d.y);
       vec3 Tc;
       vec3 Lc = integrate(o, d, t, uSunDir, 8.0, Tc) * uSunE;
-      L = mix(L, Lc + Tc * uCloudLit, a);
+      L = mix(L, Lc + Tc * uCloudLit * mix(1.0, 3.0 * (1.0 + 2.0 * d.y) / 7.0, uCie), a);
     }
     // The city's glow on the air and the clouds after dark: strongest low down and under cloud.
     L += uNightGlow * (ground > 0.5 ? 0.3 : mix(1.0, 0.35, smoothstep(0.0, 0.5, d.y)));
@@ -415,6 +418,7 @@ export class Atmosphere {
       uCloudTh: { value: 2 },
       uCloudH: { value: 1.5 },
       uCloudShift: { value: new THREE.Vector2() },
+      uCie: { value: 0 },
     }
     const skyMat = new THREE.ShaderMaterial({
       vertexShader: /* glsl */ `
@@ -498,6 +502,7 @@ export class Atmosphere {
     s.uCloudLit.value.fromArray(a.cloudLit)
     s.uCloudTh.value = a.cloudTh
     s.uCloudShift.value.fromArray(a.cloudShift)
+    s.uCie.value = a.cie ?? 0
     this.cubeCamera.update(r, this.skyScene)
     const old = this.env
     this.env = this.pmrem.fromCubemap(this.skyCube.texture)
@@ -512,11 +517,15 @@ export class Atmosphere {
     return this.env.texture
   }
 
-  // The aerial-perspective volumes for this camera (world metres; the city's ground at y = 0).
-  volume(camera, invViewProj, sunDir) {
+  // The aerial-perspective volumes for this camera (world metres; the city's ground at y = 0). `origin`:
+  // where the city stands on the studio floor (the camera's place on the planet is relative to it: Paris
+  // stands 80 km from New York, which would otherwise lift its camera half a kilometre up the curve of the
+  // Earth). `scale`: the share of each ray's air that counts (AP_SCALE for New York).
+  volume(camera, invViewProj, sunDir, origin = [0, 0, 0], scale = AP_SCALE) {
     const u = this.apUniforms
     u.uSunDir.value.fromArray(sunDir)
-    u.uCamKm.value.copy(camera.position).multiplyScalar(0.001)
+    u.uScale.value = scale
+    u.uCamKm.value.set(camera.position.x - origin[0], camera.position.y - origin[1], camera.position.z - origin[2]).multiplyScalar(0.001)
     u.uInvViewProj.value.copy(invViewProj)
     const r = this.renderer
     const prev = r.getRenderTarget()

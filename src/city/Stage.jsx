@@ -10,7 +10,7 @@ import { CAM, DRIFT, LOOK, MOVE_S, RAD, STILL, blendView, ease, fitShadow, night
 import { cityClock, plasterUniforms } from './plaster.js'
 import { signSpill } from './newYork.js'
 import Precip from './Precip.jsx'
-import RealNewYork from './real/RealNewYork.jsx'
+import RealCity from './real/RealCity.jsx'
 
 // The studio: three plaster cities on a floor, one sun, one long lens. The lens rests on the selected
 // city, drifting a few degrees either way; choosing another swings it there across bare floor while the
@@ -162,7 +162,7 @@ export default function Stage({ cityId, real = false, weather, lite = false, sti
       <PerformanceMonitor onDecline={() => setDpr((d) => Math.max(1, d * 0.75))} />
       {real ? (
         <Suspense fallback={null}>
-          <RealNewYork city={cityById(cityId)} weather={weather} lite={lite} still={still} onReady={ready} onTone={onTone} />
+          <RealCity key={cityId} city={cityById(cityId)} weather={weather} lite={lite} still={still} onReady={ready} onTone={onTone} />
         </Suspense>
       ) : (
         <>

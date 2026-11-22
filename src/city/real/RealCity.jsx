@@ -16,10 +16,11 @@ import { NIGHT_EXPOSURE, exposureFor, realLookFor } from './look.js'
 import { groundGeometry, realBuildingMaterial, realGroundMaterial, realUniforms, towerGeometry } from './materials.js'
 import { Pipeline } from './pipeline.js'
 
-// New York as a photograph: the same model and the same live sun and weather as the studio, rendered the
-// way current game engines render cities (docs/rendering-research.md): a physically based sky and
-// atmosphere with aerial perspective, image-based light from that sky, procedural PBR facades, water with
-// reflections, temporal antialiasing, bloom and a filmic tone curve. Its own render loop (pipeline.js).
+// New York and Paris as photographs: the same models and the same live sun and weather as the studio,
+// rendered the way current game engines render cities (docs/rendering-research.md, docs/paris/
+// rendering-research.md): a physically based sky and atmosphere with aerial perspective, image-based light
+// from that sky, procedural PBR facades, water with reflections, temporal antialiasing, bloom and a filmic
+// tone curve. Its own render loop (pipeline.js). What differs between the two cities is in STYLES.
 //
 // ?fx=-taa,-ssr (or any of the names in FX) turns techniques off, to compare.
 
@@ -34,15 +35,35 @@ FX.gtao = fxList.some((f) => f.replace(/^\+/, '') === 'gtao')
 // AgX with ?tm=agx to compare. Against the reference photographs ACES carries their contrast and the
 // harbour's saturated blue by day and their amber at night, where AgX flattens both
 // (docs/rendering-research.md, docs/shots/*-agx.jpg).
-const TONE = params.get('tm') === 'agx' ? THREE.AgXToneMapping : THREE.ACESFilmicToneMapping
+const TONE = { agx: THREE.AgXToneMapping, aces: THREE.ACESFilmicToneMapping }[params.get('tm')] ?? null
 
-// New York is the first city: fetch what this needs as soon as the module loads.
-for (const id of ['new-york']) {
+// Each city's choices, set against its reference photographs (docs/reference.md, docs/paris/reference.md):
+//   windowGain, streetGain: the night re-balanced for an aerial photograph (materials.js);
+//   apScale: the share of each view ray's air the aerial perspective counts (atmosphere.js): New York's
+//     photographers stood about 4 km off where the site's camera stands 17. Paris's stood 6 to 9 km off,
+//     as its camera does, but counting all of it (0.8) veiled the city in blue past the photographs (the
+//     camera's 1.3 km of height adds air they did not look through), and 0.4 left a 15 km overcast day a
+//     pale veil with the tower barely in it, where photograph 04 still draws it: 0.3, about 2.7 km;
+//   underDeck: the cloud deck's light on the air is held above the camera (Paris's camera is 1.3 km up,
+//     above a November stratus deck, but every photograph is taken from under it and the frame never
+//     shows the cloud);
+//   cie: the CIE overcast sky's gradient under a full deck (atmosphere.js);
+//   neutralDeck: a thick deck's light near neutral (look.js);
+//   tone, balance, saturation, contrast: the curve and the grade (Paris's photographs are warmer: limestone
+//     in afternoon light, where the model's camera-facing walls are lit from the side at noon in November).
+export const STYLES = {
+  'new-york': { windowGain: 0.45, streetGain: 2.0, apScale: 0.25, underDeck: false, cie: 0, neutralDeck: false, tone: THREE.ACESFilmicToneMapping, balance: [1, 1, 1], saturation: 1.12, contrast: 1.14 },
+  paris: { windowGain: 0.45, streetGain: 2.0, apScale: 0.3, underDeck: true, cie: 1, neutralDeck: true, tone: THREE.ACESFilmicToneMapping, balance: [1.04, 1, 0.94], saturation: 1.1, contrast: 1.18 },
+}
+
+// The photoreal cities: fetch what they need as soon as the module loads.
+for (const id of ['new-york', 'paris']) {
   useLoader.preload(THREE.TextureLoader, [`/models/${id}-ground.png`, `/models/${id}-cover.png`, `/models/${id}-context.png`])
   useLoader.preload(THREE.FileLoader, [`/models/${id}-context.json`, `/models/${id}-context.bin`], (l) => l.setResponseType('arraybuffer'))
 }
 
-export default function RealNewYork({ city, weather, lite = false, still = false, onReady, onTone }) {
+export default function RealCity({ city, weather, lite = false, still = false, onReady, onTone }) {
+  const style = STYLES[city.id]
   const { gl, scene, camera, size } = useThree()
   const { scene: gltf } = useGLTF(city.glb, false, true)
   const [groundMap, coverMap, contextMap] = useLoader(THREE.TextureLoader, [city.ground, `/models/${city.id}-cover.png`, `/models/${city.id}-context.png`])
@@ -57,13 +78,15 @@ export default function RealNewYork({ city, weather, lite = false, still = false
     const o = prepareModel(gltf, city)
     o.updateWorldMatrix(true, false)
     // Without the PBR materials (?fx=-pbr, to compare): the studio's plaster.
-    const mats = FX.pbr ? [realBuildingMaterial(city.offset, { plain: true }), realBuildingMaterial(city.offset)] : [buildingMaterial(city.id, city.offset, { plain: true }), buildingMaterial(city.id, city.offset)]
+    const mats = FX.pbr ? [realBuildingMaterial(city.offset, { plain: true, city: city.id }), realBuildingMaterial(city.offset, { city: city.id })] : [buildingMaterial(city.id, city.offset, { plain: true }), buildingMaterial(city.id, city.offset)]
     const buildings = new THREE.Mesh(o.geometry, mats)
     buildings.matrixAutoUpdate = false
-    buildings.matrix.copy(o.matrixWorld)
+    // The model's own transform (it is quantized), then where the city stands on the studio floor.
+    buildings.matrix.copy(o.matrixWorld).premultiply(new THREE.Matrix4().makeTranslation(...city.offset))
     buildings.castShadow = buildings.receiveShadow = true
     buildings.frustumCulled = false
     const lights = obstructionLights(o.geometry.userData.peaks, plasterUniforms)
+    lights.position.set(...city.offset)
     for (const t of [groundMap, coverMap, contextMap]) {
       t.flipY = false
       t.colorSpace = THREE.NoColorSpace
@@ -79,7 +102,8 @@ export default function RealNewYork({ city, weather, lite = false, still = false
     ground.position.set(...city.offset)
     ground.receiveShadow = true
     ground.frustumCulled = false
-    const towers = new THREE.Mesh(towerGeometry(towersBin), FX.pbr ? realBuildingMaterial(city.offset, { plain: true }) : buildingMaterial(city.id, city.offset, { plain: true }))
+    const towers = new THREE.Mesh(towerGeometry(towersBin), FX.pbr ? realBuildingMaterial(city.offset, { plain: true, city: city.id }) : buildingMaterial(city.id, city.offset, { plain: true }))
+    towers.position.set(...city.offset)
     towers.castShadow = towers.receiveShadow = true
     towers.frustumCulled = false
     return { buildings, lights, ground, towers }
@@ -102,7 +126,7 @@ export default function RealNewYork({ city, weather, lite = false, still = false
     const pipeline = new Pipeline(gl, atmosphere, { taa: FX.taa, bloom: FX.bloom })
     gpu.current = { atmosphere, pipeline, sky: null }
     const prev = { toneMapping: gl.toneMapping, exposure: gl.toneMappingExposure, autoUpdate: gl.shadowMap.autoUpdate }
-    gl.toneMapping = TONE
+    gl.toneMapping = TONE ?? STYLES[city.id].tone
     gl.toneMappingExposure = 1
     gl.shadowMap.autoUpdate = false
     scene.add(sun.current.target)
@@ -129,7 +153,7 @@ export default function RealNewYork({ city, weather, lite = false, still = false
     const date = now()
     const aspect = size.width / size.height
     if (!s.current) {
-      const l = realLookFor(city, date, weather?.[city.id])
+      const l = realLookFor(city, date, weather?.[city.id], style)
       blendLook(LOOK.current, l, l, 1)
       s.current = { target: l, at: 0, shadowDir: [0, 0, 0], frames: 4, exposure: 1 }
     }
@@ -138,7 +162,7 @@ export default function RealNewYork({ city, weather, lite = false, still = false
     if (import.meta.env.DEV) window.__real = { buildings, ground, atmosphere, pipeline, gl, LOOK, s }
     st.at -= dt
     if (st.at <= 0) {
-      st.target = realLookFor(city, date, weather?.[city.id])
+      st.target = realLookFor(city, date, weather?.[city.id], style)
       cityClock[city.id].uHour.value = localHour(city, date)
       cityClock[city.id].uDay.value = nightNumber(city, date)
       cityClock[city.id].uMonth.value = nightMonth(city, date)
@@ -161,7 +185,9 @@ export default function RealNewYork({ city, weather, lite = false, still = false
     camera.far = 120000
 
     // The sky, the tables and the environment: again when the sun or the weather has moved enough.
-    const key = [...l.sunTrue, l.mieExt, l.cover, l.night, l.rain, l.cloudH].map((x) => x.toFixed(3)).join()
+    // The deck's light on the air: at the cloud's height, or (Paris) above the camera.
+    const deckH = style.underDeck ? Math.max(l.cloudH, Math.round((camera.position.y + 400) / 100) * 100) : l.cloudH
+    const key = [...l.sunTrue, l.mieExt, l.cover, l.night, l.rain, deckH].map((x) => x.toFixed(3)).join()
     if (key !== gpu.current.sky) {
       gpu.current.sky = key
       const env = atmosphere.update({
@@ -173,7 +199,8 @@ export default function RealNewYork({ city, weather, lite = false, still = false
         cloudTh: FX.clouds ? l.cloudTh : 2,
         cloudShift: l.cloudShift,
         // The share of the sky the deck covers lights the air beneath it.
-        deck: FX.clouds ? { h: l.cloudH / 1000, sun: l.sunThrough, L: l.cloudLit.map((v) => (v * l.cover) / l.sunE) } : { h: 0, sun: 1, L: [0, 0, 0] },
+        deck: FX.clouds ? { h: deckH / 1000, sun: l.sunThrough, L: l.cloudLit.map((v) => (v * l.cover) / l.sunE) } : { h: 0, sun: 1, L: [0, 0, 0] },
+        cie: FX.clouds ? style.cie * Math.min(1, Math.max(0, (l.cover - 0.7) / 0.3)) : 0,
       })
       scene.environment = FX.ibl ? env : null
       st.exposure = exposureFor(l, atmosphere.skyIrradiance)
@@ -217,6 +244,8 @@ export default function RealNewYork({ city, weather, lite = false, still = false
     ru.uWindSpeed.value = l.windMs
     ru.uSsr.value = FX.ssr && !lite ? 1 : 0
     ru.uNightGain.value = 1
+    ru.uWindowGain.value = style.windowGain
+    ru.uStreetGain.value = style.streetGain
 
     // The frame.
     const buffer = gl.getDrawingBufferSize(new THREE.Vector2())
@@ -231,9 +260,9 @@ export default function RealNewYork({ city, weather, lite = false, still = false
       key: 0.2 * (1 - 0.35 * Math.max(l.rain, l.fog, l.snow * 0.5)),
       exposureMax: NIGHT_EXPOSURE,
       // The grade: a print's contrast and colour, as the reference photographs have (docs/reference.md).
-      balance: [1, 1, 1],
-      saturation: FX.grade ? 1.12 : 1,
-      contrast: FX.grade ? 1.14 : 1,
+      balance: FX.grade ? style.balance : [1, 1, 1],
+      saturation: FX.grade ? style.saturation : 1,
+      contrast: FX.grade ? style.contrast : 1,
       lift: 0,
       bloom: 0.04,
       sunE: l.sunE,
@@ -247,6 +276,8 @@ export default function RealNewYork({ city, weather, lite = false, still = false
       sunDirW: l.sunDir,
       mieScat: l.mieScat,
       gtao: FX.gtao ? 0.6 : 0,
+      origin: city.offset,
+      apScale: style.apScale,
     })
     // Obstruction lights' size by distance (as Maquette does).
     const u = lights.material.uniforms

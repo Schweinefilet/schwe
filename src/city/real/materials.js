@@ -1,6 +1,7 @@
 import * as THREE from 'three'
 import { NIGHTS, cityClock, patch, plasterUniforms } from '../plaster.js'
 import { CLOUDS_GLSL } from './clouds.js'
+import { NEW_YORK_GROUND, PARIS_FACADE, PARIS_GROUND } from './paris.js'
 
 // The photoreal New York's materials: the buildings, and the ground (streets, parks, water) with its
 // reflections. Physically based throughout (three's MeshStandardMaterial and MeshPhysicalMaterial: GGX
@@ -170,13 +171,35 @@ const FACADE = /* glsl */ `
   }
 `
 
+// Which material a fragment of the buildings is: New York's facades (above), Paris's (paris.js).
+const NEW_YORK_SELECT = /* glsl */ `
+  if (vBake.z < 0.25) fm = Mat(vec3(0.3, 0.3, 0.31), 0.6, 0.0, 0.3); // bridges: painted steel and stone
+  else fm = facade(pc, nWorld, vBake.y, vTop, step(0.5, vKind.x));`
+// Paris: the bridges stone; the Eiffel Tower its bronze-brown iron, drawn as the share of each pixel its
+// lattice covers by stochastic transparency (Enderton, Sintorn, Shirley and Luebke, "Stochastic
+// Transparency", I3D 2010): a fragment is kept with the probability of that coverage, a new pattern each
+// frame, and the temporal antialiasing averages them, so the haze and the city show through its gaps.
+// After dark the tower's lamps light its iron: what survives the stochastic test glows by the inverse of its
+// coverage, so the pixel's mean is the studio's calibrated gold (DECISIONS.md 2026-11-21), and the night's
+// window dimming (uWindowGain) does not apply to it. Without this the TAA averaged it to a faint ghost
+// where the Saint-Cloud photograph (08) shows the brightest thing in the frame.
+const PARIS_TOWER_GLOW = /* glsl */ `
+  if (vLandmark == 1) totalEmissiveRadiance /= max(eiffelCov * uWindowGain, 0.05);`
+const PARIS_SELECT = /* glsl */ `
+  float eiffelCov = 1.0;
+  if (vBake.z < 0.25) fm = Mat(vec3(0.4, 0.37, 0.32), 0.75, 0.0, 0.6);
+  else if (vLandmark == 1) {
+    eiffelCov = paEiffelCover(pc, nWorld);
+    if (hash21(gl_FragCoord.xy + uFrame * vec2(17.31, 7.77)) > eiffelCov) discard;
+    fm = Mat(EIFFEL_PAINT, 0.6, 0.0, 0.0);
+  } else fm = parisFacade(pc, nWorld, vBake.y, vTop, step(0.5, vKind.x), vLandmark);`
+
 // What the buildings' fragment shader does with it, after three's colour and roughness chunks.
-const FACADE_APPLY = /* glsl */ `
+const facadeApply = (city) => /* glsl */ `
   vec3 nWorld = normalize(cross(dFdx(vModel), dFdy(vModel)));
   vec3 pc = vModel - uOrigin;
   Mat fm;
-  if (vBake.z < 0.25) fm = Mat(vec3(0.3, 0.3, 0.31), 0.6, 0.0, 0.3); // bridges: painted steel and stone
-  else fm = facade(pc, nWorld, vBake.y, vTop, step(0.5, vKind.x));
+  ${city === 'paris' ? PARIS_SELECT : NEW_YORK_SELECT}
   // Rain: water fills the pores (darker) and films the surface (smoother); roofs pond (Lagarde, "Water
   // drop 3b: physically based wet surfaces", 2013).
   float wetF = uWetness * fm.porous;
@@ -185,9 +208,10 @@ const FACADE_APPLY = /* glsl */ `
   diffuseColor.rgb = fm.albedo;
   roughnessFactor = fm.rough;
   metalnessFactor = fm.metal;
-  totalEmissiveRadiance += ${NIGHTS['new-york'].night} * uNightGain * uWindowGain;
+  totalEmissiveRadiance += ${NIGHTS[city].night} * uNightGain * uWindowGain;
+  ${city === 'paris' ? PARIS_TOWER_GLOW : ''}
   // The streets' own light after dark, at the foot of every wall.
-  totalEmissiveRadiance += uNight * uNightGain * uStreetGain * ${NIGHTS['new-york'].street} * 0.07 * exp(-max(vModel.y, 0.0) / 20.0) * (1.5 - vBake.x);
+  totalEmissiveRadiance += uNight * uNightGain * uStreetGain * ${NIGHTS[city].street} * 0.07 * exp(-max(vModel.y, 0.0) / 20.0) * (1.5 - vBake.x);
 `
 
 // After the lights: the cloud layer's shadow on the sun, and the sky's reflection occluded where the
@@ -209,22 +233,22 @@ const REAL_POST = /* glsl */ `
   }
 `
 
-export function realBuildingMaterial(origin = [0, 0, 0], { plain = false } = {}) {
-  const night = NIGHTS['new-york']
+export function realBuildingMaterial(origin = [0, 0, 0], { plain = false, city = 'new-york' } = {}) {
+  const night = NIGHTS[city]
   const m = new THREE.MeshStandardMaterial({ color: '#ffffff', roughness: 0.85, metalness: 0, flatShading: true })
   if (plain) m.defines = { [night.plain]: '' }
-  m.userData.uniforms = { uOrigin: { value: new THREE.Vector3(...origin) }, ...cityClock['new-york'], ...realUniforms }
+  m.userData.uniforms = { uOrigin: { value: new THREE.Vector3(...origin) }, ...cityClock[city], ...realUniforms }
   m.userData.beginVertex = /* glsl */ `
     vBake = bake.rgb;
     vModel = (modelMatrix * vec4(position, 1.0)).xyz;
     ${night.begin}
   `
   return patch(m, {
-    key: `real-buildings${plain ? ':plain' : ''}`,
+    key: `real-buildings:${city}${plain ? ':plain' : ''}`,
     ao: 'mix(0.25, 1.0, vBake.x)',
     vertex: night.vert,
-    header: night.frag + FACADE,
-    emissive: FACADE_APPLY,
+    header: night.frag + FACADE + (city === 'paris' ? PARIS_FACADE : ''),
+    emissive: facadeApply(city),
     post: REAL_POST,
   })
 }
@@ -233,7 +257,7 @@ export function realBuildingMaterial(origin = [0, 0, 0], { plain = false } = {})
 // The ground: the plinth's top (ground map: r occlusion, g water; cover map: r parks and grass, g trees)
 // and, beyond it, open water.
 
-const GROUND_HEADER = /* glsl */ `
+const groundHeader = (city) => /* glsl */ `
   ${REAL_COMMON}
   uniform sampler2D uGround;
   uniform sampler2D uCover;
@@ -257,12 +281,15 @@ const GROUND_HEADER = /* glsl */ `
   float ctxWall = 0.0;
   uniform sampler2D uContext;
   uniform vec4 uCtxBox; // x0, x1, z0, z1 (world metres)
-  ${NIGHTS['new-york'].plinth}
+  ${NIGHTS[city].plinth}
+  // The city's palette (paris.js): paving, parks, the surroundings' walls and roofs, the water.
+  ${city === 'paris' ? PARIS_GROUND : NEW_YORK_GROUND}
 
   // The country round the plinth (scripts/models/context.mjs): r water, g buildings' cover, b parks,
   // a height (sqrt-encoded, 0..400 m). Its low buildings are drawn on the ground, lit as a height field:
   // a normal from the heights round the pixel and a short march toward the sun for their shadows.
-  vec2 ctxUv(vec2 xz) { return (xz - uCtxBox.xz) / (uCtxBox.yw - uCtxBox.xz); }
+  // (World metres; Paris stands away from the floor's origin, New York at it.)
+  vec2 ctxUv(vec2 xz) { return (xz${city === 'new-york' ? '' : ' - uOrigin.xz'} - uCtxBox.xz) / (uCtxBox.yw - uCtxBox.xz); }
   float ctxHeight(vec2 uv) { float a = textureLod(uContext, uv, 0.0).a; return a * a * 400.0; }
 
   // Wind waves: a few directional octaves round the wind's heading, deep-water dispersion
@@ -271,7 +298,7 @@ const GROUND_HEADER = /* glsl */ `
   // resolves; the rest, and any octave too fine for the pixel, goes into the roughness (as LEAN mapping
   // folds filtered normal variance into the lobe).
   vec3 waves(vec2 xz, float t, out float rough) {
-    float U = max(uWindSpeed, 0.5);
+    float U = max(palFetchWind(uWindSpeed), 0.5);
     float variance = 0.003 + 0.00512 * U;
     vec2 g = vec2(0.0);
     float resolved = 0.0;
@@ -344,7 +371,7 @@ const GROUND_HEADER = /* glsl */ `
   }
 `
 
-const GROUND_APPLY = /* glsl */ `
+const groundApply = (city) => /* glsl */ `
   vec2 plinthUv = (vModel.xz + uHalf) / (2.0 * uHalf);
   onTop = step(abs(vModel.x), uHalf.x) * step(abs(vModel.z), uHalf.y);
   vec2 cuv = ctxUv(vWorld.xz);
@@ -358,13 +385,14 @@ const GROUND_APPLY = /* glsl */ `
   // rust) and tree canopy from the cover map.
   float open = groundMap.r;
   float grain = vnoise(vWorld.xz / 6.0);
-  vec3 paving = mix(vec3(0.085, 0.085, 0.09), vec3(0.2, 0.195, 0.185), smoothstep(0.35, 0.85, open)) * mix(0.85, 1.15, grain);
-  vec3 grass = vec3(0.11, 0.115, 0.06) * mix(0.8, 1.2, vnoise(vWorld.xz / 9.0));
-  vec3 canopy = vec3(0.075, 0.065, 0.045) * mix(0.6, 1.3, vnoise(vWorld.xz / 3.5));
+  vec3 paving = palPaving(open, grain);
+  vec3 grass = palGrass(vWorld.xz);
+  vec3 canopy = palCanopy(vWorld.xz);
   float green = clamp(cover.r, 0.0, 1.0);
   float trees = max(clamp(cover.g, 0.0, 1.0), green * smoothstep(0.45, 0.75, vnoise(vWorld.xz / 14.0 + 3.0)) * 0.8);
   vec3 landC = mix(mix(paving, grass, green), canopy, trees);
   float landR = mix(mix(0.9, 0.95, green), 0.95, trees);
+  palLand(landC, landR, vWorld.xz, open, max(green, trees), uWetness);
   ctxRoof = 0.0;
   ctxShade = 1.0;
   if (onTop < 0.5) {
@@ -373,7 +401,9 @@ const GROUND_APPLY = /* glsl */ `
     // Tatarchuk, "Practical Parallax Occlusion Mapping", 2006). From 14 degrees up a ten-metre building
     // shows twice as much wall as roof, so the walls matter more than the roofs. Heights over RELIEF are
     // cut: the towers are boxes of their own.
-    const float RELIEF = 40.0;
+    // (Paris's view is lower, 7.5 degrees, so its rays cross the slab at a longer slant: a lower slab
+    // (its fabric is six storeys) and more steps keep each step near a texel.)
+    const float RELIEF = ${city === 'paris' ? '30.0' : '40.0'};
     vec3 V = normalize(vWorld - cameraPosition);
     vec3 ps = vWorld - V * (RELIEF / max(-V.y, 0.05));
     vec3 pe = vWorld;
@@ -381,8 +411,8 @@ const GROUND_APPLY = /* glsl */ `
     float hitH = 0.0;
     float prevH = 0.0;
     vec3 prevP = ps;
-    for (int i = 1; i <= 20; i++) {
-      vec3 q = mix(ps, pe, float(i) / 20.0);
+    for (int i = 1; i <= ${city === 'paris' ? 36 : 20}; i++) {
+      vec3 q = mix(ps, pe, float(i) / ${city === 'paris' ? '36.0' : '20.0'});
       float h = min(ctxHeight(ctxUv(q.xz)), RELIEF);
       if (q.y <= h) {
         // Refine between the last point above and this one.
@@ -406,12 +436,12 @@ const GROUND_APPLY = /* glsl */ `
     float wall = step(0.5, hitH - prevH) * step(1.0, hitH);
     float roofs = (1.0 - wall) * step(1.0, hitH) * (1.0 - hc.r);
     float closeIn = textureLod(uContext, huv, 2.0).g;
-    vec3 street = vec3(0.09, 0.09, 0.095) * mix(1.0, 0.55, closeIn);
+    vec3 street = palCtxStreet(closeIn);
     // Each building its own materials, chosen by where it stands (30 m cells).
     float k = hash21(floor(hit.xz / 30.0) + 0.5);
     float k2 = hash21(floor(hit.xz / 9.0) + 3.5);
-    vec3 roof = (k2 < 0.35 ? vec3(0.08, 0.08, 0.085) : k2 < 0.7 ? vec3(0.2, 0.19, 0.18) : k2 < 0.85 ? vec3(0.36, 0.36, 0.35) : vec3(0.2, 0.12, 0.09));
-    vec3 brick = k < 0.4 ? vec3(0.24, 0.11, 0.075) : k < 0.6 ? vec3(0.15, 0.09, 0.068) : k < 0.75 ? vec3(0.36, 0.29, 0.21) : k < 0.88 ? vec3(0.44, 0.41, 0.35) : vec3(0.28, 0.28, 0.27);
+    vec3 roof = palCtxRoof(k2, hitH);
+    vec3 brick = palCtxWall(k, hitH);
     // Windows on the walls: a quarter of the wall, dark glass, averaged below a pixel.
     float storey = pulse(hit.y / 3.0, fwidth(hit.y / 3.0), 0.5);
     brick = mix(brick, vec3(0.035), 0.3 * storey) * mix(0.82, 1.0, smoothstep(0.0, 12.0, hit.y));
@@ -456,7 +486,7 @@ const GROUND_APPLY = /* glsl */ `
   // Water: the harbour's own dark, silty green-grey under the reflection.
   float waveRough;
   vec3 wvn = waves(vWorld.xz, uTime, waveRough);
-  vec3 waterC = vec3(0.018, 0.026, 0.026);
+  vec3 waterC = WATER_BODY;
   diffuseColor.rgb = mix(landC, waterC, water);
   roughnessFactor = mix(landR, waveRough, water);
   metalnessFactor = 0.0;
@@ -469,7 +499,7 @@ const GROUND_APPLY = /* glsl */ `
   if (onTop < 0.5 && uNight > 0.004) {
     float near = textureLod(uContext, ctxUv(vWorld.xz), 2.0).g;
     float streets = (1.0 - ctx.g) * (1.0 - ctx.b) * land * (1.0 - ctxRoof) * smoothstep(0.15, 0.6, near);
-    vec3 lamp = nyStreet(vWorld.xz) * 0.16;
+    vec3 lamp = palStreetLamp(vWorld.xz${city === 'new-york' ? '' : ' - uOrigin.xz'}) * 0.16;
     // Windows a third of each 3 m cell, lit at the hour's share (look.js), averaged below a pixel.
     vec2 wq = vec2(dot(vWorld.xz, vec2(0.7071)) / 3.0, ctxHitY / 3.0);
     vec2 fq = vec2(max(fwidth(wq.x), 1e-3), max(fwidth(wq.y), 1e-3));
@@ -477,11 +507,11 @@ const GROUND_APPLY = /* glsl */ `
     float pane = pulse(wq.x + 0.25, fq.x, 0.5) * pulse(wq.y - 0.3, fq.y, 0.6);
     vec3 win = mix(vec3(1.0, 0.62, 0.2), vec3(1.0, 0.85, 0.6), hash21(floor(wq) + 3.0)) * on * pane;
     win = mix(win, vec3(1.0, 0.7, 0.35) * uLit * 0.5 * 0.15, smoothstep(0.4, 1.0, max(fq.x, fq.y)));
-    totalEmissiveRadiance += uNight * uNightGain * (lamp * streets * uStreetGain + win * ctxWall * 0.9 * uWindowGain);
+    totalEmissiveRadiance += uNight * uNightGain * CTX_NIGHT * (lamp * streets * uStreetGain + win * ctxWall * 0.9 * uWindowGain);
   }
   // After dark: the streets, the signs' light, the traffic and the memorial pools (newYork.js).
   float onTopSave = onTop;
-  ${NIGHTS['new-york'].ground.replace(/totalEmissiveRadiance \+=/g, 'totalEmissiveRadiance += uNightGain * uStreetGain *')}
+  ${NIGHTS[city].ground.replace(/totalEmissiveRadiance \+=/g, 'totalEmissiveRadiance += uNightGain * uStreetGain *')}
   onTop = onTopSave;
 `
 
@@ -519,10 +549,10 @@ export function realGroundMaterial(ground, cover, context, { id, halfLength, hal
     vWorld = (modelMatrix * vec4(position, 1.0)).xyz;
   `
   return patch(m, {
-    key: 'real-ground',
+    key: `real-ground:${id}`,
     vertex: 'varying vec3 vWorld;',
-    header: GROUND_HEADER,
-    emissive: GROUND_APPLY,
+    header: groundHeader(id),
+    emissive: groundApply(id),
     ao: 'mix(1.0, mix(0.34, 1.0, groundMap.r), onTop * (1.0 - waterF))',
     post: /* glsl */ `
       {

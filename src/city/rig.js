@@ -2,7 +2,7 @@ import * as THREE from 'three'
 import { CITIES } from './cities.js'
 import { PLINTH_DEPTH } from './Maquette.jsx'
 
-// The camera rig's pieces shared by the studio (Stage.jsx) and the photoreal New York (real/RealNewYork.jsx):
+// The camera rig's pieces shared by the studio (Stage.jsx) and the photoreal cities (real/RealCity.jsx):
 // each city's view for a window's shape, the drift, the shadow map's fit, the city clocks, the scene's one
 // look object.
 

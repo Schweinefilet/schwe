@@ -39,3 +39,7 @@ data/models/
 # Reference photographs for the photoreal New York (Wikimedia Commons, various CC licences; docs/reference.md
 # credits each). Looked at next to docs/shots/, never shipped.
 docs/reference/
+
+# Reference photographs for the photoreal Paris (Wikimedia Commons, various CC licences; docs/paris/reference.md
+# credits each). Looked at next to docs/paris/shots/, never shipped.
+docs/paris/reference/
