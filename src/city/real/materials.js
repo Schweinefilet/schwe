@@ -1,6 +1,7 @@
 import * as THREE from 'three'
 import { NIGHTS, cityClock, patch, plasterUniforms } from '../plaster.js'
 import { CLOUDS_GLSL } from './clouds.js'
+import { LONDON_FACADE, LONDON_GROUND, LONDON_SELECT } from './london.js'
 import { NEW_YORK_GROUND, PARIS_FACADE, PARIS_GROUND } from './paris.js'
 
 // The photoreal New York's materials: the buildings, and the ground (streets, parks, water) with its
@@ -194,12 +195,21 @@ const PARIS_SELECT = /* glsl */ `
     fm = Mat(EIFFEL_PAINT, 0.6, 0.0, 0.0);
   } else fm = parisFacade(pc, nWorld, vBake.y, vTop, step(0.5, vKind.x), vLandmark);`
 
+// Each city's own pieces: its facade code (after New York's FACADE, whose Mat and helpers it uses), how a
+// fragment picks its material, what follows the night's light, its ground palette, and the surroundings'
+// relief march (the slab's height and its steps: the lower the view, the longer the slant through the slab).
+const CITY_GLSL = {
+  'new-york': { facade: '', select: NEW_YORK_SELECT, afterNight: '', ground: NEW_YORK_GROUND, relief: ['40.0', 20] },
+  paris: { facade: PARIS_FACADE, select: PARIS_SELECT, afterNight: PARIS_TOWER_GLOW, ground: PARIS_GROUND, relief: ['30.0', 36] },
+  london: { facade: LONDON_FACADE, select: LONDON_SELECT, afterNight: '', ground: LONDON_GROUND, relief: ['30.0', 36] },
+}
+
 // What the buildings' fragment shader does with it, after three's colour and roughness chunks.
 const facadeApply = (city) => /* glsl */ `
   vec3 nWorld = normalize(cross(dFdx(vModel), dFdy(vModel)));
   vec3 pc = vModel - uOrigin;
   Mat fm;
-  ${city === 'paris' ? PARIS_SELECT : NEW_YORK_SELECT}
+  ${CITY_GLSL[city].select}
   // Rain: water fills the pores (darker) and films the surface (smoother); roofs pond (Lagarde, "Water
   // drop 3b: physically based wet surfaces", 2013).
   float wetF = uWetness * fm.porous;
@@ -209,7 +219,7 @@ const facadeApply = (city) => /* glsl */ `
   roughnessFactor = fm.rough;
   metalnessFactor = fm.metal;
   totalEmissiveRadiance += ${NIGHTS[city].night} * uNightGain * uWindowGain;
-  ${city === 'paris' ? PARIS_TOWER_GLOW : ''}
+  ${CITY_GLSL[city].afterNight}
   // The streets' own light after dark, at the foot of every wall.
   totalEmissiveRadiance += uNight * uNightGain * uStreetGain * ${NIGHTS[city].street} * 0.07 * exp(-max(vModel.y, 0.0) / 20.0) * (1.5 - vBake.x);
 `
@@ -247,7 +257,7 @@ export function realBuildingMaterial(origin = [0, 0, 0], { plain = false, city =
     key: `real-buildings:${city}${plain ? ':plain' : ''}`,
     ao: 'mix(0.25, 1.0, vBake.x)',
     vertex: night.vert,
-    header: night.frag + FACADE + (city === 'paris' ? PARIS_FACADE : ''),
+    header: night.frag + FACADE + CITY_GLSL[city].facade,
     emissive: facadeApply(city),
     post: REAL_POST,
   })
@@ -283,7 +293,7 @@ const groundHeader = (city) => /* glsl */ `
   uniform vec4 uCtxBox; // x0, x1, z0, z1 (world metres)
   ${NIGHTS[city].plinth}
   // The city's palette (paris.js): paving, parks, the surroundings' walls and roofs, the water.
-  ${city === 'paris' ? PARIS_GROUND : NEW_YORK_GROUND}
+  ${CITY_GLSL[city].ground}
 
   // The country round the plinth (scripts/models/context.mjs): r water, g buildings' cover, b parks,
   // a height (sqrt-encoded, 0..400 m). Its low buildings are drawn on the ground, lit as a height field:
@@ -401,9 +411,9 @@ const groundApply = (city) => /* glsl */ `
     // Tatarchuk, "Practical Parallax Occlusion Mapping", 2006). From 14 degrees up a ten-metre building
     // shows twice as much wall as roof, so the walls matter more than the roofs. Heights over RELIEF are
     // cut: the towers are boxes of their own.
-    // (Paris's view is lower, 7.5 degrees, so its rays cross the slab at a longer slant: a lower slab
-    // (its fabric is six storeys) and more steps keep each step near a texel.)
-    const float RELIEF = ${city === 'paris' ? '30.0' : '40.0'};
+    // (Paris's and London's views are lower, 7.5 and 8.5 degrees, so their rays cross the slab at a longer
+    // slant: a lower slab (their fabric is four to six storeys) and more steps keep each step near a texel.)
+    const float RELIEF = ${CITY_GLSL[city].relief[0]};
     vec3 V = normalize(vWorld - cameraPosition);
     vec3 ps = vWorld - V * (RELIEF / max(-V.y, 0.05));
     vec3 pe = vWorld;
@@ -411,8 +421,8 @@ const groundApply = (city) => /* glsl */ `
     float hitH = 0.0;
     float prevH = 0.0;
     vec3 prevP = ps;
-    for (int i = 1; i <= ${city === 'paris' ? 36 : 20}; i++) {
-      vec3 q = mix(ps, pe, float(i) / ${city === 'paris' ? '36.0' : '20.0'});
+    for (int i = 1; i <= ${CITY_GLSL[city].relief[1]}; i++) {
+      vec3 q = mix(ps, pe, float(i) / ${CITY_GLSL[city].relief[1]}.0);
       float h = min(ctxHeight(ctxUv(q.xz)), RELIEF);
       if (q.y <= h) {
         // Refine between the last point above and this one.

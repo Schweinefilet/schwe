@@ -41,7 +41,7 @@ const onPlinth = ([x, z], margin = 12) => {
   return Math.abs(u) <= spec.halfLength - margin && Math.abs(v) <= spec.halfWidth - margin
 }
 
-const BOX = { 'new-york': [-74.13, 40.62, -73.84, 40.87], paris: [2.17, 48.8, 2.53, 48.95] }[CITY]
+const BOX = { 'new-york': [-74.13, 40.62, -73.84, 40.87], paris: [2.17, 48.8, 2.53, 48.95], london: [-0.28, 51.46, 0.13, 51.61] }[CITY]
 const [x0, z1] = toXZ([BOX[0], BOX[1]])
 const [x1, z0] = toXZ([BOX[2], BOX[3]])
 const N = 4096

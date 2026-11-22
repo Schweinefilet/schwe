@@ -57,7 +57,9 @@ const PARIS_STAGES = [
 
 const results = fs.existsSync(path.join(OUT, 'bench.json')) ? JSON.parse(fs.readFileSync(path.join(OUT, 'bench.json'), 'utf8')) : {}
 const on = new Set()
-for (const [name, adds] of CITY === 'paris' ? PARIS_STAGES : STAGES) {
+// London's order is Paris's (docs/london/rendering-research.md, "Order of work"), the Eye needing no lattice.
+const LONDON_STAGES = PARIS_STAGES.map(([n, a]) => [n.replace('5-taa-lattice', '5-taa').replace('3-materials-surroundings-overcast', '3-brick-stone-glass-surroundings-overcast').replace('4-seine-ssr', '4-thames-ssr'), a])
+for (const [name, adds] of CITY === 'paris' ? PARIS_STAGES : CITY === 'london' ? LONDON_STAGES : STAGES) {
   if (adds) for (const a of adds) on.add(a)
   if (ONLY && !ONLY.split(',').includes(name.split('-')[0])) continue
   const fx = adds === null ? null : [...ALL.filter((t) => !on.has(t)).map((t) => `-${t}`), ...(on.has('+gtao') ? ['+gtao'] : [])].join(',')

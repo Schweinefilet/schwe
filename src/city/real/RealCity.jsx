@@ -16,9 +16,9 @@ import { NIGHT_EXPOSURE, exposureFor, realLookFor } from './look.js'
 import { groundGeometry, realBuildingMaterial, realGroundMaterial, realUniforms, towerGeometry } from './materials.js'
 import { Pipeline } from './pipeline.js'
 
-// New York and Paris as photographs: the same models and the same live sun and weather as the studio,
+// New York, Paris and London as photographs: the same models and the same live sun and weather as the studio,
 // rendered the way current game engines render cities (docs/rendering-research.md, docs/paris/
-// rendering-research.md): a physically based sky and atmosphere with aerial perspective, image-based light
+// rendering-research.md, docs/london/rendering-research.md): a physically based sky and atmosphere with aerial perspective, image-based light
 // from that sky, procedural PBR facades, water with reflections, temporal antialiasing, bloom and a filmic
 // tone curve. Its own render loop (pipeline.js). What differs between the two cities is in STYLES.
 //
@@ -49,15 +49,22 @@ const TONE = { agx: THREE.AgXToneMapping, aces: THREE.ACESFilmicToneMapping }[pa
 //     shows the cloud);
 //   cie: the CIE overcast sky's gradient under a full deck (atmosphere.js);
 //   neutralDeck: a thick deck's light near neutral (look.js);
+//   greyKey: how much darker a full deck is printed (London: the grey-day photographs are leaden, and the
+//     frame's own metering lifted them to a pale veil; New York and Paris print them at the same key);
 //   tone, balance, saturation, contrast: the curve and the grade (Paris's photographs are warmer: limestone
 //     in afternoon light, where the model's camera-facing walls are lit from the side at noon in November).
 export const STYLES = {
   'new-york': { windowGain: 0.45, streetGain: 2.0, apScale: 0.25, underDeck: false, cie: 0, neutralDeck: false, tone: THREE.ACESFilmicToneMapping, balance: [1, 1, 1], saturation: 1.12, contrast: 1.14 },
   paris: { windowGain: 0.45, streetGain: 2.0, apScale: 0.3, underDeck: true, cie: 1, neutralDeck: true, tone: THREE.ACESFilmicToneMapping, balance: [1.04, 1, 0.94], saturation: 1.1, contrast: 1.18 },
+  // London: Paris's air share and overcast handling (its photographers stood at 1 to 8 km; its camera is
+  // 9.3 km off and 1.4 km up), a cooler grade than Paris's (brick and slate under grey skies), and its
+  // streets brighter at night: the aerial photographs (09, 10) show a white grid of LED streets far
+  // brighter than the other cities' at the same gain (2 left them a faint glow, 3.5 still dim).
+  london: { windowGain: 0.45, streetGain: 5, greyKey: 0.3, apScale: 0.3, underDeck: true, cie: 1, neutralDeck: true, tone: THREE.ACESFilmicToneMapping, balance: [1.01, 1, 0.97], saturation: 1.08, contrast: 1.16 },
 }
 
 // The photoreal cities: fetch what they need as soon as the module loads.
-for (const id of ['new-york', 'paris']) {
+for (const id of ['new-york', 'paris', 'london']) {
   useLoader.preload(THREE.TextureLoader, [`/models/${id}-ground.png`, `/models/${id}-cover.png`, `/models/${id}-context.png`])
   useLoader.preload(THREE.FileLoader, [`/models/${id}-context.json`, `/models/${id}-context.bin`], (l) => l.setResponseType('arraybuffer'))
 }
@@ -257,7 +264,7 @@ export default function RealCity({ city, weather, lite = false, still = false, o
       // and its ceiling decide, so the night is not lifted to grey.
       meter: 0.6 * (1 - l.night),
       // A grey day is printed grey, not lifted to a bright one: rain and fog metered darker.
-      key: 0.2 * (1 - 0.35 * Math.max(l.rain, l.fog, l.snow * 0.5)),
+      key: 0.2 * (1 - 0.35 * Math.max(l.rain, l.fog, l.snow * 0.5)) * (1 - (style.greyKey ?? 0) * Math.min(1, Math.max(0, (l.cover - 0.7) / 0.3))),
       exposureMax: NIGHT_EXPOSURE,
       // The grade: a print's contrast and colour, as the reference photographs have (docs/reference.md).
       balance: FX.grade ? style.balance : [1, 1, 1],

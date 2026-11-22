@@ -20,10 +20,10 @@ const FAKE = {
 const params = new URLSearchParams(location.search)
 const fake = import.meta.env.DEV ? FAKE[params.get('wx')] : null
 const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)').matches
-// New York and Paris are drawn as photographs (src/city/real/); ?real=0 keeps them plaster models in the
+// The three cities are drawn as photographs (src/city/real/); ?real=0 keeps them plaster models in the
 // studio.
 const REAL = params.get('real') !== '0'
-const isReal = (id) => REAL && (id === 'new-york' || id === 'paris')
+const isReal = (id) => REAL && (id === 'new-york' || id === 'paris' || id === 'london')
 
 // The city in the address (#london) or the first.
 const fromHash = () => cityById(location.hash.slice(1))?.id ?? cityById(params.get('city'))?.id ?? CITIES[0].id

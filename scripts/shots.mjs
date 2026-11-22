@@ -45,8 +45,17 @@ export const SHOTS = [
 // Paris is on CET (UTC+1); on 22 November the sun is highest at 12:37 (21 degrees) and sets at 17:03. Golden
 // hour is 16:15 (5.8 degrees, behind the lens's right shoulder: the view looks east-north-east); night is
 // 21:20, after the Eiffel Tower's hourly sparkle; the overcast morning is 10:30.
+// London is on GMT; on 22 November the sun is highest at 11:47 (18.5 degrees) and sets at 16:03. Golden hour
+// is 15:10 (5.8 degrees, behind the landscape view's right shoulder: it looks east-north-east).
 export const SHOTS_BY_CITY = {
   'new-york': SHOTS,
+  london: [
+    { name: 'noon', at: '2026-11-22T12:00:00Z', wx: 'clear' },
+    { name: 'overcast', at: '2026-11-22T10:30:00Z', wx: 'overcast' },
+    { name: 'golden', at: '2026-11-22T15:10:00Z', wx: 'clear' },
+    { name: 'night', at: '2026-11-22T20:00:00Z', wx: 'clear' },
+    { name: 'rain', at: '2026-11-22T13:30:00Z', wx: 'rain' },
+  ],
   paris: [
     { name: 'noon', at: '2026-11-22T11:50:00Z', wx: 'clear' },
     { name: 'overcast', at: '2026-11-22T09:30:00Z', wx: 'overcast' },
