@@ -29,7 +29,7 @@ export const cityClock = Object.fromEntries(['new-york', 'london', 'paris'].map(
 // Each city's night: its vertex and fragment code, how the vertex shader reads its attributes, what the
 // buildings' emissive adds, the colour of the light at the foot of the walls, and the plinth's code and
 // emissive. `plain`: the define that leaves out the rarer lights, for the solids that have none.
-const NIGHTS = {
+export const NIGHTS = {
   'new-york': {
     plain: 'NY_PLAIN',
     vert: NY_BUILDING_VERT,
@@ -75,7 +75,7 @@ const NIGHTS = {
   },
 }
 
-const COMMON_VERT = /* glsl */ `
+export const COMMON_VERT = /* glsl */ `
   attribute vec4 bake;
   varying vec3 vBake;
   varying vec3 vModel;
@@ -85,7 +85,7 @@ const BEGIN_VERT = /* glsl */ `
   vModel = position;
 `
 
-const COMMON_FRAG = /* glsl */ `
+export const COMMON_FRAG = /* glsl */ `
   varying vec3 vBake;
   varying vec3 vModel;
   uniform float uNight;
@@ -112,8 +112,9 @@ const AO_FRAG = /* glsl */ `
 `
 
 // key: which program this is (three would otherwise share one program among all the materials patched
-// here, whose onBeforeCompile is the same function).
-function patch(material, { key, ao, emissive = '', header = '', vertex = '' }) {
+// here, whose onBeforeCompile is the same function). `post`: code after the lights and the occlusion
+// (the photoreal materials, src/city/real/materials.js); `edit`: a last change to the shaders.
+export function patch(material, { key, ao, emissive = '', header = '', vertex = '', post = '', edit = null }) {
   material.customProgramCacheKey = () => key
   material.onBeforeCompile = (shader) => {
     Object.assign(shader.uniforms, plasterUniforms, material.userData.uniforms)
@@ -123,7 +124,8 @@ function patch(material, { key, ao, emissive = '', header = '', vertex = '' }) {
     shader.fragmentShader = shader.fragmentShader
       .replace('#include <common>', `#include <common>\n${COMMON_FRAG}\n${header}`)
       .replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>\n${emissive}`)
-      .replace('#include <aomap_fragment>', AO_FRAG.replace('PLASTER_AO', ao))
+      .replace('#include <aomap_fragment>', AO_FRAG.replace('PLASTER_AO', ao) + post)
+    edit?.(shader)
   }
   return material
 }

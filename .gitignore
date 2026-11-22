@@ -35,3 +35,7 @@ data/terrain/
 data/hdri/
 # Overture Maps extracts for the city models (npm run models; scripts/models/fetch.py)
 data/models/
+
+# Reference photographs for the photoreal New York (Wikimedia Commons, various CC licences; docs/reference.md
+# credits each). Looked at next to docs/shots/, never shipped.
+docs/reference/

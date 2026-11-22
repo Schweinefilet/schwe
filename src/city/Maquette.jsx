@@ -16,42 +16,48 @@ export const PLINTH_DEPTH = 130 // the slab's thickness in the model's metres: a
 // What each city's night needs to know about its buildings (solids.js), worked out once at load.
 const TOPS = { 'new-york': newYorkTops, london: londonTops, paris: parisTops }
 
+// The file's one mesh, kept under its own node: its positions are quantized, and the node's transform
+// is what turns them back into metres. Its attributes are set up once (the photoreal New York shares it).
+export function prepareModel(scene, city) {
+  let mesh = null
+  scene.traverse((o) => {
+    if (!o.isMesh) return
+    // GLTFLoader names COLOR_0 `color`; ours is baked occlusion and a seed, not a colour.
+    const g = o.geometry
+    if (g.getAttribute('color')) {
+      g.setAttribute('bake', g.getAttribute('color'))
+      g.deleteAttribute('color')
+    }
+    // Each building's height, kind and landmark (the city's night needs them), and the tall roofs, which
+    // carry red lights.
+    if (!g.userData.peaks) {
+      o.updateWorldMatrix(true, false)
+      const { tops, kinds, peaks } = TOPS[city.id](g, o.matrixWorld)
+      g.setAttribute('top', new THREE.BufferAttribute(tops, 2))
+      g.setAttribute('kind', new THREE.BufferAttribute(kinds, 4, true))
+      g.userData.peaks = peaks
+      splitByFlags(g)
+    }
+    mesh = o
+  })
+  return mesh
+}
+
 export default function Maquette({ city, onReady }) {
   const { scene } = useGLTF(city.glb, false, true)
   const map = useLoader(THREE.TextureLoader, city.ground)
   const mesh = useRef()
   const frames = useRef(0)
 
-  // The file's one mesh, kept under its own node: its positions are quantized, and the node's transform
-  // is what turns them back into metres.
   const { model, lights } = useMemo(() => {
     const buildings = buildingMaterial(city.id, city.offset)
-    let lights = null
-    scene.traverse((o) => {
-      if (!o.isMesh) return
-      // GLTFLoader names COLOR_0 `color`; ours is baked occlusion and a seed, not a colour.
-      const g = o.geometry
-      if (g.getAttribute('color')) {
-        g.setAttribute('bake', g.getAttribute('color'))
-        g.deleteAttribute('color')
-      }
-      // Each building's height, kind and landmark (the city's night needs them), and the tall roofs, which
-      // carry red lights.
-      if (!g.userData.peaks) {
-        o.updateWorldMatrix(true, false)
-        const { tops, kinds, peaks } = TOPS[city.id](g, o.matrixWorld)
-        g.setAttribute('top', new THREE.BufferAttribute(tops, 2))
-        g.setAttribute('kind', new THREE.BufferAttribute(kinds, 4, true))
-        g.userData.peaks = peaks
-        splitByFlags(g)
-      }
-      lights = obstructionLights(g.userData.peaks, plasterUniforms)
-      // The mesh is two groups (splitByFlags): the plain city, then the solids with the rarer lights.
-      o.material = [buildingMaterial(city.id, city.offset, { plain: true }), buildings]
-      o.castShadow = o.receiveShadow = true
-      o.frustumCulled = false
-      mesh.current = o
-    })
+    const o = prepareModel(scene, city)
+    const lights = obstructionLights(o.geometry.userData.peaks, plasterUniforms)
+    // The mesh is two groups (splitByFlags): the plain city, then the solids with the rarer lights.
+    o.material = [buildingMaterial(city.id, city.offset, { plain: true }), buildings]
+    o.castShadow = o.receiveShadow = true
+    o.frustumCulled = false
+    mesh.current = o
     return { model: scene, lights }
   }, [scene, city])
 

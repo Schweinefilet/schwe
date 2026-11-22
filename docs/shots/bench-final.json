@@ -1,0 +1,32 @@
+{
+ "noon": {
+  "url": "http://localhost:4173/?lite=0#new-york",
+  "renderer": "ANGLE (Mesa, llvmpipe (LLVM 20.1.2 256 bits), OpenGL 4.5)",
+  "software": true,
+  "canvas": [
+   1920,
+   1080
+  ],
+  "frames": 24,
+  "medianMs": 838.5,
+  "p90Ms": 867.4,
+  "medianFps": 1.2,
+  "intervalMedianMs": 843.8,
+  "consoleErrors": []
+ },
+ "night": {
+  "url": "http://localhost:4173/?lite=0#new-york",
+  "renderer": "ANGLE (Mesa, llvmpipe (LLVM 20.1.2 256 bits), OpenGL 4.5)",
+  "software": true,
+  "canvas": [
+   1920,
+   1080
+  ],
+  "frames": 25,
+  "medianMs": 803.7,
+  "p90Ms": 854.1,
+  "medianFps": 1.2,
+  "intervalMedianMs": 801.5,
+  "consoleErrors": []
+ }
+}

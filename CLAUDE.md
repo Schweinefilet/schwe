@@ -1,7 +1,8 @@
 # schwe
 
 schwe.org: New York, London and Paris as matte white architectural models in a studio, shot with a long
-lens. Each model is lit by its city's real sun at this minute, lights its windows after dark, and stands
+lens. New York is also drawn as a photograph (src/city/real/, on by default, `?real=0` for the plaster):
+the same model, sun and weather through a game-style renderer. Each model is lit by its city's real sun at this minute, lights its windows after dark, and stands
 under its city's current weather. The weather interface is the only interface. Switching cities is the
 main interaction.
 
@@ -11,7 +12,8 @@ frozen-rain film this replaced (tag `pre-salvage`); none of them bind.
 ## Stack
 
 Vite 8, React 19, React Three Fiber 9, drei 10, three, SunCalc, detect-gpu. JavaScript, not TypeScript.
-Node 22. No post-processing, no GSAP, no scroll library: the page is one fixed picture.
+Node 22. No GSAP, no scroll library: the page is one fixed picture. The studio has no post-processing; the
+photoreal New York renders through its own passes (src/city/real/pipeline.js), no postprocessing library.
 
 ## Commands
 
@@ -20,6 +22,13 @@ Node 22. No post-processing, no GSAP, no scroll library: the page is one fixed p
     npm test           node --test (look, weather parsing, GPU tiering)
     npm run models:fetch -- --city new-york   Overture Maps extract into data/models/ (needs python3 + duckdb)
     npm run models -- --city new-york         data/models/ -> public/models/new-york.glb and -ground.png
+    python3 scripts/models/cover.py --city new-york && node scripts/models/cover.mjs --city new-york
+                                              parks and trees on the plinth -> public/models/new-york-cover.png
+    python3 scripts/models/context.py --city new-york && node scripts/models/context.mjs --city new-york
+                                              the surroundings -> public/models/new-york-context.{png,bin,json}
+    node scripts/shots.mjs [--url ...]        noon, golden hour, night, rain screenshots -> docs/shots/
+    xvfb-run -a node scripts/bench.mjs         frame time at 1920 x 1080 in a headed Chrome (see its header)
+    node scripts/stages.mjs --url ...         the photoreal stack one technique at a time: shots and bench
 
 Never push or deploy without being asked.
 
@@ -30,7 +39,9 @@ Dev-only query parameters (none work in a build):
     ?cam=bearing,elevation,distance,fov[,east,up,north[,near]]   try a view
     ?still                  stop the camera's drift
 
-`?lite` and `?lite=0` force the phone or desktop version anywhere. `#london` selects a city.
+`?lite` and `?lite=0` force the phone or desktop version anywhere. `#london` selects a city. `?real=0`
+keeps New York plaster; `?fx=-taa,-ssr` (any of aerial, ibl, pbr, ssr, taa, bloom, wet, shafts, clouds,
+grade) turns photoreal techniques off and `?fx=+gtao` turns the trial GTAO on, anywhere.
 
 ## Map
 
@@ -49,7 +60,14 @@ Dev-only query parameters (none work in a build):
     src/content/cityWeather.js   one Open-Meteo request for all cities; parsing
     src/content/models.json  each model's centre, plinth and night flags (shared with the build scripts)
     src/ui/                  CityPanel (corner readout, cities, credit), WeatherPanel and its charts
-    scripts/models/          fetch.py (Overture -> JSON), build.mjs (JSON -> GLB + ground map)
+    src/city/rig.js          the camera's views and drift, the shadow fit, city clocks, the shared look object
+    src/city/real/           the photoreal New York: RealNewYork.jsx (the component and its frame), look.js
+                             (sun, haze, clouds, exposure from the reading), atmosphere.js (Hillaire's sky
+                             and air), clouds.js, materials.js (facades, ground, water, context), pipeline.js
+    scripts/models/          fetch.py (Overture -> JSON), build.mjs (JSON -> GLB + ground map), cover.*,
+                             context.* (parks; the surroundings)
+    docs/                    rendering-research.md (techniques, sources, results), reference.md (the
+                             photographs; files gitignored), assets.md (licences), shots/
 
 ## Rules
 
@@ -58,8 +76,10 @@ Dev-only query parameters (none work in a build):
 - Never invent data. Unread weather shows clear skies and the interface says "weather unavailable".
   A building with no mapped height gets the city's median, and the build prints how many did.
 - The scene and the interface read the same weather object. Do not add a second request for either.
-- 60 fps on a mid-range laptop. The scene is static: the shadow map is redrawn only when the sun moves or
-  the city changes. Keep it that way. Phones get the lite version (smaller shadow map, lower pixel
+- 60 fps on a mid-range laptop in the studio; the photoreal New York's target is 30 fps at 1080p (not yet
+  measured on real hardware: docs/rendering-research.md). The scene is static: the shadow map is redrawn
+  only when the sun moves or the city changes; the sky's tables and environment only when the sun or the
+  weather moves. Keep it that way. Phones get the lite version (smaller shadow map, lower pixel
   ratio, fewer particles), never a broken one.
 - No hard cuts. A change of city is a camera move with the light blending; changes in light or weather
   ease in.
