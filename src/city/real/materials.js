@@ -243,7 +243,21 @@ const GROUND_HEADER = /* glsl */ `
   float onTop;
   float waterF;
   float ssrRough;
+  float ctxRoof;
+  float ctxShade;
+  float ctxAo = 1.0;
+  vec3 ctxNormal = vec3(0.0, 1.0, 0.0);
+  float ctxHitY = 0.0;
+  float ctxWall = 0.0;
+  uniform sampler2D uContext;
+  uniform vec4 uCtxBox; // x0, x1, z0, z1 (world metres)
   ${NIGHTS['new-york'].plinth}
+
+  // The country round the plinth (scripts/models/context.mjs): r water, g buildings' cover, b parks,
+  // a height (sqrt-encoded, 0..400 m). Its low buildings are drawn on the ground, lit as a height field:
+  // a normal from the heights round the pixel and a short march toward the sun for their shadows.
+  vec2 ctxUv(vec2 xz) { return (xz - uCtxBox.xz) / (uCtxBox.yw - uCtxBox.xz); }
+  float ctxHeight(vec2 uv) { float a = textureLod(uContext, uv, 0.0).a; return a * a * 400.0; }
 
   // Wind waves: a few directional octaves round the wind's heading, deep-water dispersion
   // (omega^2 = g k; Tessendorf, "Simulating Ocean Water", 2001). Their slopes take the part of the
@@ -327,8 +341,10 @@ const GROUND_HEADER = /* glsl */ `
 const GROUND_APPLY = /* glsl */ `
   vec2 plinthUv = (vModel.xz + uHalf) / (2.0 * uHalf);
   onTop = step(abs(vModel.x), uHalf.x) * step(abs(vModel.z), uHalf.y);
-  groundMap = onTop > 0.5 ? texture2D(uGround, plinthUv).rg : vec2(0.6, 1.0);
-  vec2 cover = onTop > 0.5 ? texture2D(uCover, plinthUv).rg : vec2(0.0);
+  vec2 cuv = ctxUv(vWorld.xz);
+  vec4 ctx = texture2D(uContext, cuv);
+  groundMap = onTop > 0.5 ? texture2D(uGround, plinthUv).rg : vec2(0.6, ctx.r);
+  vec2 cover = onTop > 0.5 ? texture2D(uCover, plinthUv).rg : vec2(ctx.b, 0.0);
   float water = groundMap.g;
   waterF = water;
   float land = 1.0 - water;
@@ -343,21 +359,120 @@ const GROUND_APPLY = /* glsl */ `
   float trees = max(clamp(cover.g, 0.0, 1.0), green * smoothstep(0.45, 0.75, vnoise(vWorld.xz / 14.0 + 3.0)) * 0.8);
   vec3 landC = mix(mix(paving, grass, green), canopy, trees);
   float landR = mix(mix(0.9, 0.95, green), 0.95, trees);
+  ctxRoof = 0.0;
+  ctxShade = 1.0;
+  if (onTop < 0.5) {
+    // Beyond the plinth: the blocks as a height field, found by marching the view ray through it (relief
+    // mapping: Policarpo and Oliveira, "Relief Mapping of Non-Height-Field Surface Details", 2005;
+    // Tatarchuk, "Practical Parallax Occlusion Mapping", 2006). From 14 degrees up a ten-metre building
+    // shows twice as much wall as roof, so the walls matter more than the roofs. Heights over RELIEF are
+    // cut: the towers are boxes of their own.
+    const float RELIEF = 40.0;
+    vec3 V = normalize(vWorld - cameraPosition);
+    vec3 ps = vWorld - V * (RELIEF / max(-V.y, 0.05));
+    vec3 pe = vWorld;
+    vec3 hit = pe;
+    float hitH = 0.0;
+    float prevH = 0.0;
+    vec3 prevP = ps;
+    for (int i = 1; i <= 20; i++) {
+      vec3 q = mix(ps, pe, float(i) / 20.0);
+      float h = min(ctxHeight(ctxUv(q.xz)), RELIEF);
+      if (q.y <= h) {
+        // Refine between the last point above and this one.
+        vec3 lo = prevP;
+        vec3 hi = q;
+        for (int k = 0; k < 4; k++) {
+          vec3 m = 0.5 * (lo + hi);
+          if (m.y <= min(ctxHeight(ctxUv(m.xz)), RELIEF)) hi = m; else lo = m;
+        }
+        hit = hi;
+        hitH = min(ctxHeight(ctxUv(hi.xz)), RELIEF);
+        prevH = min(ctxHeight(ctxUv(lo.xz)), RELIEF);
+        break;
+      }
+      prevP = q;
+    }
+    vec2 huv = ctxUv(hit.xz);
+    vec4 hc = texture2D(uContext, huv);
+    // A wall where the ray met a building's side (the height jumped under it), a roof where it came down
+    // on top, the street or a park otherwise.
+    float wall = step(0.5, hitH - prevH) * step(1.0, hitH);
+    float roofs = (1.0 - wall) * step(1.0, hitH) * (1.0 - hc.r);
+    float closeIn = textureLod(uContext, huv, 2.0).g;
+    vec3 street = vec3(0.09, 0.09, 0.095) * mix(1.0, 0.55, closeIn);
+    // Each building its own materials, chosen by where it stands (30 m cells).
+    float k = hash21(floor(hit.xz / 30.0) + 0.5);
+    float k2 = hash21(floor(hit.xz / 9.0) + 3.5);
+    vec3 roof = (k2 < 0.35 ? vec3(0.08, 0.08, 0.085) : k2 < 0.7 ? vec3(0.2, 0.19, 0.18) : k2 < 0.85 ? vec3(0.36, 0.36, 0.35) : vec3(0.2, 0.12, 0.09));
+    vec3 brick = k < 0.4 ? vec3(0.24, 0.11, 0.075) : k < 0.6 ? vec3(0.15, 0.09, 0.068) : k < 0.75 ? vec3(0.36, 0.29, 0.21) : k < 0.88 ? vec3(0.44, 0.41, 0.35) : vec3(0.28, 0.28, 0.27);
+    // Windows on the walls: a quarter of the wall, dark glass, averaged below a pixel.
+    float storey = pulse(hit.y / 3.0, fwidth(hit.y / 3.0), 0.5);
+    brick = mix(brick, vec3(0.035), 0.3 * storey) * mix(0.82, 1.0, smoothstep(0.0, 12.0, hit.y));
+    vec3 grassC = vec3(0.11, 0.115, 0.06) * mix(0.8, 1.2, vnoise(hit.xz / 9.0));
+    vec3 groundC = mix(street, grassC, hc.b);
+    landC = mix(mix(groundC, roof, roofs), brick, wall);
+    landR = mix(mix(0.9, 0.85, roofs), 0.85, wall);
+    // The wall's normal: down the height field's slope, level.
+    vec2 texel = 1.0 / vec2(4096.0);
+    float hx = min(ctxHeight(huv + vec2(texel.x, 0.0)), RELIEF) - min(ctxHeight(huv - vec2(texel.x, 0.0)), RELIEF);
+    float hz = min(ctxHeight(huv + vec2(0.0, texel.y)), RELIEF) - min(ctxHeight(huv - vec2(0.0, texel.y)), RELIEF);
+    vec3 wn = normalize(vec3(-hx, 0.0, -hz) + vec3(0.0, 1e-3, 0.0));
+    if (dot(wn, -V) < 0.0) wn = normalize(vec3(-V.x, 0.0, -V.z));
+    ctxNormal = wall > 0.5 ? wn : vec3(0.0, 1.0, 0.0);
+    // Its shadow: a march toward the sun through the same height field.
+    float lit = 1.0;
+    if (uSunDirW.y > 0.02) {
+      vec2 dir = normalize(uSunDirW.xz);
+      float rise = uSunDirW.y / length(uSunDirW.xz);
+      vec3 start = hit + ctxNormal * 1.5;
+      for (int i = 1; i <= 8; i++) {
+        float d = 8.0 * float(i);
+        float hh = min(ctxHeight(ctxUv(start.xz + dir * d)), RELIEF);
+        lit = min(lit, smoothstep(-1.5, 1.5, start.y + rise * d - hh));
+      }
+    }
+    ctxShade = lit;
+    ctxRoof = roofs + wall;
+    ctxHitY = hit.y;
+    ctxWall = wall;
+    ctxAo = mix(1.0, 0.5, closeIn * (1.0 - roofs) * (1.0 - wall) * (1.0 - hc.r)) * mix(0.6, 1.0, smoothstep(0.0, 15.0, hit.y) * wall + (1.0 - wall));
+    ctx = hc;
+    water = hc.r * (1.0 - step(1.0, hitH));
+    waterF = water;
+    land = 1.0 - water;
+    groundMap.g = water;
+  }
   // Puddles on the paving as the rain goes on.
   float puddle = uWetness * smoothstep(0.55, 0.75, vnoise(vWorld.xz / 7.0) + 0.25 * uWetness) * (1.0 - green) * (1.0 - trees);
   landC *= mix(1.0, 0.6, uWetness * (1.0 - trees));
   landR = mix(mix(landR, 0.4, uWetness * (1.0 - trees)), 0.04, puddle);
   // Water: the harbour's own dark, silty green-grey under the reflection.
   float waveRough;
-  vec3 wn = waves(vWorld.xz, uTime, waveRough);
+  vec3 wvn = waves(vWorld.xz, uTime, waveRough);
   vec3 waterC = vec3(0.018, 0.026, 0.026);
   diffuseColor.rgb = mix(landC, waterC, water);
   roughnessFactor = mix(landR, waveRough, water);
   metalnessFactor = 0.0;
   ssrRough = roughnessFactor;
   // The surface normal: waves on the water, flat elsewhere.
-  vec3 nW = normalize(mix(vec3(0.0, 1.0, 0.0), wn, water));
+  vec3 nW = normalize(mix(onTop > 0.5 ? vec3(0.0, 1.0, 0.0) : ctxNormal, wvn, water));
   normal = normalize((viewMatrix * vec4(nW, 0.0)).xyz);
+  // After dark beyond the plinth: the street grid's lamps (as New York's, newYork.js) and lit windows on
+  // the walls.
+  if (onTop < 0.5 && uNight > 0.004) {
+    float near = textureLod(uContext, ctxUv(vWorld.xz), 2.0).g;
+    float streets = (1.0 - ctx.g) * (1.0 - ctx.b) * land * (1.0 - ctxRoof) * smoothstep(0.15, 0.6, near);
+    vec3 lamp = nyStreet(vWorld.xz) * 0.16;
+    // Windows a third of each 3 m cell, lit at the hour's share (look.js), averaged below a pixel.
+    vec2 wq = vec2(dot(vWorld.xz, vec2(0.7071)) / 3.0, ctxHitY / 3.0);
+    vec2 fq = vec2(max(fwidth(wq.x), 1e-3), max(fwidth(wq.y), 1e-3));
+    float on = step(hash21(floor(wq) + 7.0), uLit * 0.5);
+    float pane = pulse(wq.x + 0.25, fq.x, 0.5) * pulse(wq.y - 0.3, fq.y, 0.6);
+    vec3 win = mix(vec3(1.0, 0.62, 0.2), vec3(1.0, 0.85, 0.6), hash21(floor(wq) + 3.0)) * on * pane;
+    win = mix(win, vec3(1.0, 0.7, 0.35) * uLit * 0.5 * 0.15, smoothstep(0.4, 1.0, max(fq.x, fq.y)));
+    totalEmissiveRadiance += uNight * uNightGain * (lamp * streets + win * ctxWall * 0.9);
+  }
   // After dark: the streets, the signs' light, the traffic and the memorial pools (newYork.js).
   float onTopSave = onTop;
   ${NIGHTS['new-york'].ground.replace(/totalEmissiveRadiance \+=/g, 'totalEmissiveRadiance += uNightGain *')}
@@ -380,11 +495,13 @@ const GROUND_SSR = /* glsl */ `
   }
 `
 
-export function realGroundMaterial(ground, cover, { id, halfLength, halfWidth, offset = [0, 0, 0] }) {
+export function realGroundMaterial(ground, cover, context, { id, halfLength, halfWidth, offset = [0, 0, 0] }) {
   const m = new THREE.MeshPhysicalMaterial({ color: '#ffffff', roughness: 0.9, metalness: 0, ior: 1.333 })
   m.userData.uniforms = {
     uGround: { value: ground },
     uCover: { value: cover },
+    uContext: { value: context.texture },
+    uCtxBox: { value: new THREE.Vector4(context.box.x0, context.box.x1, context.box.z0, context.box.z1) },
     uHalf: { value: new THREE.Vector2(halfLength, halfWidth) },
     uOrigin: { value: new THREE.Vector3(...offset) },
     ...cityClock[id],
@@ -403,15 +520,63 @@ export function realGroundMaterial(ground, cover, { id, halfLength, halfWidth, o
     ao: 'mix(1.0, mix(0.34, 1.0, groundMap.r), onTop * (1.0 - waterF))',
     post: /* glsl */ `
       {
-        float sunVis = cloudShadow(vWorld);
+        float sunVis = cloudShadow(vWorld) * mix(1.0, ctxShade, onTop < 0.5 ? 1.0 : 0.0);
         reflectedLight.directDiffuse *= sunVis;
         reflectedLight.directSpecular *= sunVis;
+        reflectedLight.indirectDiffuse *= ctxAo;
       }
     `,
     edit: (shader) => {
       shader.fragmentShader = shader.fragmentShader.replace('#include <lights_fragment_maps>', GROUND_SSR)
     },
   })
+}
+
+// The country's towers (scripts/models/context.mjs: x, z, half length, half width, angle, height) as
+// boxes with the attributes the buildings' material reads: occlusion low at the foot, a seed, windows;
+// the top and kind as New York's solids have them (no landmarks: the plain material).
+export function towerGeometry(bin) {
+  const f = new Float32Array(bin)
+  const n = f.length / 6
+  const pos = new Float32Array(n * 8 * 3)
+  const bake = new Float32Array(n * 8 * 4)
+  const top = new Float32Array(n * 8 * 2)
+  const kind = new Uint8Array(n * 8 * 4)
+  const index = new Uint32Array(n * 30)
+  const rand = (i, k) => {
+    const v = Math.sin(i * 12.9898 + k * 78.233) * 43758.5453
+    return v - Math.floor(v)
+  }
+  for (let i = 0; i < n; i++) {
+    const [x, z, hl, hw, a, h] = f.subarray(i * 6, i * 6 + 6)
+    const ca = Math.cos(a)
+    const sa = Math.sin(a)
+    const seed = rand(i, 1)
+    const office = rand(i, 2) < Math.min(0.85, 0.25 + h / 250)
+    const k = [office ? 255 : 0, Math.floor(rand(i, 3) * 6) * 51, Math.round(rand(i, 4) * 255), Math.round(rand(i, 5) * 255)]
+    for (let c = 0; c < 8; c++) {
+      const u = c & 1 ? hl : -hl
+      const v = c & 2 ? hw : -hw
+      const y = c & 4 ? h : 0
+      const o = i * 8 + c
+      pos.set([x + u * ca - v * sa, y, z + u * sa + v * ca], o * 3)
+      bake.set([c & 4 ? 1 : 0.35, seed, 1, 1], o * 4)
+      top.set([h, 0], o * 2)
+      kind.set(k, o * 4)
+    }
+    const b = i * 8
+    // Four walls and the roof, wound outward.
+    const quads = [[0, 1, 5, 4], [1, 3, 7, 5], [3, 2, 6, 7], [2, 0, 4, 6], [4, 5, 7, 6]]
+    quads.forEach(([p, q, r, s2], j) => index.set([b + p, b + r, b + q, b + p, b + s2, b + r], i * 30 + j * 6))
+  }
+  const g = new THREE.BufferGeometry()
+  g.setAttribute('position', new THREE.BufferAttribute(pos, 3))
+  g.setAttribute('bake', new THREE.BufferAttribute(bake, 4))
+  g.setAttribute('top', new THREE.BufferAttribute(top, 2))
+  g.setAttribute('kind', new THREE.BufferAttribute(kind, 4, true))
+  g.setIndex(new THREE.BufferAttribute(index, 1))
+  g.computeBoundingSphere()
+  return g
 }
 
 // The ground's mesh: a square of `size` metres in the plinth's own frame (x along its axis, z across),

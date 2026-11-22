@@ -1,10 +1,11 @@
 #!/usr/bin/env node
 // Screenshots of New York at noon, golden hour, night and in rain, for comparing against the reference
 // photographs (docs/reference.md). Works against the dev server or a production build (`npm run preview`):
-// the moment is set with Playwright's clock and the weather by answering Open-Meteo's request with a
-// fixture, so nothing dev-only is needed. Reduced motion stops the camera's drift, so runs match.
+// the moment is fixed by replacing Date (fixClock) and the weather by answering Open-Meteo's request
+// with a fixture, so nothing dev-only is needed. Reduced motion stops the camera's drift, so runs match.
 //
 //   node scripts/shots.mjs [--url http://localhost:4173/] [--out docs/shots] [--tag final] [--size 1920x1080]
+//        [--only noon,night] [--query fx=-taa] [--settle 20000] [--headed]
 //
 // Runs in headless Chromium by default; --headed uses a window (under xvfb-run on a machine without a
 // display). The image is what matters here, not the frame rate (scripts/bench.mjs measures that).
@@ -28,10 +29,11 @@ const ONLY = arg('only', '')
 const HEADED = process.argv.includes('--headed')
 const EXTRA = arg('query', '')
 
-// The four sets. New York's clocks are on EST (UTC-5) in late November; sunset on 22 November is 16:31.
+// The four sets. New York's clocks are on EST (UTC-5) in late November; sunset on 22 November is 16:31,
+// so golden hour is 15:50 (the sun about 5.5 degrees up).
 export const SHOTS = [
   { name: 'noon', at: '2026-11-22T17:00:00Z', wx: 'clear' },
-  { name: 'golden', at: '2026-11-22T21:12:00Z', wx: 'clear' },
+  { name: 'golden', at: '2026-11-22T20:50:00Z', wx: 'clear' },
   { name: 'night', at: '2026-11-23T01:00:00Z', wx: 'clear' },
   { name: 'rain', at: '2026-11-22T19:00:00Z', wx: 'rain' },
 ]
@@ -59,7 +61,8 @@ function forecast(at, wx) {
 }
 
 // Fixes "now" at this moment: Date.now() and new Date() return it, everything else about Date and every
-// timer is left alone (Playwright's own clock replaces requestAnimationFrame, which the benchmark times).
+// timer is left alone (Playwright's own clock would replace requestAnimationFrame, which the benchmark
+// times).
 export async function fixClock(page, at) {
   await page.addInitScript((ms) => {
     const Real = Date
@@ -95,7 +98,7 @@ async function main() {
     await fixClock(page, shot.at)
     await fixtureRoutes(page, shot.at, shot.wx)
     const q = new URLSearchParams(EXTRA)
-    q.set('lite', '0')
+    if (!q.has('lite')) q.set('lite', '0')
     const url = `${URL_}?${q}#new-york`
     await page.goto(url)
     await page.waitForSelector('.loader.is-done', { timeout: 180000 })

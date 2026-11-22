@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 // Frame time for New York at 1920 x 1080, in a headed Chrome window with GPU acceleration asked for.
 //
-//   node scripts/bench.mjs [--url http://localhost:4173/] [--seconds 20] [--at 2026-11-23T01:00:00Z] [--wx clear|rain]
-//        [--query real=0] [--headless]
+//   node scripts/bench.mjs [--url http://localhost:4173/] [--seconds 20] [--shot noon|golden|night|rain]
+//        [--at 2026-11-23T01:00:00Z] [--wx clear|rain] [--query real=0] [--headless]
 //
 // Chrome paces requestAnimationFrame to the display (60 Hz here even with vsync and its frame-rate limit
 // switched off), so the interval between frames hides any cost under 16.7 ms. The script therefore also
@@ -10,10 +10,9 @@
 // afterwards that makes the CPU wait until the GPU has finished the frame. That is the cost of a frame
 // with the CPU and GPU serialized: pessimistic by whatever overlap the browser would otherwise get.
 // The camera drifts as on the site (reduced motion off) and the moment and weather are
-// fixed the way scripts/shots.mjs fixes them (Playwright's clock, an Open-Meteo fixture), so runs compare.
+// fixed the way scripts/shots.mjs fixes them (a fixed Date, an Open-Meteo fixture), so runs compare.
 // It prints the WebGL renderer: a software one (SwiftShader, llvmpipe) makes the numbers a relative
-// measure at best (CLAUDE.md). With EXT_disjoint_timer_query_webgl2 the GPU's own time per frame is
-// printed too.
+// measure at best (CLAUDE.md).
 //
 // On a machine without a display, run it under xvfb-run (which still renders in software).
 
@@ -107,7 +106,7 @@ const result = await page.evaluate(async (seconds) => {
     else byFrame.set(t, [a, b])
   }
   const work = [...byFrame.values()].map(([a, b]) => b - a).slice(1)
-  return { renderer, dpr, size: [canvas.width, canvas.height], frames: frames.slice(1), work, gpu: window.__schweGpuMs ?? null }
+  return { renderer, dpr, size: [canvas.width, canvas.height], frames: frames.slice(1), work }
 }, SECONDS)
 
 const med = median(result.work)
@@ -121,7 +120,6 @@ console.log(JSON.stringify({
   p90Ms: +pct(result.work, 0.9).toFixed(2),
   medianFps: +(1000 / med).toFixed(1),
   intervalMedianMs: +median(result.frames).toFixed(2),
-  gpuMedianMs: result.gpu?.length ? +median(result.gpu).toFixed(2) : null,
   consoleErrors: errors,
 }, null, 2))
 await browser.close()

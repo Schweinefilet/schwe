@@ -13,7 +13,7 @@ import { DRIFT, LOOK, RAD, STILL, fitShadow, nightMonth, nightNumber, viewOf } f
 import { Atmosphere } from './atmosphere.js'
 import { CLOUDS_GLSL } from './clouds.js'
 import { NIGHT_EXPOSURE, exposureFor, realLookFor } from './look.js'
-import { groundGeometry, realBuildingMaterial, realGroundMaterial, realUniforms } from './materials.js'
+import { groundGeometry, realBuildingMaterial, realGroundMaterial, realUniforms, towerGeometry } from './materials.js'
 import { Pipeline } from './pipeline.js'
 
 // New York as a photograph: the same model and the same live sun and weather as the studio, rendered the
@@ -25,18 +25,30 @@ import { Pipeline } from './pipeline.js'
 
 const params = new URLSearchParams(location.search)
 const off = new Set((params.get('fx') ?? '').split(',').filter((f) => f.startsWith('-')).map((f) => f.slice(1)))
-export const FX = Object.fromEntries(['aerial', 'ibl', 'pbr', 'ssr', 'taa', 'bloom', 'clouds', 'wet', 'grade'].map((k) => [k, !off.has(k)]))
+export const FX = Object.fromEntries(['aerial', 'ibl', 'pbr', 'ssr', 'taa', 'bloom', 'clouds', 'wet', 'grade', 'shafts'].map((k) => [k, !off.has(k)]))
+// On trial, off unless asked for (?fx=+gtao).
+FX.gtao = (params.get('fx') ?? '').split(',').includes('+gtao')
+// The tone curve: AgX, or ACES (Narkowicz's fit, three's ACESFilmicToneMapping) with ?tm=aces to compare.
+const TONE = params.get('tm') === 'aces' ? THREE.ACESFilmicToneMapping : THREE.AgXToneMapping
+
+// New York is the first city: fetch what this needs as soon as the module loads.
+for (const id of ['new-york']) {
+  useLoader.preload(THREE.TextureLoader, [`/models/${id}-ground.png`, `/models/${id}-cover.png`, `/models/${id}-context.png`])
+  useLoader.preload(THREE.FileLoader, [`/models/${id}-context.json`, `/models/${id}-context.bin`], (l) => l.setResponseType('arraybuffer'))
+}
 
 export default function RealNewYork({ city, weather, lite = false, still = false, onReady, onTone }) {
   const { gl, scene, camera, size } = useThree()
   const { scene: gltf } = useGLTF(city.glb, false, true)
-  const [groundMap, coverMap] = useLoader(THREE.TextureLoader, [city.ground, `/models/${city.id}-cover.png`])
+  const [groundMap, coverMap, contextMap] = useLoader(THREE.TextureLoader, [city.ground, `/models/${city.id}-cover.png`, `/models/${city.id}-context.png`])
+  // The country round the plinth: its extent, and its towers (scripts/models/context.mjs).
+  const [contextJson, towersBin] = useLoader(THREE.FileLoader, [`/models/${city.id}-context.json`, `/models/${city.id}-context.bin`], (l) => l.setResponseType('arraybuffer'))
   const sun = useRef()
   const precip = useRef()
   const s = useRef(null)
 
   const gpu = useRef(null)
-  const { buildings, lights, ground } = useMemo(() => {
+  const { buildings, lights, ground, towers } = useMemo(() => {
     const o = prepareModel(gltf, city)
     o.updateWorldMatrix(true, false)
     const mats = FX.pbr ? [realBuildingMaterial(city.offset, { plain: true }), realBuildingMaterial(city.offset)] : o.material
@@ -46,28 +58,45 @@ export default function RealNewYork({ city, weather, lite = false, still = false
     buildings.castShadow = buildings.receiveShadow = true
     buildings.frustumCulled = false
     const lights = obstructionLights(o.geometry.userData.peaks, plasterUniforms)
-    for (const t of [groundMap, coverMap]) {
+    for (const t of [groundMap, coverMap, contextMap]) {
       t.flipY = false
       t.colorSpace = THREE.NoColorSpace
       t.minFilter = THREE.LinearMipmapLinearFilter
       t.anisotropy = 8
       t.needsUpdate = true
     }
-    const ground = new THREE.Mesh(groundGeometry(200000), realGroundMaterial(groundMap, coverMap, city))
+    // Straight alpha: the height channel must not be premultiplied into the others.
+    contextMap.premultiplyAlpha = false
+    const meta = JSON.parse(new TextDecoder().decode(contextJson))
+    const ground = new THREE.Mesh(groundGeometry(200000), realGroundMaterial(groundMap, coverMap, { texture: contextMap, box: meta.box }, city))
     ground.rotation.y = Math.PI / 2 - city.axisBearing * RAD
     ground.position.set(...city.offset)
     ground.receiveShadow = true
     ground.frustumCulled = false
-    return { buildings, lights, ground }
-  }, [gltf, city, groundMap, coverMap])
+    const towers = new THREE.Mesh(towerGeometry(towersBin), FX.pbr ? realBuildingMaterial(city.offset, { plain: true }) : new THREE.MeshStandardMaterial())
+    towers.castShadow = towers.receiveShadow = true
+    towers.frustumCulled = false
+    return { buildings, lights, ground, towers }
+  }, [gltf, city, groundMap, coverMap, contextMap, contextJson, towersBin])
+
+  // The meshes' own GPU resources go when they do (the model's geometry is the loader's, shared).
+  useEffect(
+    () => () => {
+      for (const m of [buildings.material, towers.material, ground.material, lights.material].flat()) m.dispose()
+      towers.geometry.dispose()
+      ground.geometry.dispose()
+      lights.geometry.dispose()
+    },
+    [buildings, towers, ground, lights]
+  )
 
   // The GPU side (tables, targets, passes) lives exactly as long as the component is mounted.
   useEffect(() => {
     const atmosphere = new Atmosphere(gl, CLOUDS_GLSL)
-    const pipeline = new Pipeline(gl, atmosphere, { taa: FX.taa && !lite, bloom: FX.bloom })
+    const pipeline = new Pipeline(gl, atmosphere, { taa: FX.taa, bloom: FX.bloom })
     gpu.current = { atmosphere, pipeline, sky: null }
     const prev = { toneMapping: gl.toneMapping, exposure: gl.toneMappingExposure, autoUpdate: gl.shadowMap.autoUpdate }
-    gl.toneMapping = THREE.AgXToneMapping
+    gl.toneMapping = TONE
     gl.toneMappingExposure = 1
     gl.shadowMap.autoUpdate = false
     scene.add(sun.current.target)
@@ -137,7 +166,8 @@ export default function RealNewYork({ city, weather, lite = false, still = false
         cloudLit: l.cloudLit,
         cloudTh: FX.clouds ? l.cloudTh : 2,
         cloudShift: l.cloudShift,
-        deck: FX.clouds ? { h: l.cloudH / 1000, sun: l.sunThrough, L: l.cloudLit.map((v) => v / l.sunE) } : { h: 0, sun: 1, L: [0, 0, 0] },
+        // The share of the sky the deck covers lights the air beneath it.
+        deck: FX.clouds ? { h: l.cloudH / 1000, sun: l.sunThrough, L: l.cloudLit.map((v) => (v * l.cover) / l.sunE) } : { h: 0, sun: 1, L: [0, 0, 0] },
       })
       scene.environment = FX.ibl ? env : null
       st.exposure = exposureFor(l, atmosphere.skyIrradiance)
@@ -184,7 +214,7 @@ export default function RealNewYork({ city, weather, lite = false, still = false
     const buffer = gl.getDrawingBufferSize(new THREE.Vector2())
     pipeline.setSize(buffer.x, buffer.y)
     pipeline.jitter(camera)
-    pipeline.render(scene, camera, { buildings: [buildings, lights], ground: [ground], late: [precip.current].filter(Boolean) }, {
+    pipeline.render(scene, camera, { buildings: [buildings, lights, towers], ground: [ground], late: [precip.current].filter(Boolean) }, {
       exposure: st.exposure,
       // By day a camera meters the frame itself (half its exposure here); after dark the incident reading
       // and its ceiling decide, so the night is not lifted to grey.
@@ -201,6 +231,12 @@ export default function RealNewYork({ city, weather, lite = false, still = false
       sunDir: l.sunTrue,
       aerial: FX.aerial,
       sky: atmosphere.skyCube.texture,
+      shafts: FX.shafts,
+      shadow: sl.shadow.map ? { map: sl.shadow.map.depthTexture, matrix: sl.shadow.matrix } : null,
+      sunL: l.sunLight.map((e) => e * l.sunThrough),
+      sunDirW: l.sunDir,
+      mieScat: l.mieScat,
+      gtao: FX.gtao ? 0.6 : 0,
     })
     // Obstruction lights' size by distance (as Maquette does).
     const u = lights.material.uniforms
@@ -212,6 +248,7 @@ export default function RealNewYork({ city, weather, lite = false, still = false
     <>
       <directionalLight ref={sun} castShadow shadow-mapSize={[lite ? 2048 : 4096, lite ? 2048 : 4096]} shadow-bias={-0.0004} shadow-normalBias={2.5} shadow-radius={1.5} />
       <primitive object={buildings} />
+      <primitive object={towers} />
       <primitive object={lights} />
       <primitive object={ground} />
       <group ref={precip} position={city.offset}>

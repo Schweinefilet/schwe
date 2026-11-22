@@ -45,23 +45,140 @@ const COPY_FRAG = /* glsl */ `
 `
 
 // Aerial perspective (Hillaire 2020, section 5.6): a read of the camera volume at the pixel's distance.
+// Then two things the volume cannot know, both about the city itself:
+//
+// Light shafts. The volume lights all of its air by the sun. Where the air near the ground is in the
+// shadow of a building, it is not: march the view ray through the slab of air the city stands in (below
+// SLAB metres) and take back the sun's in-scattering wherever the shadow map says the sun is blocked
+// (the shadowed in-scattering of Wronski, "Volumetric Fog", Advances 2014, and of Bauer's RDR2
+// atmosphere, Advances 2019, done here as a correction to the volume rather than as a froxel grid).
+//
+// Ground-truth ambient occlusion, on trial (GTAO: Jimenez et al., "Practical Realtime Strategies for
+// Accurate Indirect Occlusion", 2016; the slice integral as XeGTAO writes it, github.com/GameTechDev/XeGTAO,
+// MIT). From depth alone, normals reconstructed from it.
 const AP_FRAG = /* glsl */ `
   uniform sampler2D tColor;
   uniform sampler3D tScatter;
   uniform sampler3D tTransmit;
   uniform float uSunE;
   uniform float uOn;
+  uniform sampler2DShadow tShadow;
+  uniform mat4 uShadowMatrix;
+  uniform mat4 uViewInv;
+  uniform vec3 uSunL; // the sun's illuminance on the city
+  uniform vec3 uSunDirW;
+  uniform vec3 uRayleighKm;
+  uniform float uMieScatKm;
+  uniform float uMieH;
+  uniform float uMieG;
+  uniform float uShafts;
+  uniform float uGtao;
+  uniform vec2 uRes;
+  uniform float uProj11;
+  uniform float uNoise;
   ${DEPTH_GLSL}
   varying vec2 vUv;
+  #define SLAB 600.0
+  #define G_PI 3.14159265
+
+  float hash(vec2 p) { return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453); }
+  float csPhase(float g, float c) {
+    float k = 3.0 / (8.0 * G_PI) * (1.0 - g * g) / (2.0 + g * g);
+    return k * (1.0 + c * c) / pow(1.0 + g * g - 2.0 * g * c, 1.5);
+  }
+
+  vec3 apUvw(vec2 uv, float metres) {
+    return vec3(uv, clamp(metres * 0.001 / ${AP_RANGE}.0, 0.0, 1.0) * ${(AP_SIZE - 1) / AP_SIZE} + ${0.5 / AP_SIZE});
+  }
+
+  // View-space normal from depth: of the two neighbours each way, the one on the same surface.
+  vec3 normalAt(vec2 uv, vec3 P) {
+    vec2 px = 1.0 / uRes;
+    vec3 l = viewPos(uv - vec2(px.x, 0.0)), r = viewPos(uv + vec2(px.x, 0.0));
+    vec3 d = viewPos(uv - vec2(0.0, px.y)), u = viewPos(uv + vec2(0.0, px.y));
+    vec3 dx = abs(r.z - P.z) < abs(P.z - l.z) ? r - P : P - l;
+    vec3 dy = abs(u.z - P.z) < abs(P.z - d.z) ? u - P : P - d;
+    return normalize(cross(dx, dy));
+  }
+
+  float gtao(vec2 uv, vec3 P) {
+    const float RADIUS = 50.0; // metres
+    float rpx = RADIUS * uProj11 * uRes.y * 0.5 / -P.z;
+    if (rpx < 2.0) return 1.0;
+    vec3 N = normalAt(uv, P);
+    vec3 V = normalize(-P);
+    float noise = hash(uv * uRes + uNoise);
+    float vis = 0.0;
+    for (int sl = 0; sl < 2; sl++) {
+      float phi = (float(sl) + noise) * G_PI / 2.0;
+      vec2 omega = vec2(cos(phi), sin(phi));
+      vec3 dir = vec3(omega, 0.0);
+      vec3 ortho = dir - dot(dir, V) * V;
+      vec3 axis = normalize(cross(ortho, V));
+      vec3 pn = N - axis * dot(N, axis);
+      float pl = length(pn);
+      float cosN = clamp(dot(pn, V) / max(pl, 1e-4), 0.0, 1.0);
+      float n = sign(dot(ortho, pn)) * acos(cosN);
+      float h0c = cos(n + G_PI / 2.0);
+      float h1c = cos(n - G_PI / 2.0);
+      for (int st = 0; st < 6; st++) {
+        float s = (float(st) + fract(noise * 7.0)) / 6.0;
+        s *= s;
+        vec2 off = omega * s * rpx / uRes;
+        vec3 d0 = viewPos(uv + off) - P;
+        vec3 d1 = viewPos(uv - off) - P;
+        float l0 = length(d0), l1 = length(d1);
+        float w0 = clamp(2.0 - 2.0 * l0 / RADIUS, 0.0, 1.0), w1 = clamp(2.0 - 2.0 * l1 / RADIUS, 0.0, 1.0);
+        h0c = max(h0c, mix(cos(n + G_PI / 2.0), dot(d0 / l0, V), w0));
+        h1c = max(h1c, mix(cos(n - G_PI / 2.0), dot(d1 / l1, V), w1));
+      }
+      float h0 = -acos(clamp(h1c, -1.0, 1.0));
+      float h1 = acos(clamp(h0c, -1.0, 1.0));
+      h0 = n + clamp(h0 - n, -G_PI / 2.0, G_PI / 2.0);
+      h1 = n + clamp(h1 - n, -G_PI / 2.0, G_PI / 2.0);
+      float a0 = (cosN + 2.0 * h0 * sin(n) - cos(2.0 * h0 - n)) / 4.0;
+      float a1 = (cosN + 2.0 * h1 * sin(n) - cos(2.0 * h1 - n)) / 4.0;
+      vis += mix(pl, 1.0, 0.05) * (a0 + a1);
+    }
+    return clamp(vis / 2.0, 0.0, 1.0);
+  }
+
   void main() {
     vec3 c = texture(tColor, vUv).rgb;
     float d = texture(tDepth, vUv).r;
-    if (d >= 1.0 || uOn < 0.5) { gl_FragColor = vec4(c, 1.0); return; }
-    float km = length(viewPos(vUv)) * 0.001;
-    vec3 w = vec3(vUv, clamp(km / ${AP_RANGE}.0, 0.0, 1.0) * ${(AP_SIZE - 1) / AP_SIZE} + ${0.5 / AP_SIZE});
-    vec3 L = texture(tScatter, w).rgb * uSunE;
-    vec3 T = texture(tTransmit, w).rgb;
-    gl_FragColor = vec4(c * T + L, 1.0);
+    if (d >= 1.0) { gl_FragColor = vec4(c, 1.0); return; }
+    vec3 P = viewPos(vUv);
+    float dist = length(P);
+    if (uGtao > 0.0) c *= mix(1.0, gtao(vUv, P), uGtao);
+    if (uOn < 0.5) { gl_FragColor = vec4(c, 1.0); return; }
+    vec3 w = apUvw(vUv, dist);
+    c = c * texture(tTransmit, w).rgb + texture(tScatter, w).rgb * uSunE;
+    if (uShafts > 0.5 && uSunDirW.y > 0.0) {
+      vec3 ro = (uViewInv * vec4(0.0, 0.0, 0.0, 1.0)).xyz;
+      vec3 wp = (uViewInv * vec4(P, 1.0)).xyz;
+      vec3 rd = (wp - ro) / dist;
+      float t0 = rd.y < 0.0 ? max(0.0, (SLAB - ro.y) / rd.y) : dist;
+      if (t0 < dist) {
+        float ct = dot(rd, uSunDirW);
+        float pr = 3.0 / (16.0 * G_PI) * (1.0 + ct * ct);
+        float pm = csPhase(uMieG, ct);
+        const int N = 12;
+        float dt = (dist - t0) / float(N);
+        float j = hash(vUv * uRes + uNoise * 3.1);
+        vec3 lost = vec3(0.0);
+        for (int i = 0; i < N; i++) {
+          vec3 p = ro + rd * (t0 + (float(i) + j) * dt);
+          vec4 sc = uShadowMatrix * vec4(p, 1.0);
+          float lit = 1.0;
+          if (sc.x > 0.0 && sc.x < 1.0 && sc.y > 0.0 && sc.y < 1.0 && sc.z < 1.0) lit = texture(tShadow, vec3(sc.xy, sc.z - 0.0004));
+          float h = max(p.y, 0.0) * 0.001;
+          vec3 scat = (uRayleighKm * exp(-h / 8.0) * pr + uMieScatKm * exp(-h / uMieH) * pm) * 0.001;
+          lost += (1.0 - lit) * scat * dt * texture(tTransmit, apUvw(vUv, t0 + (float(i) + j) * dt)).rgb;
+        }
+        c = max(c - lost * uSunL, c * 0.2);
+      }
+    }
+    gl_FragColor = vec4(c, 1.0);
   }
 `
 
@@ -263,7 +380,29 @@ export class Pipeline {
     this.quadScene.add(this.quad)
     const mat = (frag, uniforms, extra = {}) => new THREE.ShaderMaterial({ vertexShader: VERT, fragmentShader: frag, uniforms, depthTest: false, depthWrite: false, toneMapped: false, ...extra })
     this.copy = mat(COPY_FRAG, { tColor: { value: null }, tDepth: { value: null }, uInvProj: { value: new THREE.Matrix4() } })
-    this.ap = mat(AP_FRAG, { tColor: { value: null }, tDepth: { value: null }, uInvProj: { value: new THREE.Matrix4() }, tScatter: { value: atmosphere.apScatter.texture }, tTransmit: { value: atmosphere.apTransmit.texture }, uSunE: { value: 1 }, uOn: { value: 1 } })
+    this.ap = mat(AP_FRAG, {
+      tColor: { value: null },
+      tDepth: { value: null },
+      uInvProj: { value: new THREE.Matrix4() },
+      tScatter: { value: atmosphere.apScatter.texture },
+      tTransmit: { value: atmosphere.apTransmit.texture },
+      uSunE: { value: 1 },
+      uOn: { value: 1 },
+      tShadow: { value: null },
+      uShadowMatrix: { value: new THREE.Matrix4() },
+      uViewInv: { value: new THREE.Matrix4() },
+      uSunL: { value: new THREE.Vector3() },
+      uSunDirW: { value: new THREE.Vector3() },
+      uRayleighKm: { value: atmosphere.uniforms.uRayleigh.value },
+      uMieScatKm: { value: 0 },
+      uMieH: { value: atmosphere.uniforms.uMieH.value },
+      uMieG: { value: atmosphere.uniforms.uMieG.value },
+      uShafts: { value: 0 },
+      uGtao: { value: 0 },
+      uRes: { value: new THREE.Vector2() },
+      uProj11: { value: 1 },
+      uNoise: { value: 0 },
+    })
     this.taaMat = mat(TAA_FRAG, { tColor: { value: null }, tHistory: { value: null }, tDepth: { value: null }, uInvViewProj: { value: new THREE.Matrix4() }, uPrevViewProj: { value: new THREE.Matrix4() }, uRes: { value: new THREE.Vector2() }, uReset: { value: 1 }, uAlpha: { value: 0.1 } })
     this.down = mat(DOWN_FRAG, { tSrc: { value: null }, uTexel: { value: new THREE.Vector2() }, uFirst: { value: 0 } })
     this.up = mat(UP_FRAG, { tSrc: { value: null }, tBase: { value: null }, uTexel: { value: new THREE.Vector2() } })
@@ -380,6 +519,17 @@ export class Pipeline {
     ap.uInvProj.value.copy(camera.projectionMatrixInverse)
     ap.uSunE.value = look.sunE
     ap.uOn.value = look.aerial === false ? 0 : 1
+    ap.uShafts.value = look.shafts && look.shadow?.map ? 1 : 0
+    ap.tShadow.value = look.shadow?.map ?? null
+    if (look.shadow) ap.uShadowMatrix.value.copy(look.shadow.matrix)
+    ap.uViewInv.value.copy(camera.matrixWorld)
+    ap.uSunL.value.fromArray(look.sunL)
+    ap.uSunDirW.value.fromArray(look.sunDirW)
+    ap.uMieScatKm.value = look.mieScat
+    ap.uGtao.value = look.gtao ?? 0
+    ap.uRes.value.copy(this.size)
+    ap.uProj11.value = camera.projectionMatrix.elements[5]
+    ap.uNoise.value = (this.frame % 64) * 1.618
     this.pass(this.ap, this.apRT)
     let image = this.apRT
 
