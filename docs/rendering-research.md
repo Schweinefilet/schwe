@@ -455,7 +455,7 @@ three.js. Out of reach in WebGL 2 at this scale. The cheap part that matters at 
 ground's bounce: a hemisphere ground colour taken from the sunlit ground's albedo times the sun on it,
 and the baked occlusion. Recorded for completeness.
 
-Priority 14 (approximate only).
+Priority 14. Rejected for WebGL 2 (no compute shaders or ray queries); the sky's image-based light and the ground's bounce in the sky cube stand in for it.
 
 ## Order of work
 
@@ -598,5 +598,5 @@ within noise. These are not frame rates: llvmpipe draws this scene at 1.2 fps, a
 | Colour grading (14) | Shipped | 838 / 828 (-58 / -19) | One grade for all weathers. | A grade per condition, set against the photographs. |
 | GTAO (15) | Rejected | 903 / 857 (+65 / +28) on trial | 1.8% RMSE change, but it darkens direct sunlight and double-counts the baked occlusion. | AO on the indirect light only. |
 | Cascaded, contact and soft shadows (16) | Rejected | none | One fitted 4096 map is about a texel a pixel already; the sun's penumbra is a pixel. | Only for a closer view. |
-| Global illumination (17) | Approximated | none | No bounce between buildings. | A screen-space indirect diffuse pass. |
+| Global illumination (17) | Rejected: Lumen-style GI and path tracing need compute shaders and ray queries WebGL 2 lacks; the sky's image-based light and the ground's bounce in the sky cube stand in | none | No bounce between buildings. | A screen-space indirect diffuse pass. |
 | The surroundings (not in the list; from MSFS's approach) | Shipped | in row 5 | Relief-mapped low-rise looks soft near the plinth. | Real extrusions near the plinth. |
