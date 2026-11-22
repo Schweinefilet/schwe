@@ -512,7 +512,7 @@ export class Pipeline {
     show(parts.buildings, true)
 
     // 4. Aerial perspective.
-    this.atmosphere.volume(camera, this.unjitteredInverse(), look.sunDir)
+    this.atmosphere.volume(camera, this.unjitteredInverse(), look.sunDir, look.origin, look.apScale)
     const ap = this.ap.uniforms
     ap.tColor.value = this.sceneRT.texture
     ap.tDepth.value = this.sceneRT.depthTexture

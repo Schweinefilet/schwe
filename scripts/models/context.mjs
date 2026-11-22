@@ -10,8 +10,8 @@
 //                                      angle (radians from x toward z), height
 //   public/models/<city>-context.json  the box's extent and the counts
 //
-// Heights: mapped height, else floors x 3.2 m, else the median of the box's known heights; the script
-// prints how many took the median (CLAUDE.md). Buildings on the plinth are left out: the model has them.
+// Heights: mapped height, else floors x 3.2 m, else the median of the known heights in its 1 km cell, else
+// the box's; the script prints how many took each (CLAUDE.md). Buildings on the plinth are left out: the model has them.
 //
 //   node scripts/models/context.mjs --city new-york
 
@@ -41,7 +41,7 @@ const onPlinth = ([x, z], margin = 12) => {
   return Math.abs(u) <= spec.halfLength - margin && Math.abs(v) <= spec.halfWidth - margin
 }
 
-const BOX = { 'new-york': [-74.13, 40.62, -73.84, 40.87] }[CITY]
+const BOX = { 'new-york': [-74.13, 40.62, -73.84, 40.87], paris: [2.17, 48.8, 2.53, 48.95], london: [-0.28, 51.46, 0.13, 51.61] }[CITY]
 const [x0, z1] = toXZ([BOX[0], BOX[1]])
 const [x1, z0] = toXZ([BOX[2], BOX[3]])
 const N = 4096
@@ -95,6 +95,30 @@ for (const g of await load('green')) for (const poly of geoPolygons(g.geometry))
 const raw = await load('buildings')
 const known = raw.map(([h, f]) => h ?? (f ? f * 3.2 : null)).filter((h) => h != null && h > 0).sort((a, b) => a - b)
 const median = known[Math.floor(known.length / 2)]
+// A building with no mapped height takes the median of the known heights round it (the 1 km cell it stands
+// in, when at least 25 of the cell's buildings are mapped), else the box's: in Paris the box's median (7 m)
+// is the suburbs' houses, and most unmapped buildings stand in the six-storey city (CLAUDE.md: never invent;
+// this is the same rule at a finer grain).
+const CELL = 1000
+const firstPoint = (coords) => {
+  let c = coords
+  while (Array.isArray(c[0])) c = c[0]
+  return toXZ(c)
+}
+const cellOf = (coords) => {
+  const [x, z] = firstPoint(coords)
+  return `${Math.floor(x / CELL)},${Math.floor(z / CELL)}`
+}
+const cellKnown = new Map()
+for (const [h, f, coords] of raw) {
+  const H = h ?? (f ? f * 3.2 : null)
+  if (!(H > 0)) continue
+  const k = cellOf(coords)
+  if (!cellKnown.has(k)) cellKnown.set(k, [])
+  cellKnown.get(k).push(H)
+}
+const cellMedian = new Map([...cellKnown].filter(([, v]) => v.length >= 25).map(([k, v]) => [k, v.sort((a, b) => a - b)[Math.floor(v.length / 2)]]))
+let localCount = 0
 const cover = new Uint8Array(N * N)
 const height = new Float32Array(N * N)
 const towers = []
@@ -103,8 +127,12 @@ let onModel = 0
 for (const [h, f, coords] of raw) {
   let H = h ?? (f ? f * 3.2 : null)
   if (!(H > 0)) {
-    H = median
-    medianCount++
+    H = cellMedian.get(cellOf(coords))
+    if (H > 0) localCount++
+    else {
+      H = median
+      medianCount++
+    }
   }
   for (const poly of polygons(coords)) {
     const rings = poly.map((r) => r.map(toXZ))
@@ -207,6 +235,6 @@ const pngBuf = encodePng(png, N, N)
 await writeFile(out('context.png'), pngBuf)
 const bin = new Float32Array(towers.flat())
 await writeFile(out('context.bin'), Buffer.from(bin.buffer))
-const meta = { box: { x0, x1, z0, z1 }, towers: towers.length, buildings: raw.length, onModel, medianHeight: median, tookMedian: medianCount }
+const meta = { box: { x0, x1, z0, z1 }, towers: towers.length, buildings: raw.length, onModel, medianHeight: median, tookMedian: medianCount, tookLocalMedian: localCount }
 await writeFile(out('context.json'), JSON.stringify(meta, null, 1))
-console.log(`${CITY}: context ${N}x${N} (${((x1 - x0) / N).toFixed(1)} x ${((z1 - z0) / N).toFixed(1)} m a texel), ${(pngBuf.length / 1e6).toFixed(1)} MB; ${raw.length} buildings, ${onModel} on the plinth left out, ${medianCount} without a mapped height took the median ${median.toFixed(1)} m; ${towers.length} boxes of 30 m and more (${(bin.byteLength / 1e3).toFixed(0)} kB); ${((waterTexels / (N * N)) * 100).toFixed(0)}% water`)
+console.log(`${CITY}: context ${N}x${N} (${((x1 - x0) / N).toFixed(1)} x ${((z1 - z0) / N).toFixed(1)} m a texel), ${(pngBuf.length / 1e6).toFixed(1)} MB; ${raw.length} buildings, ${onModel} on the plinth left out, ${localCount} without a mapped height took their 1 km cell's median and ${medianCount} the box's, ${median.toFixed(1)} m; ${towers.length} boxes of 30 m and more (${(bin.byteLength / 1e3).toFixed(0)} kB); ${((waterTexels / (N * N)) * 100).toFixed(0)}% water`)

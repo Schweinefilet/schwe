@@ -1,0 +1,409 @@
+{
+ "0-plaster": {
+  "query": "real=0",
+  "noon": {
+   "city": "london",
+   "shot": "noon",
+   "url": "http://localhost:4173/?real=0&lite=0#london",
+   "renderer": "ANGLE (Mesa, llvmpipe (LLVM 20.1.2 256 bits), OpenGL 4.5)",
+   "software": true,
+   "canvas": [
+    1920,
+    1080
+   ],
+   "frames": 46,
+   "medianMs": 330.7,
+   "p90Ms": 357.4,
+   "medianFps": 3,
+   "intervalMedianMs": 333.1,
+   "consoleErrors": []
+  },
+  "night": {
+   "city": "london",
+   "shot": "night",
+   "url": "http://localhost:4173/?real=0&lite=0#london",
+   "renderer": "ANGLE (Mesa, llvmpipe (LLVM 20.1.2 256 bits), OpenGL 4.5)",
+   "software": true,
+   "canvas": [
+    1920,
+    1080
+   ],
+   "frames": 36,
+   "medianMs": 415.3,
+   "p90Ms": 439.9,
+   "medianFps": 2.4,
+   "intervalMedianMs": 416.8,
+   "consoleErrors": []
+  }
+ },
+ "1-hdr-aces": {
+  "query": "fx=-aerial,-ibl,-pbr,-ssr,-taa,-bloom,-wet,-shafts,-clouds,-grade",
+  "noon": {
+   "city": "london",
+   "shot": "noon",
+   "url": "http://localhost:4173/?fx=-aerial%2C-ibl%2C-pbr%2C-ssr%2C-taa%2C-bloom%2C-wet%2C-shafts%2C-clouds%2C-grade&lite=0#london",
+   "renderer": "ANGLE (Mesa, llvmpipe (LLVM 20.1.2 256 bits), OpenGL 4.5)",
+   "software": true,
+   "canvas": [
+    1920,
+    1080
+   ],
+   "frames": 33,
+   "medianMs": 448.5,
+   "p90Ms": 504.1,
+   "medianFps": 2.2,
+   "intervalMedianMs": 454.5,
+   "consoleErrors": []
+  },
+  "night": {
+   "city": "london",
+   "shot": "night",
+   "url": "http://localhost:4173/?fx=-aerial%2C-ibl%2C-pbr%2C-ssr%2C-taa%2C-bloom%2C-wet%2C-shafts%2C-clouds%2C-grade&lite=0#london",
+   "renderer": "ANGLE (Mesa, llvmpipe (LLVM 20.1.2 256 bits), OpenGL 4.5)",
+   "software": true,
+   "canvas": [
+    1920,
+    1080
+   ],
+   "frames": 31,
+   "medianMs": 478.2,
+   "p90Ms": 509.8,
+   "medianFps": 2.1,
+   "intervalMedianMs": 480.2,
+   "consoleErrors": []
+  }
+ },
+ "2-sky-air-ibl": {
+  "query": "fx=-pbr,-ssr,-taa,-bloom,-wet,-shafts,-clouds,-grade",
+  "noon": {
+   "city": "london",
+   "shot": "noon",
+   "url": "http://localhost:4173/?fx=-pbr%2C-ssr%2C-taa%2C-bloom%2C-wet%2C-shafts%2C-clouds%2C-grade&lite=0#london",
+   "renderer": "ANGLE (Mesa, llvmpipe (LLVM 20.1.2 256 bits), OpenGL 4.5)",
+   "software": true,
+   "canvas": [
+    1920,
+    1080
+   ],
+   "frames": 30,
+   "medianMs": 499.7,
+   "p90Ms": 551.6,
+   "medianFps": 2,
+   "intervalMedianMs": 503.1,
+   "consoleErrors": []
+  },
+  "night": {
+   "city": "london",
+   "shot": "night",
+   "url": "http://localhost:4173/?fx=-pbr%2C-ssr%2C-taa%2C-bloom%2C-wet%2C-shafts%2C-clouds%2C-grade&lite=0#london",
+   "renderer": "ANGLE (Mesa, llvmpipe (LLVM 20.1.2 256 bits), OpenGL 4.5)",
+   "software": true,
+   "canvas": [
+    1920,
+    1080
+   ],
+   "frames": 28,
+   "medianMs": 525.8,
+   "p90Ms": 556,
+   "medianFps": 1.9,
+   "intervalMedianMs": 530.3,
+   "consoleErrors": []
+  }
+ },
+ "3-brick-stone-glass-surroundings-overcast": {
+  "query": "fx=-ssr,-taa,-bloom,-wet,-shafts,-grade",
+  "noon": {
+   "city": "london",
+   "shot": "noon",
+   "url": "http://localhost:4173/?fx=-ssr%2C-taa%2C-bloom%2C-wet%2C-shafts%2C-grade&lite=0#london",
+   "renderer": "ANGLE (Mesa, llvmpipe (LLVM 20.1.2 256 bits), OpenGL 4.5)",
+   "software": true,
+   "canvas": [
+    1920,
+    1080
+   ],
+   "frames": 29,
+   "medianMs": 533.7,
+   "p90Ms": 562.7,
+   "medianFps": 1.9,
+   "intervalMedianMs": 531.5,
+   "consoleErrors": []
+  },
+  "night": {
+   "city": "london",
+   "shot": "night",
+   "url": "http://localhost:4173/?fx=-ssr%2C-taa%2C-bloom%2C-wet%2C-shafts%2C-grade&lite=0#london",
+   "renderer": "ANGLE (Mesa, llvmpipe (LLVM 20.1.2 256 bits), OpenGL 4.5)",
+   "software": true,
+   "canvas": [
+    1920,
+    1080
+   ],
+   "frames": 26,
+   "medianMs": 574.9,
+   "p90Ms": 626.3,
+   "medianFps": 1.7,
+   "intervalMedianMs": 577.7,
+   "consoleErrors": []
+  }
+ },
+ "4-thames-ssr": {
+  "query": "fx=-taa,-bloom,-wet,-shafts,-grade",
+  "noon": {
+   "city": "london",
+   "shot": "noon",
+   "url": "http://localhost:4173/?fx=-taa%2C-bloom%2C-wet%2C-shafts%2C-grade&lite=0#london",
+   "renderer": "ANGLE (Mesa, llvmpipe (LLVM 20.1.2 256 bits), OpenGL 4.5)",
+   "software": true,
+   "canvas": [
+    1920,
+    1080
+   ],
+   "frames": 28,
+   "medianMs": 536.4,
+   "p90Ms": 570.4,
+   "medianFps": 1.9,
+   "intervalMedianMs": 535.5,
+   "consoleErrors": []
+  },
+  "night": {
+   "city": "london",
+   "shot": "night",
+   "url": "http://localhost:4173/?fx=-taa%2C-bloom%2C-wet%2C-shafts%2C-grade&lite=0#london",
+   "renderer": "ANGLE (Mesa, llvmpipe (LLVM 20.1.2 256 bits), OpenGL 4.5)",
+   "software": true,
+   "canvas": [
+    1920,
+    1080
+   ],
+   "frames": 26,
+   "medianMs": 576.5,
+   "p90Ms": 641.2,
+   "medianFps": 1.7,
+   "intervalMedianMs": 575.7,
+   "consoleErrors": []
+  }
+ },
+ "5-taa": {
+  "query": "fx=-bloom,-wet,-shafts,-grade",
+  "noon": {
+   "city": "london",
+   "shot": "noon",
+   "url": "http://localhost:4173/?fx=-bloom%2C-wet%2C-shafts%2C-grade&lite=0#london",
+   "renderer": "ANGLE (Mesa, llvmpipe (LLVM 20.1.2 256 bits), OpenGL 4.5)",
+   "software": true,
+   "canvas": [
+    1920,
+    1080
+   ],
+   "frames": 25,
+   "medianMs": 591.3,
+   "p90Ms": 612,
+   "medianFps": 1.7,
+   "intervalMedianMs": 596.3,
+   "consoleErrors": []
+  },
+  "night": {
+   "city": "london",
+   "shot": "night",
+   "url": "http://localhost:4173/?fx=-bloom%2C-wet%2C-shafts%2C-grade&lite=0#london",
+   "renderer": "ANGLE (Mesa, llvmpipe (LLVM 20.1.2 256 bits), OpenGL 4.5)",
+   "software": true,
+   "canvas": [
+    1920,
+    1080
+   ],
+   "frames": 24,
+   "medianMs": 624.4,
+   "p90Ms": 648.5,
+   "medianFps": 1.6,
+   "intervalMedianMs": 621,
+   "consoleErrors": []
+  }
+ },
+ "6-bloom": {
+  "query": "fx=-wet,-shafts,-grade",
+  "noon": {
+   "city": "london",
+   "shot": "noon",
+   "url": "http://localhost:4173/?fx=-wet%2C-shafts%2C-grade&lite=0#london",
+   "renderer": "ANGLE (Mesa, llvmpipe (LLVM 20.1.2 256 bits), OpenGL 4.5)",
+   "software": true,
+   "canvas": [
+    1920,
+    1080
+   ],
+   "frames": 24,
+   "medianMs": 636,
+   "p90Ms": 656.6,
+   "medianFps": 1.6,
+   "intervalMedianMs": 638.9,
+   "consoleErrors": []
+  },
+  "night": {
+   "city": "london",
+   "shot": "night",
+   "url": "http://localhost:4173/?fx=-wet%2C-shafts%2C-grade&lite=0#london",
+   "renderer": "ANGLE (Mesa, llvmpipe (LLVM 20.1.2 256 bits), OpenGL 4.5)",
+   "software": true,
+   "canvas": [
+    1920,
+    1080
+   ],
+   "frames": 23,
+   "medianMs": 664.6,
+   "p90Ms": 702,
+   "medianFps": 1.5,
+   "intervalMedianMs": 663.8,
+   "consoleErrors": []
+  }
+ },
+ "7-wet": {
+  "query": "fx=-shafts,-grade",
+  "noon": {
+   "city": "london",
+   "shot": "noon",
+   "url": "http://localhost:4173/?fx=-shafts%2C-grade&lite=0#london",
+   "renderer": "ANGLE (Mesa, llvmpipe (LLVM 20.1.2 256 bits), OpenGL 4.5)",
+   "software": true,
+   "canvas": [
+    1920,
+    1080
+   ],
+   "frames": 24,
+   "medianMs": 627.2,
+   "p90Ms": 674.5,
+   "medianFps": 1.6,
+   "intervalMedianMs": 626.5,
+   "consoleErrors": []
+  },
+  "night": {
+   "city": "london",
+   "shot": "night",
+   "url": "http://localhost:4173/?fx=-shafts%2C-grade&lite=0#london",
+   "renderer": "ANGLE (Mesa, llvmpipe (LLVM 20.1.2 256 bits), OpenGL 4.5)",
+   "software": true,
+   "canvas": [
+    1920,
+    1080
+   ],
+   "frames": 22,
+   "medianMs": 685.7,
+   "p90Ms": 731.7,
+   "medianFps": 1.5,
+   "intervalMedianMs": 695.4,
+   "consoleErrors": []
+  }
+ },
+ "8-shafts": {
+  "query": "fx=-grade",
+  "noon": {
+   "city": "london",
+   "shot": "noon",
+   "url": "http://localhost:4173/?fx=-grade&lite=0#london",
+   "renderer": "ANGLE (Mesa, llvmpipe (LLVM 20.1.2 256 bits), OpenGL 4.5)",
+   "software": true,
+   "canvas": [
+    1920,
+    1080
+   ],
+   "frames": 20,
+   "medianMs": 747,
+   "p90Ms": 870.8,
+   "medianFps": 1.3,
+   "intervalMedianMs": 746.4,
+   "consoleErrors": []
+  },
+  "night": {
+   "city": "london",
+   "shot": "night",
+   "url": "http://localhost:4173/?fx=-grade&lite=0#london",
+   "renderer": "ANGLE (Mesa, llvmpipe (LLVM 20.1.2 256 bits), OpenGL 4.5)",
+   "software": true,
+   "canvas": [
+    1920,
+    1080
+   ],
+   "frames": 23,
+   "medianMs": 660.1,
+   "p90Ms": 680.9,
+   "medianFps": 1.5,
+   "intervalMedianMs": 663.1,
+   "consoleErrors": []
+  }
+ },
+ "9-grade": {
+  "query": "",
+  "noon": {
+   "city": "london",
+   "shot": "noon",
+   "url": "http://localhost:4173/?lite=0#london",
+   "renderer": "ANGLE (Mesa, llvmpipe (LLVM 20.1.2 256 bits), OpenGL 4.5)",
+   "software": true,
+   "canvas": [
+    1920,
+    1080
+   ],
+   "frames": 20,
+   "medianMs": 766.1,
+   "p90Ms": 791.9,
+   "medianFps": 1.3,
+   "intervalMedianMs": 756.4,
+   "consoleErrors": []
+  },
+  "night": {
+   "city": "london",
+   "shot": "night",
+   "url": "http://localhost:4173/?lite=0#london",
+   "renderer": "ANGLE (Mesa, llvmpipe (LLVM 20.1.2 256 bits), OpenGL 4.5)",
+   "software": true,
+   "canvas": [
+    1920,
+    1080
+   ],
+   "frames": 23,
+   "medianMs": 648.9,
+   "p90Ms": 678.2,
+   "medianFps": 1.5,
+   "intervalMedianMs": 652.8,
+   "consoleErrors": []
+  }
+ },
+ "10-gtao-trial": {
+  "query": "fx=+gtao",
+  "noon": {
+   "city": "london",
+   "shot": "noon",
+   "url": "http://localhost:4173/?fx=+gtao&lite=0#london",
+   "renderer": "ANGLE (Mesa, llvmpipe (LLVM 20.1.2 256 bits), OpenGL 4.5)",
+   "software": true,
+   "canvas": [
+    1920,
+    1080
+   ],
+   "frames": 18,
+   "medianMs": 860.4,
+   "p90Ms": 902.3,
+   "medianFps": 1.2,
+   "intervalMedianMs": 862.3,
+   "consoleErrors": []
+  },
+  "night": {
+   "city": "london",
+   "shot": "night",
+   "url": "http://localhost:4173/?fx=+gtao&lite=0#london",
+   "renderer": "ANGLE (Mesa, llvmpipe (LLVM 20.1.2 256 bits), OpenGL 4.5)",
+   "software": true,
+   "canvas": [
+    1920,
+    1080
+   ],
+   "frames": 21,
+   "medianMs": 733.1,
+   "p90Ms": 821.5,
+   "medianFps": 1.4,
+   "intervalMedianMs": 735.4,
+   "consoleErrors": []
+  }
+ }
+}

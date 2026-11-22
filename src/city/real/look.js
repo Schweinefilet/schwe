@@ -26,7 +26,10 @@ const smooth = (a, b, v) => {
 export const NIGHT_EXPOSURE = 1.15
 const METER = 1.0 // exposure x illuminance / pi for an 18% card to read 0.18
 
-export function realLookFor(city, date, wx) {
+// `neutralDeck`: under a thick deck the light the clouds pass on is near neutral (overcast daylight measures
+// about 6500 K; the droplets scatter every colour alike), not the low sun's warm colour (Paris; New York's
+// rain was calibrated without it).
+export function realLookFor(city, date, wx, { neutralDeck = false } = {}) {
   const base = lookFor(city, date, wx)
   const w = weatherOf(wx)
   const sun = getPosition(date, city.lat, city.lon)
@@ -46,7 +49,12 @@ export function realLookFor(city, date, wx) {
   // A cloud's underside: the light on its top, diffused through it (a thick deck lets through about a
   // quarter, a fair-weather cumulus half), darker in rain.
   const through = (0.5 - 0.25 * smooth(0.6, 1, cover)) * (1 - 0.45 * w.rain)
-  const cloudLit = s.E.map((e) => ((e * up + SUN_E * 0.02 * smooth(-4, 6, alt)) * through) / Math.PI)
+  let cloudLit = s.E.map((e) => ((e * up + SUN_E * 0.02 * smooth(-4, 6, alt)) * through) / Math.PI)
+  if (neutralDeck) {
+    const y = 0.2126 * cloudLit[0] + 0.7152 * cloudLit[1] + 0.0722 * cloudLit[2]
+    const k = smooth(0.6, 1, cover)
+    cloudLit = cloudLit.map((v, i) => v + (y * [0.97, 1, 1.05][i] - v) * k)
+  }
   // The ground's radiance for the lower half of the sky cube (a city of albedo 0.12).
   const ground = direct.map((e) => (0.12 * (e * sunThrough + e * 0.25)) / Math.PI)
   // The city's own light on the air and the clouds after dark (sodium and LED, about 3000 K), several

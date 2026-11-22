@@ -28,7 +28,10 @@ args = ap.parse_args()
 
 # The box the site's views can see (src/city/cities.js: from the south-west, up to about 26 km from the
 # camera), generously: lon/lat.
-BOXES = {'new-york': (-74.13, 40.62, -73.84, 40.87)}
+# Paris: from over Saint-Cloud east-north-east past the Eiffel Tower to Montreuil (cities.js).
+# London: from over Putney east-north-east to the Isle of Dogs (the wide view) and from over Greenwich west
+# (the tall one).
+BOXES = {'new-york': (-74.13, 40.62, -73.84, 40.87), 'paris': (2.17, 48.80, 2.53, 48.95), 'london': (-0.28, 51.46, 0.13, 51.61)}
 xmin, ymin, xmax, ymax = BOXES[args.city]
 
 con = duckdb.connect()

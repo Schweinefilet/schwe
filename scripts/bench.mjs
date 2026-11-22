@@ -1,7 +1,7 @@
 #!/usr/bin/env node
-// Frame time for New York at 1920 x 1080, in a headed Chrome window with GPU acceleration asked for.
+// Frame time for a city (New York unless --city) at 1920 x 1080, in a headed Chrome window with GPU acceleration asked for.
 //
-//   node scripts/bench.mjs [--url http://localhost:4173/] [--seconds 20] [--shot noon|golden|night|rain]
+//   node scripts/bench.mjs [--city new-york|paris] [--url http://localhost:4173/] [--seconds 20] [--shot noon|golden|night|rain]
 //        [--at 2026-11-23T01:00:00Z] [--wx clear|rain] [--query real=0] [--headless]
 //
 // Chrome paces requestAnimationFrame to the display (60 Hz here even with vsync and its frame-rate limit
@@ -17,7 +17,7 @@
 // On a machine without a display, run it under xvfb-run (which still renders in software).
 
 import { createRequire } from 'node:module'
-import { SHOTS, fixClock, fixtureRoutes } from './shots.mjs'
+import { SHOTS_BY_CITY, fixClock, fixtureRoutes } from './shots.mjs'
 
 const { chromium } = createRequire(import.meta.url)('playwright')
 
@@ -28,7 +28,8 @@ const arg = (name, fallback) => {
 const URL_ = arg('url', 'http://localhost:5173/')
 const SECONDS = Number(arg('seconds', 20))
 const WARMUP = Number(arg('warmup', 8))
-const SHOT = SHOTS.find((s) => s.name === arg('shot', 'night'))
+const CITY = arg('city', 'new-york')
+const SHOT = SHOTS_BY_CITY[CITY].find((s) => s.name === arg('shot', 'night'))
 const AT = arg('at', SHOT.at)
 const WX = arg('wx', SHOT.wx)
 const QUERY = arg('query', '')
@@ -75,7 +76,7 @@ await page.addInitScript(() => {
 await fixtureRoutes(page, AT, WX)
 const q = new URLSearchParams(QUERY)
 q.set('lite', '0')
-await page.goto(`${URL_}?${q}#new-york`)
+await page.goto(`${URL_}?${q}#${CITY}`)
 await page.waitForSelector('.loader.is-done', { timeout: 300000 })
 await page.waitForTimeout(WARMUP * 1000)
 
@@ -111,6 +112,8 @@ const result = await page.evaluate(async (seconds) => {
 
 const med = median(result.work)
 console.log(JSON.stringify({
+  city: CITY,
+  shot: SHOT.name,
   url: page.url(),
   renderer: result.renderer,
   software: /swiftshader|llvmpipe|software/i.test(result.renderer),
